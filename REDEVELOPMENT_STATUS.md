@@ -163,7 +163,7 @@ The repo has been converted from a Firebase/static deployment package into a bui
 
 ## Known Issues
 - `npm audit --omit=dev` reports 2 moderate advisories from Next 16.2.9's nested `postcss@8.4.31`. The app also has direct `postcss@8.5.15`; npm still reports the nested Next copy and suggests an invalid downgrade to Next 9.3.3. Build/lint/typecheck pass.
-- GitHub push has not been completed yet in this workspace.
+- GitHub push completed to `origin/master`.
 
 ## Commands Already Run
 - `npm install`
@@ -178,6 +178,7 @@ The repo has been converted from a Firebase/static deployment package into a bui
 - Typecheck: PASS
 - Build: PASS
 - Production dependency audit: 2 moderate advisories remain from Next nested PostCSS as noted above.
+- Git commit pushed: `4e9f11e` (`Redevelop 6S AuditPro as Next.js app`)
 
 ## Exact Next Steps for Next Codex Run
 1. Connect `.env.local` to real MongoDB/Cloudinary/SMTP.
