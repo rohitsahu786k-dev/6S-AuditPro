@@ -2,13 +2,20 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { apiPost } from "@/hooks/useApi";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { APP_NAME, COMPANY_NAME } from "@/lib/constants";
 
 export function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,7 +24,7 @@ export function LoginForm() {
     setError("");
     setLoading(true);
     try {
-      await apiPost("/api/auth/login", { username, password });
+      await apiPost("/api/auth/login", { username, password, remember });
       router.push(search.get("next") || "/dashboard");
       router.refresh();
     } catch (err) {
@@ -28,22 +35,85 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={submit} className="login-card">
-      <img className="login-logo" src="/onepws-dark-logo-scaled.png" alt="ONEPWS Private Limited" />
-      <h1 style={{ textAlign: "center", margin: "0 0 4px" }}>6S AuditPro</h1>
-      <p className="muted" style={{ textAlign: "center", marginTop: 0 }}>Enterprise audit system</p>
-      {error ? <div className="alert">{error}</div> : null}
-      <label className="field">
-        <span className="label">Username</span>
-        <input className="control" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
+    <form
+      onSubmit={submit}
+      className="w-full max-w-[420px] rounded-2xl border border-bd bg-bg1 p-9 px-8 shadow-[var(--shadow-md)]"
+    >
+      <div className="mb-6 text-center">
+        <img
+          src="/onepws-dark-logo-scaled.png"
+          alt={COMPANY_NAME}
+          className="mx-auto mb-3.5 block w-[220px] max-w-[82%]"
+        />
+        <div className="mb-3 inline-flex h-[72px] w-[72px] items-center justify-center rounded-[18px] border border-[#fecaca] bg-white p-2.5 shadow-[0_8px_20px_rgba(239,43,45,.18)]">
+          <img src="/favicon.png" alt="" className="block h-full w-full object-contain" />
+        </div>
+        <h1 className="mb-1 text-[22px] font-bold text-t1">{APP_NAME}</h1>
+        <p className="text-[13px] text-t2">{COMPANY_NAME} — Enterprise Audit System</p>
+      </div>
+
+      {error ? (
+        <div className="mb-3 rounded-lg border border-[#fecaca] bg-[#fee2e2] px-3 py-2.5 text-[13px] text-red">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="mb-3.5 grid gap-1.5">
+        <Label htmlFor="l-user" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+          Username
+        </Label>
+        <Input
+          id="l-user"
+          value={username}
+          onChange={(event) => setUsername(event.target.value)}
+          autoComplete="username"
+          className="h-auto rounded-[7px] border-bd px-3 py-2.5 text-sm focus-visible:border-brand focus-visible:ring-[3px] focus-visible:ring-brand/12"
+          required
+        />
+      </div>
+
+      <div className="mb-3.5 grid gap-1.5">
+        <Label htmlFor="l-pass" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+          Password
+        </Label>
+        <div className="relative">
+          <Input
+            id="l-pass"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            className="h-auto rounded-[7px] border-bd px-3 py-2.5 pr-11 text-sm focus-visible:border-brand focus-visible:ring-[3px] focus-visible:ring-brand/12"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-t3 hover:text-t2"
+          >
+            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        </div>
+      </div>
+
+      <label className="mb-4 flex items-center gap-2 text-[13px] text-t2">
+        <input
+          type="checkbox"
+          checked={remember}
+          onChange={(event) => setRemember(event.target.checked)}
+          className="h-3.5 w-3.5 accent-brand"
+        />
+        Remember me
       </label>
-      <label className="field">
-        <span className="label">Password</span>
-        <input className="control" type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
-      </label>
-      <button className="btn primary" style={{ width: "100%", justifyContent: "center" }} disabled={loading}>
-        {loading ? "Signing in..." : "Login"}
-      </button>
+
+      <Button
+        type="submit"
+        disabled={loading}
+        className="h-auto w-full justify-center rounded-lg bg-brand px-[22px] py-3 text-[15px] font-semibold text-white shadow-[0_2px_8px_rgba(239,43,45,.22)] hover:bg-brand-d"
+      >
+        {loading ? "Signing in..." : "Login →"}
+      </Button>
     </form>
   );
 }

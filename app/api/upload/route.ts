@@ -10,8 +10,13 @@ export async function POST(request: Request) {
     }
     const form = await request.formData();
     const file = form.get("file");
+    const requestedFolder = form.get("folderSuffix")?.toString() || "audit-photos";
+    if (!/^[a-zA-Z0-9_-]{1,64}$/.test(requestedFolder)) {
+      throw Object.assign(new Error("Invalid folderSuffix"), { status: 400 });
+    }
+    const folderSuffix = requestedFolder;
     if (!(file instanceof File)) throw Object.assign(new Error("file is required"), { status: 400 });
-    return ok(await uploadImage(file));
+    return ok(await uploadImage(file, folderSuffix));
   } catch (error) {
     return fail(error);
   }

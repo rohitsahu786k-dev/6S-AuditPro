@@ -34,12 +34,12 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
 };
 
 export const ROLE_ROUTES: Record<Role, string[]> = {
-  MASTER_ADMIN: ["/dashboard", "/audits", "/findings", "/analytics", "/admin"],
-  ADMIN: ["/dashboard", "/audits", "/findings", "/analytics", "/admin"],
-  AUDITOR: ["/dashboard", "/audits", "/findings", "/analytics"],
-  STORES_SPOC: ["/dashboard", "/findings", "/analytics"],
-  PRODUCTION_SPOC: ["/dashboard", "/findings", "/analytics"],
-  MANAGEMENT: ["/dashboard", "/audits", "/findings", "/analytics"]
+  MASTER_ADMIN: ["/dashboard", "/audits", "/findings", "/analytics", "/admin", "/media"],
+  ADMIN: ["/dashboard", "/audits", "/findings", "/analytics", "/admin", "/media"],
+  AUDITOR: ["/dashboard", "/audits", "/findings", "/analytics", "/media"],
+  STORES_SPOC: ["/dashboard", "/findings", "/analytics", "/media"],
+  PRODUCTION_SPOC: ["/dashboard", "/findings", "/analytics", "/media"],
+  MANAGEMENT: ["/dashboard", "/audits", "/findings", "/analytics", "/media"]
 };
 
 export function permissionsForRole(role: Role): Permission[] {

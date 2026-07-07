@@ -3,6 +3,8 @@ import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
 import { addWorkingDays, defaultSeverity, scoreChecklist } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
+import { resolveRecipients } from "@/services/email-recipient.service";
+import { sendTemplatedEmail } from "@/services/email.service";
 
 export async function nextAuditNumber() {
   const year = new Date().getFullYear();
@@ -19,7 +21,19 @@ export async function listAudits(user: SessionUser) {
 }
 
 export async function createAudit(input: {
-  zone: string; department: string; auditorName: string; date?: Date; checklist: Array<{ questionId: string; category: string; question: string; response: "Adequate" | "Not Adequate" | "N/A"; observation?: string; severity?: "Critical" | "High" | "Medium" | "Low" }>;
+  zone: string;
+  department: string;
+  auditorName: string;
+  date?: Date;
+  checklist: Array<{
+    questionId: string;
+    category: string;
+    question: string;
+    response: "Adequate" | "Not Adequate" | "N/A";
+    observation?: string;
+    severity?: "Critical" | "High" | "Medium" | "Low";
+    beforePhotos?: Array<{ secureUrl: string; publicId: string }>;
+  }>;
 }, user: SessionUser) {
   await connectDB();
   const { categoryScores, totalScore } = scoreChecklist(input.checklist);
@@ -50,6 +64,7 @@ export async function createAudit(input: {
       question: item.question,
       severity: item.severity || defaultSeverity(item.response, item.category),
       observation: item.observation,
+      beforePhotos: item.beforePhotos || [],
       assignedTo: audit.department,
       dueDate: addWorkingDays(new Date(), 7),
       status: "OPEN",
@@ -59,5 +74,55 @@ export async function createAudit(input: {
 
   audit.findingIds = findings.map((finding) => finding._id);
   await audit.save();
+
+  // Send Audit Completed Email (Async)
+  resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] })
+    .then((recipients) => {
+      if (user.email && !recipients.includes(user.email)) {
+        recipients.push(user.email);
+      }
+      return sendTemplatedEmail({
+        triggerEvent: "AUDIT_COMPLETED",
+        recipients,
+        data: {
+          recipientName: "6S AuditPro Team",
+          auditNumber: audit.auditNumber,
+          departmentName: audit.department,
+          zoneName: audit.zone,
+          auditorName: audit.auditorName,
+          status: audit.status,
+          totalScore: `${audit.totalScore}%`
+        },
+        relatedAuditId: audit._id.toString()
+      });
+    })
+    .catch((err) => console.error("Error sending audit completion email:", err));
+
+  // Send Finding Assigned Emails (Async)
+  for (const finding of findings) {
+    resolveRecipients({ department: finding.department, roles: ["STORES_SPOC", "PRODUCTION_SPOC", "ADMIN", "MASTER_ADMIN"] })
+      .then((spocRecipients) => {
+        return sendTemplatedEmail({
+          triggerEvent: "FINDING_ASSIGNED",
+          recipients: spocRecipients,
+          data: {
+            recipientName: "Department SPOC",
+            findingNumber: finding.findingNumber,
+            auditNumber: audit.auditNumber,
+            departmentName: finding.department,
+            zoneName: finding.zone,
+            severity: finding.severity,
+            dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : "",
+            question: finding.question,
+            assignedTo: finding.assignedTo || finding.department,
+            auditorName: audit.auditorName
+          },
+          relatedAuditId: audit._id.toString(),
+          relatedFindingId: finding._id.toString()
+        });
+      })
+      .catch((err) => console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err));
+  }
+
   return { audit, findings };
 }

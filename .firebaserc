@@ -1,8 +1,0 @@
-{
-  "projects": {
-    "default": "fir-audit-portal",
-    "fir-audit-portal": "fir-audit-portal"
-  },
-  "targets": {},
-  "etags": {}
-}

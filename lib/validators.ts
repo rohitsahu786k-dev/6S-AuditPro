@@ -39,7 +39,8 @@ export const auditSchema = z.object({
     question: z.string(),
     response: z.enum(["Adequate", "Not Adequate", "N/A"]),
     observation: z.string().optional(),
-    severity: z.enum(["Critical", "High", "Medium", "Low"]).optional()
+    severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
+    beforePhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional().default([])
   })).default([])
 });
 
@@ -48,7 +49,21 @@ export const findingUpdateSchema = z.object({
   observation: z.string().trim().optional(),
   assignedTo: z.string().trim().optional(),
   dueDate: z.coerce.date().optional(),
-  status: z.enum(["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"]).optional()
+  status: z.enum(["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"]).optional(),
+  beforePhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional(),
+  afterPhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional()
+});
+
+export const findingCreateSchema = z.object({
+  zone: z.string().trim().min(1),
+  department: z.string().trim().min(1),
+  category: z.string().trim().min(1),
+  question: z.string().trim().min(1),
+  severity: z.enum(["Critical", "High", "Medium", "Low"]).optional().default("Medium"),
+  observation: z.string().trim().optional(),
+  beforePhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional().default([]),
+  assignedTo: z.string().trim().optional(),
+  dueDate: z.coerce.date().optional()
 });
 
 export const capaSchema = z.object({
