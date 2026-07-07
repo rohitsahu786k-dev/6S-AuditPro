@@ -9,3 +9,5 @@ dist/
 .vercel/
 .firebase/
 tsconfig.tsbuildinfo
+public/uploads/*
+!public/uploads/.gitkeep
