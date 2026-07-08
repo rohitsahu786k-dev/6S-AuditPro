@@ -3,22 +3,18 @@
 import { useMemo, useState } from "react";
 import { apiPost, useApi } from "@/hooks/useApi";
 import { CATEGORIES } from "@/lib/constants";
-import { 
-  Check, 
-  X, 
-  ChevronLeft, 
-  ChevronRight, 
-  Trash2, 
-  UploadCloud, 
-  Calendar, 
-  User, 
-  MapPin, 
-  CheckCircle2, 
-  Plus, 
+import {
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
+  UploadCloud,
+  MapPin,
+  CheckCircle2,
+  Plus,
   Eye,
-  AlertOctagon,
   AlertTriangle,
-  Info,
   ExternalLink
 } from "lucide-react";
 import { defaultSeverity } from "@/lib/audit-scoring";

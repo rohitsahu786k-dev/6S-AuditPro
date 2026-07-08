@@ -2,16 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
-import { 
-  Search, 
-  Filter, 
-  Trash2, 
-  UploadCloud, 
-  X, 
-  Image as ImageIcon, 
-  AlertTriangle, 
-  ExternalLink, 
-  Info,
+import {
+  Search,
+  Trash2,
+  UploadCloud,
+  X,
+  AlertTriangle,
+  ExternalLink,
   CheckCircle,
   FolderOpen
 } from "lucide-react";

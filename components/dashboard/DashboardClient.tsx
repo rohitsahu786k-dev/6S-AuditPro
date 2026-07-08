@@ -87,23 +87,23 @@ export function DashboardClient() {
         </Link>
       </div>
 
-      <div className="relative mb-6 overflow-hidden rounded-[10px] bg-gradient-to-br from-[#0f172a] to-[#1e293b] p-6 text-white">
-        <Sparkles size={250} className="pointer-events-none absolute -right-10 -bottom-10 text-white opacity-10" />
+      <div className="relative mb-6 overflow-hidden rounded-[10px] border border-bd bg-gradient-to-br from-white to-bg3 p-6">
+        <Sparkles size={250} className="pointer-events-none absolute -right-10 -bottom-10 text-brand opacity-10" />
         <div className="relative z-10 max-w-[600px]">
-          <h2 className="mb-2 flex items-center gap-2 text-[22px] font-semibold">
-            6S Compliance &amp; Safety Hub <Sparkles size={18} className="text-[#fbbf24]" />
+          <h2 className="mb-2 flex items-center gap-2 text-[22px] font-semibold text-t1">
+            6S Compliance &amp; Safety Hub <Sparkles size={18} className="text-brand" />
           </h2>
-          <p className="mb-4 text-sm leading-relaxed text-[#94a3b8]">
+          <p className="mb-4 text-sm leading-relaxed text-t2">
             Operational health is monitored in real time. Maintain high cleanliness, sorting accuracy, safety protocols, and
             execute Corrective and Preventive Actions (CAPA) before target deadlines.
           </p>
-          <div className="flex gap-4 text-[13px]">
+          <div className="flex gap-4 text-[13px] text-t2">
             <div>
-              IMS Status: <span className="font-bold text-[#34d399]">● ACTIVE</span>
+              IMS Status: <span className="font-bold text-green">● ACTIVE</span>
             </div>
-            <div className="text-[#94a3b8]">|</div>
+            <div className="text-t3">|</div>
             <div>
-              Latest Revision: <strong className="text-[#f3f4f6]">Rev.03</strong>
+              Latest Revision: <strong className="text-t1">Rev.03</strong>
             </div>
           </div>
         </div>

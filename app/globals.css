@@ -101,13 +101,20 @@
  * removed page-by-page as each is converted in a later pass.
  * ------------------------------------------------------------------- */
 :root {
+  --brand: #ef2b2d;
+  --brand-dark: #b91c1c;
   --brand-soft: #fff1f1;
+  --text: #1a2332;
+  --ink: #1a2332;
+  --muted: #4b5563;
   --panel: #ffffff;
   --surface: #f5f7fa;
   --line: #d8dee6;
   --ok: #15803d;
   --warn: #b45309;
   --danger: #dc2626;
+  --secondary: var(--color-bg3);
+  --foreground: var(--color-t1);
 }
 
 .shell { min-height: 100vh; display: flex; }

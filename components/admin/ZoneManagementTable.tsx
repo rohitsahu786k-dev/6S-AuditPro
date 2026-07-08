@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { apiPost, apiPatch, apiPost as apiDelete, useApi } from "@/hooks/useApi";
+import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 
 type ZoneRow = { _id: string; name: string; department: string; location?: string; status: string };

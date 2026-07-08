@@ -2,17 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
-import { 
-  BarChart3, 
-  FileSpreadsheet, 
-  Printer, 
-  Calendar, 
-  TrendingUp, 
+import {
+  BarChart3,
+  FileSpreadsheet,
+  Printer,
+  TrendingUp,
   AlertTriangle,
   CheckCircle,
   Clock,
   Layers,
-  Search,
   Filter
 } from "lucide-react";
 
