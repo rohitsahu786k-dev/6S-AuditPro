@@ -1,6 +1,7 @@
 import EmailTemplate from "@/models/EmailTemplate";
 import { requireUser } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
+import { EMAIL_LOGO_URL } from "@/lib/email-layout";
 import { renderTemplate } from "@/lib/email-template-renderer";
 import { fail, ok } from "@/utils/api";
 
@@ -15,11 +16,14 @@ const sample = {
   assignedTo: "Stores SPOC",
   auditorName: "Lead Auditor",
   status: "OPEN",
+  totalScore: "92%",
   capaAction: "Clean and label the storage rack",
   closureRemarks: "Action completed",
   rejectionReason: "Photo evidence is unclear",
+  resetUrl: `${process.env.APP_BASE_URL || "http://localhost:3000"}/reset-password?token=sample-token`,
   appUrl: process.env.APP_BASE_URL || "http://localhost:3000",
-  companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "OnePWS Private Limited"
+  companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "OnePWS Private Limited",
+  logoUrl: EMAIL_LOGO_URL
 };
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {

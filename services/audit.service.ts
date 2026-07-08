@@ -87,34 +87,36 @@ export async function createAudit(input: {
   audit.findingIds = findings.map((finding) => finding._id);
   await audit.save();
 
-  // Send Audit Completed Email (Async)
-  resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] })
-    .then((recipients) => {
-      if (user.email && !recipients.includes(user.email)) {
-        recipients.push(user.email);
-      }
-      return sendTemplatedEmail({
-        triggerEvent: "AUDIT_COMPLETED",
-        recipients,
-        data: {
-          recipientName: "6S AuditPro Team",
-          auditNumber: audit.auditNumber,
-          departmentName: audit.department,
-          zoneName: audit.zone,
-          auditorName: audit.auditorName,
-          status: audit.status,
-          totalScore: `${audit.totalScore}%`
-        },
-        relatedAuditId: audit._id.toString()
-      });
-    })
-    .catch((err) => console.error("Error sending audit completion email:", err));
+  // Send Audit Completed + Finding Assigned emails. Awaited (not fire-and-forget) so
+  // sends complete before the serverless function returns and freezes.
+  try {
+    const recipients = await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
+    if (user.email && !recipients.includes(user.email)) {
+      recipients.push(user.email);
+    }
+    await sendTemplatedEmail({
+      triggerEvent: "AUDIT_COMPLETED",
+      recipients,
+      data: {
+        recipientName: "6S AuditPro Team",
+        auditNumber: audit.auditNumber,
+        departmentName: audit.department,
+        zoneName: audit.zone,
+        auditorName: audit.auditorName,
+        status: audit.status,
+        totalScore: `${audit.totalScore}%`
+      },
+      relatedAuditId: audit._id.toString()
+    });
+  } catch (err) {
+    console.error("Error sending audit completion email:", err);
+  }
 
-  // Send Finding Assigned Emails (Async)
-  for (const finding of findings) {
-    resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] })
-      .then((spocRecipients) => {
-        return sendTemplatedEmail({
+  await Promise.all(
+    findings.map(async (finding) => {
+      try {
+        const spocRecipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+        await sendTemplatedEmail({
           triggerEvent: "FINDING_ASSIGNED",
           recipients: spocRecipients,
           data: {
@@ -132,9 +134,11 @@ export async function createAudit(input: {
           relatedAuditId: audit._id.toString(),
           relatedFindingId: finding._id.toString()
         });
-      })
-      .catch((err) => console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err));
-  }
+      } catch (err) {
+        console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err);
+      }
+    })
+  );
 
   return { audit, findings };
 }

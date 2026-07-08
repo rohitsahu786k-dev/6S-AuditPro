@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { connectDB } from "@/lib/db";
 import { DEFAULT_DEPARTMENTS, DEFAULT_QUESTIONS, DEFAULT_ZONES, EMAIL_VARIABLES } from "@/lib/constants";
+import { DEFAULT_EMAIL_TEMPLATES } from "@/lib/email-template-defaults";
 import Department from "@/models/Department";
 import Zone from "@/models/Zone";
 import Question from "@/models/Question";
@@ -8,20 +9,6 @@ import Person from "@/models/Person";
 import EmailTemplate from "@/models/EmailTemplate";
 import User from "@/models/User";
 import { createUser } from "@/services/user.service";
-
-const defaultTemplates = [
-  ["finding-assigned", "Finding Assigned", "FINDING_ASSIGNED", "Finding {{findingNumber}} assigned to {{departmentName}}"],
-  ["capa-submitted", "CAPA Submitted", "CAPA_SUBMITTED", "CAPA submitted for {{findingNumber}}"],
-  ["capa-approved", "CAPA Approved / Finding Closed", "CAPA_APPROVED", "Finding {{findingNumber}} closed"],
-  ["capa-rejected", "CAPA Rejected", "CAPA_REJECTED", "CAPA rejected for {{findingNumber}}"],
-  ["finding-overdue", "Finding Overdue Reminder", "FINDING_OVERDUE", "Finding {{findingNumber}} is overdue"],
-  ["audit-completed", "Audit Completed", "AUDIT_COMPLETED", "Audit {{auditNumber}} completed"],
-  ["audit-report-shared", "Audit Report Shared", "AUDIT_REPORT_SHARED", "Audit report {{auditNumber}} shared"],
-  ["password-changed", "Password Changed", "PASSWORD_CHANGED", "Password changed for {{recipientName}}"],
-  ["password-reset-requested", "Password Reset Requested", "PASSWORD_RESET_REQUESTED", "Reset your 6S AuditPro password"],
-  ["user-created", "User Created / Account Activated", "USER_CREATED", "Your 6S AuditPro account is active"],
-  ["summary", "Daily or Weekly Summary", "SUMMARY", "6S AuditPro summary"]
-] as const;
 
 async function main() {
   await connectDB();
@@ -37,14 +24,7 @@ async function main() {
   }
   await Person.updateOne({ name: "Lead Auditor", type: "AUDITOR" }, { $setOnInsert: { name: "Lead Auditor", type: "AUDITOR", roleTitle: "Lead Auditor", isActive: true } }, { upsert: true });
 
-  for (const [templateKey, templateName, triggerEvent, subject] of defaultTemplates) {
-    const isPasswordReset = triggerEvent === "PASSWORD_RESET_REQUESTED";
-    const htmlBody = isPasswordReset
-      ? `<p>Hello {{recipientName}},</p><p>We received a request to reset your 6S AuditPro password. This link expires in 1 hour.</p><p><a href="{{resetUrl}}">Reset your password</a></p><p>If you did not request this, you can safely ignore this email.</p><p>{{companyName}}</p>`
-      : `<p>Hello {{recipientName}},</p><p>${subject}</p><p><a href="{{appUrl}}">Open 6S AuditPro</a></p><p>${"{{companyName}}"}</p>`;
-    const textBody = isPasswordReset
-      ? `Hello {{recipientName}},\nWe received a request to reset your 6S AuditPro password. This link expires in 1 hour.\nReset: {{resetUrl}}\nIf you did not request this, you can safely ignore this email.\n{{companyName}}`
-      : `Hello {{recipientName}},\n${subject}\nOpen: {{appUrl}}\n{{companyName}}`;
+  for (const { templateKey, templateName, triggerEvent, subject, htmlBody, textBody } of DEFAULT_EMAIL_TEMPLATES) {
     await EmailTemplate.updateOne(
       { templateKey },
       {

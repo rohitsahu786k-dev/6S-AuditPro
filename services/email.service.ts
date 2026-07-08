@@ -1,4 +1,5 @@
 import { COMPANY_NAME } from "@/lib/constants";
+import { EMAIL_LOGO_URL } from "@/lib/email-layout";
 import { renderTemplate } from "@/lib/email-template-renderer";
 import { createTransporter, fromAddress } from "@/lib/mailer";
 import { getActiveTemplate } from "@/services/email-template.service";
@@ -24,6 +25,7 @@ export async function sendTemplatedEmail(input: {
   const data = {
     companyName: COMPANY_NAME,
     appUrl: process.env.APP_BASE_URL || "http://localhost:3000",
+    logoUrl: EMAIL_LOGO_URL,
     ...input.data
   };
   const subject = renderTemplate(template.subject, data).rendered;

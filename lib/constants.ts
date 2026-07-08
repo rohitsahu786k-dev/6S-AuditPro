@@ -82,5 +82,8 @@ export const EMAIL_VARIABLES = [
   "rejectionReason",
   "appUrl",
   "companyName",
-  "resetUrl"
+  "resetUrl",
+  "logoUrl",
+  "totalScore",
+  "capaAction"
 ];

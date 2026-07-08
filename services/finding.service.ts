@@ -53,27 +53,29 @@ export async function submitCapa(id: string, input: { capaAction: string; closur
   
   const saved = await finding.save();
 
-  // Send CAPA Submitted Email (Async)
-  resolveRecipients({ roles: ["MASTER_ADMIN", "ADMIN", "AUDITOR"] })
-    .then((recipients) => {
-      return sendTemplatedEmail({
-        triggerEvent: "CAPA_SUBMITTED",
-        recipients,
-        data: {
-          recipientName: "Auditor / Admin",
-          findingNumber: saved.findingNumber,
-          auditNumber: saved.auditNumber || "",
-          departmentName: saved.department,
-          zoneName: saved.zone,
-          severity: saved.severity,
-          question: saved.question,
-          capaAction: saved.capaAction || "",
-          closureRemarks: saved.closureRemarks || ""
-        },
-        relatedFindingId: saved._id.toString()
-      });
-    })
-    .catch((err) => console.error("Error sending CAPA submitted email:", err));
+  // Send CAPA Submitted Email. Awaited so the send completes before the
+  // serverless function returns and freezes.
+  try {
+    const recipients = await resolveRecipients({ roles: ["MASTER_ADMIN", "ADMIN", "AUDITOR"] });
+    await sendTemplatedEmail({
+      triggerEvent: "CAPA_SUBMITTED",
+      recipients,
+      data: {
+        recipientName: "Auditor / Admin",
+        findingNumber: saved.findingNumber,
+        auditNumber: saved.auditNumber || "",
+        departmentName: saved.department,
+        zoneName: saved.zone,
+        severity: saved.severity,
+        question: saved.question,
+        capaAction: saved.capaAction || "",
+        closureRemarks: saved.closureRemarks || ""
+      },
+      relatedFindingId: saved._id.toString()
+    });
+  } catch (err) {
+    console.error("Error sending CAPA submitted email:", err);
+  }
 
   return saved;
 }
@@ -106,27 +108,29 @@ export async function reviewCapa(id: string, input: { decision: "approve" | "rej
   finding.timeline.push({ action: `CAPA ${input.decision}`, note: input.remarks || input.rejectionReason, by: user.id, byName: user.name, at: new Date() });
   const saved = await finding.save();
 
-  // Send review outcome email (Async)
+  // Send review outcome email. Awaited so the send completes before the
+  // serverless function returns and freezes.
   const rolesToNotify = input.decision === "approve"
     ? ["SPOC", "ADMIN", "MASTER_ADMIN", "AUDITOR", "MANAGEMENT"]
     : ["SPOC", "ADMIN", "MASTER_ADMIN"];
-    
-  resolveRecipients({ department: saved.department, roles: rolesToNotify as any[] })
-    .then((recipients) => {
-      return sendTemplatedEmail({
-        triggerEvent,
-        recipients,
-        data: {
-          recipientName: "Team",
-          findingNumber: saved.findingNumber,
-          status: saved.status,
-          closureRemarks: input.remarks || "",
-          rejectionReason: saved.rejectionReason || ""
-        },
-        relatedFindingId: saved._id.toString()
-      });
-    })
-    .catch((err) => console.error(`Error sending email for event ${triggerEvent}:`, err));
+
+  try {
+    const recipients = await resolveRecipients({ department: saved.department, roles: rolesToNotify as any[] });
+    await sendTemplatedEmail({
+      triggerEvent,
+      recipients,
+      data: {
+        recipientName: "Team",
+        findingNumber: saved.findingNumber,
+        status: saved.status,
+        closureRemarks: input.remarks || "",
+        rejectionReason: saved.rejectionReason || ""
+      },
+      relatedFindingId: saved._id.toString()
+    });
+  } catch (err) {
+    console.error(`Error sending email for event ${triggerEvent}:`, err);
+  }
 
   return saved;
 }

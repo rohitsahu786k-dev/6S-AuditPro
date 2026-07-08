@@ -2,6 +2,7 @@ import User from "@/models/User";
 import { connectDB } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { permissionsForRole } from "@/lib/roles";
+import { sendTemplatedEmail } from "@/services/email.service";
 import type { Role } from "@/types/domain";
 
 export async function listUsers() {
@@ -14,7 +15,7 @@ export async function createUser(input: {
 }) {
   await connectDB();
   const passwordHash = await hashPassword(input.password);
-  return User.create({
+  const user = await User.create({
     name: input.name,
     username: input.username.toLowerCase(),
     email: input.email || undefined,
@@ -26,6 +27,20 @@ export async function createUser(input: {
     permissions: permissionsForRole(input.role),
     passwordChangedAt: new Date()
   });
+
+  if (user.email) {
+    try {
+      await sendTemplatedEmail({
+        triggerEvent: "USER_CREATED",
+        recipients: [user.email],
+        data: { recipientName: user.name }
+      });
+    } catch (err) {
+      console.error("Error sending user created email:", err);
+    }
+  }
+
+  return user;
 }
 
 export async function updateUser(id: string, input: Partial<{

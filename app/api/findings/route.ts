@@ -53,28 +53,30 @@ export async function POST(request: Request) {
 
     const saved = await newFinding.save();
 
-    // Notify SPOC and Admin
-    resolveRecipients({ department: saved.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] })
-      .then((recipients) => {
-        return sendTemplatedEmail({
-          triggerEvent: "FINDING_ASSIGNED",
-          recipients,
-          data: {
-            recipientName: "Department SPOC",
-            findingNumber: saved.findingNumber,
-            auditNumber: "AD-HOC",
-            departmentName: saved.department,
-            zoneName: saved.zone,
-            severity: saved.severity,
-            dueDate: saved.dueDate ? new Date(saved.dueDate).toLocaleDateString() : "",
-            question: saved.question,
-            assignedTo: saved.assignedTo || saved.department,
-            auditorName: user.name
-          },
-          relatedFindingId: saved._id.toString()
-        });
-      })
-      .catch((err) => console.error("Error sending email notification:", err));
+    // Notify SPOC and Admin. Awaited so the send completes before the
+    // serverless function returns and freezes.
+    try {
+      const recipients = await resolveRecipients({ department: saved.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+      await sendTemplatedEmail({
+        triggerEvent: "FINDING_ASSIGNED",
+        recipients,
+        data: {
+          recipientName: "Department SPOC",
+          findingNumber: saved.findingNumber,
+          auditNumber: "AD-HOC",
+          departmentName: saved.department,
+          zoneName: saved.zone,
+          severity: saved.severity,
+          dueDate: saved.dueDate ? new Date(saved.dueDate).toLocaleDateString() : "",
+          question: saved.question,
+          assignedTo: saved.assignedTo || saved.department,
+          auditorName: user.name
+        },
+        relatedFindingId: saved._id.toString()
+      });
+    } catch (err) {
+      console.error("Error sending email notification:", err);
+    }
 
     return ok(saved);
   } catch (error) {
