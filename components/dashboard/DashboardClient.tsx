@@ -33,10 +33,10 @@ type Finding = {
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-  Critical: "#b91c1c",
-  High: "#9a3412",
-  Medium: "#92400e",
-  Low: "#4b5563"
+  Critical: "#dc2626",
+  High: "#f97316",
+  Medium: "#eab308",
+  Low: "#64748b"
 };
 
 const COMPLIANCE_TARGET = 90;
@@ -139,17 +139,26 @@ export function DashboardClient() {
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
           <h3 className="mb-3 font-bold text-t1">Findings by Severity</h3>
           {severityBreakdown.length === 0 ? (
-            <div className="flex h-[220px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
+            <div className="flex h-[260px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
+            <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={severityBreakdown} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80} paddingAngle={2}>
+                <Pie
+                  data={severityBreakdown}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius="55%"
+                  outerRadius="85%"
+                  paddingAngle={2}
+                  label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
+                  labelLine={false}
+                >
                   {severityBreakdown.map((entry) => (
                     <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] || "#8896a5"} />
                   ))}
                 </Pie>
                 <Tooltip />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           )}
