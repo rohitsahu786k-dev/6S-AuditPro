@@ -267,7 +267,7 @@ export function RegisterWorkspace() {
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                     <span className="inline-flex items-center rounded-md border border-bd bg-bg3 px-1.5 py-0.5 text-[11px] font-semibold text-t2">{r.category}</span>
                   </td>
-                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[260px]">{r.question}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[260px] line-clamp-2" title={r.question}>{r.question}</td>
                   <td
                     className={`border-b border-[#edf0f4] px-3 py-2.5 align-top font-semibold ${
                       r.response === "Not Adequate" ? "text-red" : r.response === "Adequate" ? "text-green" : "text-t2"
@@ -282,7 +282,7 @@ export function RegisterWorkspace() {
                       <span className="text-t3">-</span>
                     )}
                   </td>
-                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[220px] text-t2">{r.observation || "-"}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[220px] line-clamp-2 text-t2" title={r.observation}>{r.observation || "-"}</td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                     <span
                       className={`inline-flex min-w-[74px] items-center justify-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusClass(r.status)}`}

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
+import { CATEGORY_META } from "@/lib/constants";
 import {
   BarChart3,
   FileSpreadsheet,
@@ -132,11 +133,17 @@ export function AnalyticsClient() {
 
     for (const a of audits) {
       if (a.status !== "COMPLETED") continue;
-      
-      // If a.categoryScores exists, extract from there
+
+      // categoryScores is keyed by full category name (e.g. "SORT"), not pillar
+      // code, and its value can be a plain score number or the
+      // { adequate, total, score } shape produced by scoreChecklist().
       if (a.categoryScores) {
-        for (const [pil, val] of Object.entries(a.categoryScores)) {
-          sums[pil] = (sums[pil] || 0) + Number(val);
+        for (const [category, val] of Object.entries(a.categoryScores)) {
+          const pil = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+          if (!pil) continue;
+          const score = typeof val === "object" && val !== null && "score" in val ? Number((val as { score: number }).score) : Number(val);
+          if (Number.isNaN(score)) continue;
+          sums[pil] = (sums[pil] || 0) + score;
           counts[pil] = (counts[pil] || 0) + 1;
         }
       } else {
@@ -151,7 +158,9 @@ export function AnalyticsClient() {
             catGroup[item.category].total += 1;
           }
         }
-        for (const [pil, data] of Object.entries(catGroup)) {
+        for (const [category, data] of Object.entries(catGroup)) {
+          const pil = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+          if (!pil) continue;
           const score = data.total > 0 ? (data.yes / data.total) * 100 : 0;
           sums[pil] = (sums[pil] || 0) + score;
           counts[pil] = (counts[pil] || 0) + 1;
