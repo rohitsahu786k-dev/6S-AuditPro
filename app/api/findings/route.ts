@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/auth";
-import { listFindings } from "@/services/finding.service";
+import { listFindings, type FindingListView } from "@/services/finding.service";
 import { fail, ok, parseJson } from "@/utils/api";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
@@ -7,10 +7,14 @@ import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 import { findingCreateSchema } from "@/lib/validators";
 
-export async function GET() {
+const FINDING_VIEWS = new Set<FindingListView>(["full", "summary", "register", "media-selector"]);
+
+export async function GET(request: Request) {
   try {
     const user = await requireUser("findings:read");
-    return ok(await listFindings(user));
+    const viewParam = new URL(request.url).searchParams.get("view") || "full";
+    const view = FINDING_VIEWS.has(viewParam as FindingListView) ? viewParam as FindingListView : "full";
+    return ok(await listFindings(user, view));
   } catch (error) {
     return fail(error);
   }
@@ -50,7 +54,7 @@ export async function POST(request: Request) {
     const saved = await newFinding.save();
 
     // Notify SPOC and Admin
-    resolveRecipients({ department: saved.department, roles: ["STORES_SPOC", "PRODUCTION_SPOC", "ADMIN", "MASTER_ADMIN"] })
+    resolveRecipients({ department: saved.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] })
       .then((recipients) => {
         return sendTemplatedEmail({
           triggerEvent: "FINDING_ASSIGNED",

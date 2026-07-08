@@ -6,6 +6,15 @@ import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 
+export type AuditListView = "full" | "summary" | "analytics" | "register";
+
+const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
+  full: null,
+  summary: "auditNumber department zone date totalScore status auditorName",
+  analytics: "auditNumber zone department auditorName date status totalScore categoryScores checklist.category checklist.response",
+  register: "auditNumber department zone date status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity"
+};
+
 export async function nextAuditNumber() {
   const year = new Date().getFullYear();
   const prefix = `6S-${year}-`;
@@ -14,10 +23,13 @@ export async function nextAuditNumber() {
   return `${prefix}${String(seq).padStart(4, "0")}`;
 }
 
-export async function listAudits(user: SessionUser) {
+export async function listAudits(user: SessionUser, view: AuditListView = "full") {
   await connectDB();
-  const query = user.role.endsWith("_SPOC") && user.department ? { department: user.department } : {};
-  return Audit.find(query).sort({ date: -1 }).lean();
+  const query = user.role === "SPOC" && user.department ? { department: user.department } : {};
+  const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;
+  const request = Audit.find(query).sort({ date: -1 });
+  if (projection) request.select(projection);
+  return request.lean();
 }
 
 export async function createAudit(input: {
@@ -100,7 +112,7 @@ export async function createAudit(input: {
 
   // Send Finding Assigned Emails (Async)
   for (const finding of findings) {
-    resolveRecipients({ department: finding.department, roles: ["STORES_SPOC", "PRODUCTION_SPOC", "ADMIN", "MASTER_ADMIN"] })
+    resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] })
       .then((spocRecipients) => {
         return sendTemplatedEmail({
           triggerEvent: "FINDING_ASSIGNED",

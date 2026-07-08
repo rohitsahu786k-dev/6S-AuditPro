@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 type ApiState<T> = { data?: T; error?: string; loading: boolean };
+type ApiEnvelope<T> = { ok?: boolean; data?: T; error?: string };
+
+async function parseApiResponse<T>(res: Response) {
+  const json = (await res.json().catch(() => ({}))) as ApiEnvelope<T>;
+  if (!res.ok || json.ok === false) throw new Error(json.error || "Request failed");
+  return ("data" in json ? json.data : json) as T;
+}
 
 export function useApi<T>(url: string) {
   const [state, setState] = useState<ApiState<T>>({ loading: true });
@@ -24,14 +31,15 @@ export async function apiPost<T>(url: string, body?: unknown) {
     headers: body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined
   });
-  const json = await res.json();
-  if (!res.ok || !json.ok) throw new Error(json.error || "Request failed");
-  return json.data as T;
+  return parseApiResponse<T>(res);
 }
 
 export async function apiPatch<T>(url: string, body: unknown) {
   const res = await fetch(url, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  const json = await res.json();
-  if (!res.ok || !json.ok) throw new Error(json.error || "Request failed");
-  return json.data as T;
+  return parseApiResponse<T>(res);
+}
+
+export async function apiUpload<T>(url: string, body: FormData) {
+  const res = await fetch(url, { method: "POST", body });
+  return parseApiResponse<T>(res);
 }

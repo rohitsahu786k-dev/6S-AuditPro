@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
+import { useEffect, useMemo, useState } from "react";
+import { apiPost, apiPatch, apiUpload, useApi } from "@/hooks/useApi";
 import {
   Search,
   AlertTriangle,
@@ -51,23 +51,31 @@ type Finding = {
   createdAt: string;
 };
 
+type UploadedPhoto = { secureUrl: string; publicId: string };
+
 type SessionUser = {
   id: string;
   name: string;
   username: string;
   email?: string;
-  role: "MASTER_ADMIN" | "ADMIN" | "AUDITOR" | "STORES_SPOC" | "PRODUCTION_SPOC" | "MANAGEMENT";
+  role: "MASTER_ADMIN" | "ADMIN" | "AUDITOR" | "SPOC" | "MANAGEMENT";
   department?: string;
 };
 
-type Masters = { 
+type Masters = {
   zones: Array<{ name: string; department: string }>; 
   questions: Array<{ _id: string; category: string; text: string; subSection: string }>;
   people: Array<{ _id: string; name: string; type: string; department?: string }>;
 };
 
+const PAGE_SIZE = 20;
+
+function formatStatus(status?: string) {
+  return status ? status.replace(/_/g, " ") : "UNKNOWN";
+}
+
 export function FindingsWorkspace() {
-  const findingsApi = useApi<Finding[]>("/api/findings");
+  const findingsApi = useApi<Finding[]>("/api/findings?view=summary");
   const meApi = useApi<{ user: SessionUser | null }>("/api/auth/me");
   const masters = useApi<Masters>("/api/masters");
   
@@ -78,6 +86,7 @@ export function FindingsWorkspace() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [severityFilter, setSeverityFilter] = useState("ALL");
   const [deptFilter, setDeptFilter] = useState("ALL");
+  const [page, setPage] = useState(1);
 
   // Selected Finding details modal
   const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
@@ -96,6 +105,7 @@ export function FindingsWorkspace() {
 
   // General Notification
   const [note, setNote] = useState("");
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
   // Edit fields (Auditors/Admins only)
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
@@ -151,13 +161,22 @@ export function FindingsWorkspace() {
     return Array.from(depts);
   }, [findingsApi.data]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, severityFilter, deptFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredFindings.length / PAGE_SIZE));
+  const pageRows = filteredFindings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
+
   // Check roles permissions
   const canSubmitCapa = useMemo(() => {
     if (!user) return false;
     if (user.role === "MASTER_ADMIN" || user.role === "ADMIN") return true;
-    if (user.role === "STORES_SPOC" && selectedFinding?.department === "Stores") return true;
-    if (user.role === "PRODUCTION_SPOC" && selectedFinding?.department === "Production") return true;
-    // General check if user's department matches
+    // SPOC (and any department-scoped role) may act when their department matches the finding's
     if (user.department && selectedFinding?.department === user.department) return true;
     return false;
   }, [user, selectedFinding]);
@@ -167,17 +186,45 @@ export function FindingsWorkspace() {
     return ["MASTER_ADMIN", "ADMIN", "AUDITOR"].includes(user.role);
   }, [user]);
 
-  function openDetails(finding: Finding) {
-    setSelectedFinding(finding);
-    setCapaAction(finding.capaAction || "");
-    setClosureRemarks(finding.closureRemarks || "");
-    setAfterPhotos(finding.afterPhotos || []);
+  function normalizeFinding(finding: Finding): Finding {
+    return {
+      ...finding,
+      beforePhotos: finding.beforePhotos || [],
+      afterPhotos: finding.afterPhotos || [],
+      timeline: finding.timeline || []
+    };
+  }
+
+  async function openDetails(finding: Finding) {
+    const summaryFinding = normalizeFinding(finding);
+    setSelectedFinding(summaryFinding);
+    setCapaAction(summaryFinding.capaAction || "");
+    setClosureRemarks(summaryFinding.closureRemarks || "");
+    setAfterPhotos(summaryFinding.afterPhotos || []);
     setRemarks("");
     setRejectionReason("");
     setIsEditingMetadata(false);
-    setEditSeverity(finding.severity);
-    setEditDueDate(finding.dueDate ? new Date(finding.dueDate).toISOString().split("T")[0] : "");
-    setEditAssignedTo(finding.assignedTo || finding.department || "");
+    setEditSeverity(summaryFinding.severity);
+    setEditDueDate(summaryFinding.dueDate ? new Date(summaryFinding.dueDate).toISOString().split("T")[0] : "");
+    setEditAssignedTo(summaryFinding.assignedTo || summaryFinding.department || "");
+    setIsLoadingDetails(true);
+    try {
+      const response = await fetch(`/api/findings/${finding._id}`, { cache: "no-store" });
+      const json = await response.json();
+      if (!response.ok || !json.ok) throw new Error(json.error || "Failed to load finding details");
+      const fullFinding = normalizeFinding(json.data as Finding);
+      setSelectedFinding(fullFinding);
+      setCapaAction(fullFinding.capaAction || "");
+      setClosureRemarks(fullFinding.closureRemarks || "");
+      setAfterPhotos(fullFinding.afterPhotos || []);
+      setEditSeverity(fullFinding.severity);
+      setEditDueDate(fullFinding.dueDate ? new Date(fullFinding.dueDate).toISOString().split("T")[0] : "");
+      setEditAssignedTo(fullFinding.assignedTo || fullFinding.department || "");
+    } catch (err: any) {
+      alert(`Unable to load finding details: ${err.message}`);
+    } finally {
+      setIsLoadingDetails(false);
+    }
   }
 
   async function handlePhotoUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -226,17 +273,7 @@ export function FindingsWorkspace() {
       formData.append("file", processed.file);
       formData.append("folderSuffix", "capa-photos");
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Upload failed");
-      }
-
-      const result = await response.json();
+      const result = await apiUpload<UploadedPhoto>("/api/upload", formData);
       setAfterPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId }]);
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);
@@ -253,17 +290,7 @@ export function FindingsWorkspace() {
       formData.append("file", processed.file);
       formData.append("folderSuffix", "audit-photos");
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Upload failed");
-      }
-
-      const result = await response.json();
+      const result = await apiUpload<UploadedPhoto>("/api/upload", formData);
       setCreateFindingPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId }]);
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);
@@ -507,7 +534,7 @@ export function FindingsWorkspace() {
                 </tr>
               </thead>
               <tbody>
-                {filteredFindings.map((f) => {
+                {pageRows.map((f) => {
                   const isOverdue = f.status === "OVERDUE" || (f.status !== "CLOSED" && f.dueDate && new Date(f.dueDate) < new Date());
                   return (
                     <tr
@@ -544,17 +571,17 @@ export function FindingsWorkspace() {
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                         <span
-                          className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
-                          style={badgeStyleToVars(STATUS_BADGE_STYLES[f.status])}
+                          className="inline-flex min-w-[86px] items-center justify-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
+                          style={badgeStyleToVars(STATUS_BADGE_STYLES[f.status] ?? STATUS_BADGE_STYLES.OPEN)}
                         >
-                          {f.status}
+                          {formatStatus(f.status)}
                         </span>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 text-right align-top text-sm">
                         <div className="flex justify-end gap-1.5">
                           <button
                             className="inline-flex items-center gap-1 rounded-lg border border-bd bg-white px-2.5 py-[5px] text-xs font-bold text-t1 hover:bg-bg3"
-                            onClick={() => openDetails(f)}
+                            onClick={() => { void openDetails(f); }}
                           >
                             <Eye size={12} /> Open
                           </button>
@@ -577,6 +604,33 @@ export function FindingsWorkspace() {
         )}
       </div>
 
+      {!findingsApi.loading && filteredFindings.length > 0 ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-t2">
+          <div>
+            Showing {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filteredFindings.length)} of {filteredFindings.length} findings
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              className="inline-flex items-center justify-center rounded-lg border border-bd bg-white px-3 py-1.5 text-sm font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={page === 1}
+            >
+              Prev
+            </button>
+            <span className="min-w-[82px] text-center text-xs font-semibold text-t2">
+              Page {page} / {pageCount}
+            </span>
+            <button
+              className="inline-flex items-center justify-center rounded-lg border border-bd bg-white px-3 py-1.5 text-sm font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+              disabled={page === pageCount}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* DETAIL MODAL PANEL */}
       {selectedFinding && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-5">
@@ -584,13 +638,14 @@ export function FindingsWorkspace() {
             {/* Close */}
             <button
               onClick={() => setSelectedFinding(null)}
-              className="absolute right-4 top-4 border-none bg-none text-t2"
+              className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-full border border-bd bg-white text-t2 shadow-[0_4px_14px_rgba(15,23,42,0.12)] hover:bg-bg3"
+              aria-label="Close finding details"
             >
               <X size={20} />
             </button>
 
             {/* Modal Header */}
-            <div className="mb-[18px] flex items-start justify-between border-b border-bd pb-3.5">
+            <div className="mb-[18px] flex items-start justify-between gap-4 border-b border-bd pb-3.5 pr-12">
               <div>
                 <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">CAPA WORKFLOW</span>
                 <h3 className="m-0 text-xl">Finding: {selectedFinding.findingNumber}</h3>
@@ -600,16 +655,21 @@ export function FindingsWorkspace() {
               </div>
               <div className="flex items-center gap-2">
                 <span
-                  className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-extrabold"
-                  style={badgeStyleToVars(STATUS_BADGE_STYLES[selectedFinding.status])}
+                  className="inline-flex min-w-[92px] items-center justify-center whitespace-nowrap rounded-full border px-3 py-1 text-sm font-extrabold"
+                  style={badgeStyleToVars(STATUS_BADGE_STYLES[selectedFinding.status] ?? STATUS_BADGE_STYLES.OPEN)}
                 >
-                  {selectedFinding.status}
+                  {formatStatus(selectedFinding.status)}
                 </span>
               </div>
             </div>
 
             {/* Body Columns */}
             <div className="grid grid-cols-1 gap-5 md:grid-cols-[1.2fr_1fr]">
+              {isLoadingDetails ? (
+                <div className="md:col-span-2 rounded-md border border-bd bg-bg3 px-3 py-2 text-sm text-t2">
+                  Loading complete finding details...
+                </div>
+              ) : null}
               {/* Left Column: Context, Issue Details & Timeline */}
               <div>
                 <div className="grid gap-3.5">
@@ -913,13 +973,14 @@ export function FindingsWorkspace() {
             {/* Close button */}
             <button
               onClick={() => setIsCreateFindingModalOpen(false)}
-              className="absolute right-4 top-4 border-none bg-none text-t2"
+              className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-full border border-bd bg-white text-t2 shadow-[0_4px_14px_rgba(15,23,42,0.12)] hover:bg-bg3"
+              aria-label="Close create finding"
             >
               <X size={20} />
             </button>
 
-            <h3 className="mb-1 text-xl font-extrabold">Create Ad-Hoc Finding</h3>
-            <p className="mb-5 text-[13px] text-t2">Log a new non-conformity finding directly to the database without a formal full-site audit.</p>
+            <h3 className="mb-1 pr-12 text-xl font-extrabold">Create Ad-Hoc Finding</h3>
+            <p className="mb-5 pr-12 text-[13px] text-t2">Log a new non-conformity finding directly to the database without a formal full-site audit.</p>
 
             <div className="grid gap-4">
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

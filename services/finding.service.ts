@@ -4,14 +4,39 @@ import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 
+export type FindingListView = "full" | "summary" | "register" | "media-selector";
+
+const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
+  full: null,
+  summary: "findingNumber auditNumber zone department category question severity status dueDate observation createdAt updatedAt",
+  register: "auditId questionId status dueDate updatedAt",
+  "media-selector": "findingNumber question zone department category status beforePhotos afterPhotos"
+};
+
+let lastOverdueRefreshAt = 0;
+const OVERDUE_REFRESH_INTERVAL_MS = 60_000;
+
 function scopedQuery(user: SessionUser) {
-  return user.role.endsWith("_SPOC") && user.department ? { department: user.department } : {};
+  return user.role === "SPOC" && user.department ? { department: user.department } : {};
 }
 
-export async function listFindings(user: SessionUser) {
+async function refreshOverdueStatuses() {
+  const now = Date.now();
+  if (now - lastOverdueRefreshAt < OVERDUE_REFRESH_INTERVAL_MS) return;
+  lastOverdueRefreshAt = now;
+  await Finding.updateMany(
+    { status: { $in: ["OPEN", "IN_PROGRESS", "SUBMITTED", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
+    { $set: { status: "OVERDUE" } }
+  );
+}
+
+export async function listFindings(user: SessionUser, view: FindingListView = "full") {
   await connectDB();
-  await Finding.updateMany({ status: { $nin: ["CLOSED"] }, dueDate: { $lt: new Date() } }, { $set: { status: "OVERDUE" } });
-  return Finding.find(scopedQuery(user)).sort({ createdAt: -1 }).lean();
+  await refreshOverdueStatuses();
+  const projection = FINDING_PROJECTIONS[view] ?? FINDING_PROJECTIONS.full;
+  const request = Finding.find(scopedQuery(user)).sort({ createdAt: -1 });
+  if (projection) request.select(projection);
+  return request.lean();
 }
 
 export async function submitCapa(id: string, input: { capaAction: string; closureRemarks?: string; afterPhotos?: Array<{ secureUrl: string; publicId: string }> }, user: SessionUser) {
@@ -82,9 +107,9 @@ export async function reviewCapa(id: string, input: { decision: "approve" | "rej
   const saved = await finding.save();
 
   // Send review outcome email (Async)
-  const rolesToNotify = input.decision === "approve" 
-    ? ["STORES_SPOC", "PRODUCTION_SPOC", "ADMIN", "MASTER_ADMIN", "AUDITOR", "MANAGEMENT"]
-    : ["STORES_SPOC", "PRODUCTION_SPOC", "ADMIN", "MASTER_ADMIN"];
+  const rolesToNotify = input.decision === "approve"
+    ? ["SPOC", "ADMIN", "MASTER_ADMIN", "AUDITOR", "MANAGEMENT"]
+    : ["SPOC", "ADMIN", "MASTER_ADMIN"];
     
   resolveRecipients({ department: saved.department, roles: rolesToNotify as any[] })
     .then((recipients) => {

@@ -48,8 +48,8 @@ type Finding = {
 };
 
 export function AnalyticsClient() {
-  const auditsApi = useApi<Audit[]>("/api/audits");
-  const findingsApi = useApi<Finding[]>("/api/findings");
+  const auditsApi = useApi<Audit[]>("/api/audits?view=analytics");
+  const findingsApi = useApi<Finding[]>("/api/findings?view=summary");
 
   const audits = auditsApi.data || [];
   const findings = findingsApi.data || [];
@@ -168,6 +168,29 @@ export function AnalyticsClient() {
       };
     });
   }, [audits]);
+
+  // Department vs Severity heatmap
+  const severityHeatmap = useMemo(() => {
+    const map = new Map<string, { Critical: number; High: number; Medium: number; Low: number; total: number }>();
+    for (const f of findings) {
+      const row = map.get(f.department) || { Critical: 0, High: 0, Medium: 0, Low: 0, total: 0 };
+      row[f.severity] = (row[f.severity] || 0) + 1;
+      row.total += 1;
+      map.set(f.department, row);
+    }
+    return [...map.entries()].map(([department, row]) => ({ department, ...row })).sort((a, b) => b.total - a.total);
+  }, [findings]);
+
+  function heatmapCellClass(count: number, severity: "Critical" | "High" | "Medium" | "Low") {
+    if (count === 0) return "text-t3";
+    const intensity: Record<string, string> = {
+      Critical: "bg-[#fecaca] text-[#7f1d1d]",
+      High: "bg-[#fed7aa] text-[#7c2d12]",
+      Medium: "bg-[#fde68a] text-[#78350f]",
+      Low: "bg-[#bfdbfe] text-[#1e3a8a]"
+    };
+    return `${intensity[severity]} font-bold`;
+  }
 
   // Unique lists for export filters
   const uniqueDepts = useMemo(() => {
@@ -390,6 +413,40 @@ export function AnalyticsClient() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="mb-6 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <h3 className="mb-2.5 font-extrabold text-t1">Severity Heatmap - Department vs Severity</h3>
+            {severityHeatmap.length === 0 ? (
+              <div className="p-5 text-center text-t2">No findings recorded yet.</div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-bd bg-white">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-t2">Critical</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-t2">High</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-t2">Medium</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-t2">Low</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-center text-xs font-bold uppercase tracking-wide text-t2">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {severityHeatmap.map((row) => (
+                      <tr key={row.department}>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top font-semibold text-t1">{row.department}</td>
+                        <td className={`border-b border-[#edf0f4] px-3 py-2.5 text-center align-top ${heatmapCellClass(row.Critical, "Critical")}`}>{row.Critical || "-"}</td>
+                        <td className={`border-b border-[#edf0f4] px-3 py-2.5 text-center align-top ${heatmapCellClass(row.High, "High")}`}>{row.High || "-"}</td>
+                        <td className={`border-b border-[#edf0f4] px-3 py-2.5 text-center align-top ${heatmapCellClass(row.Medium, "Medium")}`}>{row.Medium || "-"}</td>
+                        <td className={`border-b border-[#edf0f4] px-3 py-2.5 text-center align-top ${heatmapCellClass(row.Low, "Low")}`}>{row.Low || "-"}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 text-center align-top font-bold text-t1">{row.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { apiPost, useApi } from "@/hooks/useApi";
+import { apiPost, apiUpload, useApi } from "@/hooks/useApi";
 import { CATEGORIES } from "@/lib/constants";
 import {
   Check,
@@ -57,6 +57,14 @@ type Finding = {
   severity: string;
   observation?: string;
 };
+
+type UploadedPhoto = { secureUrl: string; publicId: string };
+
+function responseBadgeClass(response: "Adequate" | "Not Adequate" | "N/A") {
+  if (response === "Adequate") return "bg-green";
+  if (response === "Not Adequate") return "bg-red";
+  return "bg-t2";
+}
 
 export function AuditWorkspace() {
   const masters = useApi<Masters>("/api/masters");
@@ -158,17 +166,7 @@ export function AuditWorkspace() {
       formData.append("file", processed.file);
       formData.append("folderSuffix", "audit-photos");
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Upload failed");
-      }
-
-      const uploadResult = await response.json();
+      const uploadResult = await apiUpload<UploadedPhoto>("/api/upload", formData);
       
       setChecklistResponses(prev => {
         const curr = prev[questionId] || { response: "Adequate" };
@@ -775,12 +773,13 @@ export function AuditWorkspace() {
             {/* Close Button */}
             <button
               onClick={() => setSelectedAuditDetail(null)}
-              className="absolute top-4 right-4 border-0 bg-transparent text-t2"
+              className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-full border border-bd bg-white text-t2 shadow-[0_4px_14px_rgba(15,23,42,0.12)] hover:bg-bg3"
+              aria-label="Close audit details"
             >
               <X size={20} />
             </button>
 
-            <div className="mb-[18px] flex items-start justify-between gap-4 border-b border-bd pb-3.5">
+            <div className="mb-[18px] flex items-start justify-between gap-4 border-b border-bd pb-3.5 pr-12">
               <div>
                 <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">COMPLETED REPORT</span>
                 <h3 className="m-0 text-xl">Audit Details: {selectedAuditDetail.auditNumber}</h3>
@@ -844,8 +843,8 @@ export function AuditWorkspace() {
                         : "border-bd bg-[#f8fafc]"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2.5">
-                      <div>
+                    <div className="grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_116px]">
+                      <div className="min-w-0">
                         <span className="text-[9px] font-bold uppercase text-brand-d">
                           [{item.category}]
                         </span>
@@ -858,11 +857,9 @@ export function AuditWorkspace() {
                           </div>
                         )}
                       </div>
-                      <div>
+                      <div className="flex w-[116px] shrink-0 flex-col items-stretch gap-1 justify-self-end">
                         <span
-                          className={`inline-flex items-center rounded-full border border-transparent px-2 py-0.5 text-[11px] font-extrabold text-white ${
-                            item.response === "Adequate" ? "bg-green" : item.response === "Not Adequate" ? "bg-red" : "bg-t2"
-                          }`}
+                          className={`inline-flex min-h-7 w-full items-center justify-center rounded-full border border-transparent px-2 py-0.5 text-center text-[11px] font-extrabold leading-tight text-white ${responseBadgeClass(item.response)}`}
                         >
                           {item.response}
                         </span>
@@ -870,7 +867,7 @@ export function AuditWorkspace() {
                           const severityStyle = SEVERITY_BADGE_STYLES[item.severity as Severity] ?? SEVERITY_BADGE_STYLES.Low;
                           return (
                             <span
-                              className="ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold"
+                              className="inline-flex min-h-6 w-full items-center justify-center rounded-full border px-2 py-0.5 text-center text-[10px] font-extrabold leading-tight"
                               style={{ background: severityStyle.bg, color: severityStyle.text, borderColor: severityStyle.border }}
                             >
                               {item.severity}

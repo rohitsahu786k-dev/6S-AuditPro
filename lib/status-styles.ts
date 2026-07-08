@@ -7,8 +7,7 @@ export const ROLE_BADGE_STYLES: Record<Role, BadgeStyle> = {
   MASTER_ADMIN: { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
   ADMIN: { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
   AUDITOR: { bg: "#fef3c7", text: "#92400e", border: "#fcd34d" },
-  STORES_SPOC: { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
-  PRODUCTION_SPOC: { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
+  SPOC: { bg: "#fee2e2", text: "#b91c1c", border: "#fca5a5" },
   MANAGEMENT: { bg: "#ecfdf5", text: "#047857", border: "#6ee7b7" },
 };
 

@@ -35,7 +35,7 @@ export function UserManagementTable() {
         <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Initial password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
         <select className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
-          {["MASTER_ADMIN", "ADMIN", "AUDITOR", "STORES_SPOC", "PRODUCTION_SPOC", "MANAGEMENT"].map((role) => <option key={role}>{role}</option>)}
+          {["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"].map((role) => <option key={role}>{role}</option>)}
         </select>
         <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
         <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d">Create</button>

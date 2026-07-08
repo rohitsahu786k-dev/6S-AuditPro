@@ -5,7 +5,7 @@ const UserSchema = new Schema({
   username: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   email: { type: String, trim: true, lowercase: true },
   passwordHash: { type: String, required: true, select: false },
-  role: { type: String, required: true, enum: ["MASTER_ADMIN", "ADMIN", "AUDITOR", "STORES_SPOC", "PRODUCTION_SPOC", "MANAGEMENT"], index: true },
+  role: { type: String, required: true, enum: ["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"], index: true },
   department: { type: String, trim: true },
   zone: { type: String, trim: true },
   status: { type: String, enum: ["active", "inactive"], default: "active", index: true },

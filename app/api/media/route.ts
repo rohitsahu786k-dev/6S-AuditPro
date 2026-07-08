@@ -10,7 +10,7 @@ export async function GET() {
     const user = await requireUser("findings:read");
     await connectDB();
 
-    const scope = user.role.endsWith("_SPOC") && user.department ? { department: user.department } : {};
+    const scope = user.role === "SPOC" && user.department ? { department: user.department } : {};
 
     // 1. Fetch Findings and Audits with media files (department-scoped for SPOC roles)
     const findings = await Finding.find({

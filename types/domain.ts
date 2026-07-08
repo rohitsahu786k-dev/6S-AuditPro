@@ -2,8 +2,7 @@ export type Role =
   | "MASTER_ADMIN"
   | "ADMIN"
   | "AUDITOR"
-  | "STORES_SPOC"
-  | "PRODUCTION_SPOC"
+  | "SPOC"
   | "MANAGEMENT";
 
 export type Permission =

@@ -9,12 +9,21 @@ export async function uploadImage(file: File, folderSuffix = "audit-photos") {
 
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  const cloudinary = configureCloudinary();
+  let cloudinary: ReturnType<typeof configureCloudinary>;
+  try {
+    cloudinary = configureCloudinary();
+  } catch (error) {
+    console.error("Cloudinary configuration error:", error);
+    throw Object.assign(new Error("Image upload is not configured. Please verify Cloudinary settings."), { status: 400 });
+  }
   const folder = `${process.env.CLOUDINARY_UPLOAD_FOLDER || "onepws-6s-auditpro"}/${folderSuffix}`;
 
   return new Promise<{ secureUrl: string; publicId: string }>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream({ folder, resource_type: "image" }, (error, result) => {
-      if (error || !result) reject(error || new Error("Upload failed"));
+      if (error || !result) {
+        console.error("Cloudinary upload error:", error || "No upload result returned");
+        reject(Object.assign(new Error("Image upload failed. Please check the file and Cloudinary configuration."), { status: 400 }));
+      }
       else resolve({ secureUrl: result.secure_url, publicId: result.public_id });
     });
     stream.end(buffer);

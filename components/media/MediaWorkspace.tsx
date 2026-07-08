@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useApi } from "@/hooks/useApi";
+import { apiUpload, useApi } from "@/hooks/useApi";
 import {
   Search,
   Trash2,
@@ -34,7 +34,7 @@ type SessionUser = {
   id: string;
   name: string;
   username: string;
-  role: "MASTER_ADMIN" | "ADMIN" | "AUDITOR" | "STORES_SPOC" | "PRODUCTION_SPOC" | "MANAGEMENT";
+  role: "MASTER_ADMIN" | "ADMIN" | "AUDITOR" | "SPOC" | "MANAGEMENT";
   department?: string;
 };
 
@@ -55,11 +55,13 @@ type Finding = {
   afterPhotos: Array<{ secureUrl: string; publicId: string }>;
 };
 
+type UploadedPhoto = { secureUrl: string; publicId: string };
+
 export function MediaWorkspace() {
   const mediaApi = useApi<MediaItem[]>("/api/media");
   const meApi = useApi<{ user: SessionUser | null }>("/api/auth/me");
   const masters = useApi<Masters>("/api/masters");
-  const findingsApi = useApi<Finding[]>("/api/findings");
+  const findingsApi = useApi<Finding[]>("/api/findings?view=media-selector");
 
   const user = meApi.data?.user;
   const isAdmin = user?.role === "MASTER_ADMIN" || user?.role === "ADMIN";
@@ -176,17 +178,7 @@ export function MediaWorkspace() {
       formData.append("file", processed.file);
       formData.append("folderSuffix", uploadType === "BEFORE" ? "audit-photos" : "capa-photos");
 
-      const response = await fetch("/api/upload", {
-        method: "POST",
-        body: formData
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Upload failed");
-      }
-
-      const result = await response.json();
+      const result = await apiUpload<UploadedPhoto>("/api/upload", formData);
       setUploadedPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId }]);
       setSuccessMsg("Image uploaded & optimized successfully.");
       setTimeout(() => setSuccessMsg(""), 3000);
@@ -470,12 +462,13 @@ export function MediaWorkspace() {
           <div className="relative w-full max-w-[500px] rounded-lg border border-bd bg-bg1 p-6 shadow-[var(--shadow-sm)]">
             <button
               onClick={() => setIsUploadModalOpen(false)}
-              className="absolute top-4 right-4 cursor-pointer border-none bg-transparent text-t2"
+              className="absolute right-3 top-3 z-30 grid h-9 w-9 cursor-pointer place-items-center rounded-full border border-bd bg-white text-t2 shadow-[0_4px_14px_rgba(15,23,42,0.12)] hover:bg-bg3"
+              aria-label="Close upload dialog"
             >
               <X size={20} />
             </button>
 
-            <h3 className="mb-1.5 text-lg font-extrabold">Upload & Link Portal Media</h3>
+            <h3 className="mb-1.5 pr-12 text-lg font-extrabold">Upload & Link Portal Media</h3>
             <p className="mb-5 text-[13px] text-t2">
               Upload optimized evidence photos and link them directly to a live non-conformity finding record.
             </p>
