@@ -39,6 +39,47 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
   return request.lean();
 }
 
+/**
+ * Sends one FINDING_OVERDUE email per finding that just crossed into OVERDUE
+ * and hasn't been notified yet (overdueNotifiedAt gates this to a single
+ * send per finding, since this runs on a recurring cron schedule).
+ */
+export async function notifyOverdueFindings() {
+  await connectDB();
+  await Finding.updateMany(
+    { status: { $in: ["OPEN", "IN_PROGRESS", "SUBMITTED", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
+    { $set: { status: "OVERDUE" } }
+  );
+
+  const overdue = await Finding.find({ status: "OVERDUE", overdueNotifiedAt: { $exists: false } });
+  let notified = 0;
+
+  for (const finding of overdue) {
+    try {
+      const recipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+      await sendTemplatedEmail({
+        triggerEvent: "FINDING_OVERDUE",
+        recipients,
+        data: {
+          recipientName: "Department SPOC",
+          findingNumber: finding.findingNumber,
+          departmentName: finding.department,
+          severity: finding.severity,
+          dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : ""
+        },
+        relatedFindingId: finding._id.toString()
+      });
+      finding.overdueNotifiedAt = new Date();
+      await finding.save();
+      notified += 1;
+    } catch (err) {
+      console.error(`Error sending overdue reminder for ${finding.findingNumber}:`, err);
+    }
+  }
+
+  return { checked: overdue.length, notified };
+}
+
 export async function submitCapa(id: string, input: { capaAction: string; closureRemarks?: string; afterPhotos?: Array<{ secureUrl: string; publicId: string }> }, user: SessionUser) {
   await connectDB();
   const finding = await Finding.findOne({ _id: id, ...scopedQuery(user) });

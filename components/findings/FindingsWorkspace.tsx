@@ -31,14 +31,14 @@ type Finding = {
   question: string;
   severity: "Critical" | "High" | "Medium" | "Low";
   observation?: string;
-  beforePhotos: Array<{ secureUrl: string; publicId: string }>;
+  beforePhotos: Array<UploadedPhoto>;
   assignedTo?: string;
   dueDate?: string;
   status: "OPEN" | "IN_PROGRESS" | "SUBMITTED" | "CLOSED" | "REJECTED" | "REOPENED" | "OVERDUE";
   capaAction?: string;
   closureRemarks?: string;
   rejectionReason?: string;
-  afterPhotos: Array<{ secureUrl: string; publicId: string }>;
+  afterPhotos: Array<UploadedPhoto>;
   capaStatus?: string;
   auditorReviewStatus?: string;
   timeline: Array<{
@@ -51,7 +51,7 @@ type Finding = {
   createdAt: string;
 };
 
-type UploadedPhoto = { secureUrl: string; publicId: string };
+type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
 
 type SessionUser = {
   id: string;
@@ -94,7 +94,7 @@ export function FindingsWorkspace() {
   // CAPA submission form state
   const [capaAction, setCapaAction] = useState("");
   const [closureRemarks, setClosureRemarks] = useState("");
-  const [afterPhotos, setAfterPhotos] = useState<Array<{ secureUrl: string; publicId: string }>>([]);
+  const [afterPhotos, setAfterPhotos] = useState<Array<UploadedPhoto>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmittingCapa, setIsSubmittingCapa] = useState(false);
 
@@ -126,7 +126,7 @@ export function FindingsWorkspace() {
     d.setDate(d.getDate() + 7);
     return d.toISOString().split("T")[0];
   });
-  const [createFindingPhotos, setCreateFindingPhotos] = useState<Array<{ secureUrl: string; publicId: string }>>([]);
+  const [createFindingPhotos, setCreateFindingPhotos] = useState<Array<UploadedPhoto>>([]);
   const [isCreatingFinding, setIsCreatingFinding] = useState(false);
   const [isUploadingCreatePhoto, setIsUploadingCreatePhoto] = useState(false);
 
@@ -274,7 +274,7 @@ export function FindingsWorkspace() {
       formData.append("folderSuffix", "capa-photos");
 
       const result = await apiUpload<UploadedPhoto>("/api/upload", formData);
-      setAfterPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId }]);
+      setAfterPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId, sizeBytes: result.sizeBytes, uploadedBy: result.uploadedBy, uploadedByName: result.uploadedByName }]);
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);
     } finally {
@@ -291,7 +291,7 @@ export function FindingsWorkspace() {
       formData.append("folderSuffix", "audit-photos");
 
       const result = await apiUpload<UploadedPhoto>("/api/upload", formData);
-      setCreateFindingPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId }]);
+      setCreateFindingPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId, sizeBytes: result.sizeBytes, uploadedBy: result.uploadedBy, uploadedByName: result.uploadedByName }]);
     } catch (err: any) {
       alert(`Upload failed: ${err.message}`);
     } finally {
@@ -454,7 +454,7 @@ export function FindingsWorkspace() {
   return (
     <>
       {/* Header */}
-      <div className="mb-[18px] flex items-center justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-t1">Findings & CAPA Dashboard</h1>
           <p className="mt-1 text-sm text-t2">Track non-conformities, submit Corrective & Preventive Action plans (CAPA), and verify closures.</p>
@@ -645,7 +645,7 @@ export function FindingsWorkspace() {
             </button>
 
             {/* Modal Header */}
-            <div className="mb-[18px] flex items-start justify-between gap-4 border-b border-bd pb-3.5 pr-12">
+            <div className="mb-[18px] flex flex-wrap items-start justify-between gap-4 border-b border-bd pb-3.5 pr-12">
               <div>
                 <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">CAPA WORKFLOW</span>
                 <h3 className="m-0 text-xl">Finding: {selectedFinding.findingNumber}</h3>
@@ -770,7 +770,7 @@ export function FindingsWorkspace() {
               </div>
 
               {/* Right Column: CAPA Submission / Approval Review controls */}
-              <div className="border-l border-bd pl-5">
+              <div className="md:border-l md:border-bd md:pl-5">
                 {/* 1. CLOSED FINDING DISPLAY */}
                 {selectedFinding.status === "CLOSED" && (
                   <div className="grid gap-3.5">

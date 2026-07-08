@@ -10,7 +10,8 @@ import {
   AlertTriangle,
   ExternalLink,
   CheckCircle,
-  FolderOpen
+  FolderOpen,
+  Download
 } from "lucide-react";
 import { processImageToWebP } from "@/utils/media";
 
@@ -28,6 +29,8 @@ type MediaItem = {
   description: string;
   severity: "Critical" | "High" | "Medium" | "Low";
   assignedTo?: string;
+  uploadedByName?: string;
+  sizeBytes?: number;
 };
 
 type SessionUser = {
@@ -55,7 +58,7 @@ type Finding = {
   afterPhotos: Array<{ secureUrl: string; publicId: string }>;
 };
 
-type UploadedPhoto = { secureUrl: string; publicId: string };
+type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
 
 export function MediaWorkspace() {
   const mediaApi = useApi<MediaItem[]>("/api/media");
@@ -72,6 +75,12 @@ export function MediaWorkspace() {
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [zoneFilter, setZoneFilter] = useState("ALL");
   const [deptFilter, setDeptFilter] = useState("ALL");
+  const [fromDateInput, setFromDateInput] = useState("");
+  const [toDateInput, setToDateInput] = useState("");
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: "", to: "" });
+
+  // Bulk Selection State
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Upload Modal State
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -105,10 +114,37 @@ export function MediaWorkspace() {
       const matchesType = typeFilter === "ALL" || item.type === typeFilter;
       const matchesZone = zoneFilter === "ALL" || item.zone === zoneFilter;
       const matchesDept = deptFilter === "ALL" || item.department === deptFilter;
+      const itemDate = item.date ? item.date.slice(0, 10) : "";
+      const matchesFrom = !dateRange.from || (itemDate && itemDate >= dateRange.from);
+      const matchesTo = !dateRange.to || (itemDate && itemDate <= dateRange.to);
 
-      return matchesSearch && matchesPillar && matchesType && matchesZone && matchesDept;
+      return matchesSearch && matchesPillar && matchesType && matchesZone && matchesDept && matchesFrom && matchesTo;
     });
-  }, [mediaApi.data, searchQuery, pillarFilter, typeFilter, zoneFilter, deptFilter]);
+  }, [mediaApi.data, searchQuery, pillarFilter, typeFilter, zoneFilter, deptFilter, dateRange]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.size === filteredMedia.length ? new Set() : new Set(filteredMedia.map((item) => item.id))
+    );
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "—";
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const toDownloadUrl = (url: string) => url.replace("/upload/", "/upload/fl_attachment/");
 
   // Statistics Calculation
   const stats = useMemo(() => {
@@ -153,6 +189,48 @@ export function MediaWorkspace() {
     }
   };
 
+  // Bulk Delete Handler
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!window.confirm(`Delete ${selectedIds.size} selected media asset(s)? This cannot be undone.`)) return;
+
+    const targets = filteredMedia.filter((item) => selectedIds.has(item.id));
+    let failed = 0;
+    for (const item of targets) {
+      try {
+        const response = await fetch(`/api/media?publicId=${encodeURIComponent(item.publicId)}`, { method: "DELETE" });
+        if (!response.ok) failed += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+
+    setSelectedIds(new Set());
+    mediaApi.reload();
+    findingsApi.reload();
+    if (failed > 0) {
+      setErrorMsg(`${failed} of ${targets.length} deletions failed.`);
+      setTimeout(() => setErrorMsg(""), 5000);
+    } else {
+      setSuccessMsg(`${targets.length} media asset(s) deleted successfully.`);
+      setTimeout(() => setSuccessMsg(""), 3000);
+    }
+  };
+
+  // Bulk Download Handler — sequential to avoid popup-blocker issues with multiple simultaneous windows
+  const handleBulkDownload = async () => {
+    const targets = filteredMedia.filter((item) => selectedIds.has(item.id));
+    for (const item of targets) {
+      const a = document.createElement("a");
+      a.href = toDownloadUrl(item.url);
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    }
+  };
+
   // Upload Interceptor
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -179,7 +257,7 @@ export function MediaWorkspace() {
       formData.append("folderSuffix", uploadType === "BEFORE" ? "audit-photos" : "capa-photos");
 
       const result = await apiUpload<UploadedPhoto>("/api/upload", formData);
-      setUploadedPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId }]);
+      setUploadedPhotos(prev => [...prev, { secureUrl: result.secureUrl, publicId: result.publicId, sizeBytes: result.sizeBytes, uploadedBy: result.uploadedBy, uploadedByName: result.uploadedByName }]);
       setSuccessMsg("Image uploaded & optimized successfully.");
       setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err: any) {
@@ -248,7 +326,7 @@ export function MediaWorkspace() {
 
   return (
     <>
-      <div className="mb-[18px] flex items-end justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-extrabold text-t1">Media Manager</h2>
           <p className="mt-1 text-sm text-t2">Centralized digital assets, evidence library, and closure confirmations registry.</p>
@@ -360,7 +438,62 @@ export function MediaWorkspace() {
             ))}
           </select>
         </div>
+
+        {/* Date range */}
+        <div className="mt-3 flex flex-wrap items-center gap-2.5 border-t border-bd pt-3">
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-t2">
+            From:
+            <input
+              type="date"
+              className="rounded-lg border border-bd px-2.5 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+              value={fromDateInput}
+              onChange={(e) => setFromDateInput(e.target.value)}
+            />
+          </label>
+          <label className="flex items-center gap-1.5 text-xs font-semibold text-t2">
+            To:
+            <input
+              type="date"
+              className="rounded-lg border border-bd px-2.5 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+              value={toDateInput}
+              onChange={(e) => setToDateInput(e.target.value)}
+            />
+          </label>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand px-3 py-2 text-xs font-bold text-white hover:bg-brand-d"
+            onClick={() => setDateRange({ from: fromDateInput, to: toDateInput })}
+          >
+            Apply
+          </button>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-bd bg-white px-3 py-2 text-xs font-bold text-t1 hover:bg-bg3"
+            onClick={() => { setFromDateInput(""); setToDateInput(""); setDateRange({ from: "", to: "" }); }}
+          >
+            <X size={12} /> Clear
+          </button>
+        </div>
       </div>
+
+      {/* BULK ACTION BAR */}
+      {selectedIds.size > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2.5 rounded-lg border border-bd bg-bg1 p-3 shadow-[var(--shadow-sm)]">
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-bd bg-white px-3 py-2 text-xs font-bold text-t1 hover:bg-bg3"
+            onClick={handleBulkDownload}
+          >
+            <Download size={13} /> Download Selected
+          </button>
+          {isAdmin && (
+            <button
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red hover:bg-accent"
+              onClick={handleBulkDelete}
+            >
+              <Trash2 size={13} /> Delete Selected
+            </button>
+          )}
+          <span className="text-xs font-semibold text-t2">{selectedIds.size} selected</span>
+        </div>
+      )}
 
       {/* MEDIA GRID */}
       {mediaApi.loading ? (
@@ -376,83 +509,82 @@ export function MediaWorkspace() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
-          {filteredMedia.map((item) => (
-            <div
-              key={item.id}
-              className="group relative flex flex-col overflow-hidden rounded-lg border border-bd bg-bg1 shadow-[var(--shadow-sm)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-1 hover:border-bd2 hover:shadow-[0_12px_32px_rgba(26,35,50,0.12)]"
-            >
-              {/* Media Thumbnail Container */}
-              <div className="relative overflow-hidden bg-[#0f172a] pb-[70%]">
-                <img
-                  src={item.url}
-                  alt={item.description}
-                  className="absolute top-0 left-0 h-full w-full cursor-pointer object-cover transition-transform duration-500 ease-in-out group-hover:scale-[1.06]"
-                />
-
-                {/* Phase Tag Badge */}
-                <span
-                  className="absolute top-3 left-3 z-10 inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-extrabold text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-                  style={{
-                    background: item.type === "BEFORE" ? "rgba(220, 38, 38, 0.9)" : item.type === "AFTER" ? "rgba(21, 128, 61, 0.9)" : "rgba(59, 130, 246, 0.9)"
-                  }}
-                >
-                  {item.type === "BEFORE" ? "Before (Audit)" : item.type === "AFTER" ? "After (CAPA)" : "Checklist Ref"}
-                </span>
-
-                {/* Severity Badge */}
-                <span
-                  className="absolute top-3 right-3 z-10 inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold"
-                  style={{
-                    background: item.severity === "Critical" ? "#fef2f2" : item.severity === "High" ? "#fff7ed" : item.severity === "Medium" ? "#fefce8" : "#f0fdf4",
-                    color: item.severity === "Critical" ? "#991b1b" : item.severity === "High" ? "#c2410c" : item.severity === "Medium" ? "#a16207" : "#166534",
-                    borderColor: item.severity === "Critical" ? "#fee2e2" : item.severity === "High" ? "#ffedd5" : item.severity === "Medium" ? "#fef9c3" : "#dcfce7"
-                  }}
-                >
-                  {item.severity}
-                </span>
-              </div>
-
-              {/* Card Meta Content */}
-              <div className="flex flex-grow flex-col gap-1.5 p-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-extrabold text-brand-d">
-                    {item.sourceNumber}
-                  </span>
-                  <span className="text-[11px] text-t2">
-                    {item.date ? new Date(item.date).toLocaleDateString() : ""}
-                  </span>
-                </div>
-
-                <p className="my-1 h-9 overflow-hidden text-[13px] leading-[1.4] font-medium line-clamp-2">
-                  {item.description}
-                </p>
-
-                <div className="mt-1 flex flex-wrap gap-1.5 border-t border-[#f1f5f9] pt-2">
-                  <span className="rounded bg-[#f1f5f9] px-1.5 py-0.5 text-[11px] font-semibold">
-                    {item.zone}
-                  </span>
-                  <span className="rounded bg-[#f1f5f9] px-1.5 py-0.5 text-[11px] font-semibold">
-                    {item.department}
-                  </span>
-                  <span className="rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-brand-d">
-                    {item.category}
-                  </span>
-                </div>
-              </div>
-
-              {/* Admin Deletion Action */}
-              {isAdmin && (
-                <button
-                  onClick={() => handleDeleteMedia(item.publicId)}
-                  className="absolute right-2.5 bottom-2.5 z-20 grid cursor-pointer place-items-center rounded-md border border-[#fee2e2] bg-[rgba(254,242,242,0.8)] p-1.5 text-red"
-                  title="Delete Media File"
-                >
-                  <Trash2 size={14} />
-                </button>
-              )}
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-lg border border-bd bg-bg1 shadow-[var(--shadow-sm)]">
+          <table className="w-full min-w-[1000px] border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="bg-bg3 px-3 py-2.5 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size > 0 && selectedIds.size === filteredMedia.length}
+                    onChange={toggleSelectAll}
+                    aria-label="Select all"
+                  />
+                </th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Preview</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Description</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Category</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Type</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Dept</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Related</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Uploaded By</th>
+                <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Size</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Date</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMedia.map((item) => (
+                <tr key={item.id} className={selectedIds.has(item.id) ? "bg-accent/40" : undefined}>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(item.id)}
+                      onChange={() => toggleSelect(item.id)}
+                      aria-label={`Select ${item.sourceNumber}`}
+                    />
+                  </td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <img src={item.url} alt={item.description} className="h-12 w-12 cursor-pointer rounded-md border border-bd object-cover" />
+                  </td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[240px]">
+                    <span className="line-clamp-2 text-[13px] font-medium">{item.description}</span>
+                  </td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <span className="rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-brand-d whitespace-nowrap">{item.category}</span>
+                  </td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white whitespace-nowrap"
+                      style={{ background: item.type === "BEFORE" ? "#dc2626" : item.type === "AFTER" ? "#15803d" : "#3b82f6" }}
+                    >
+                      {item.type === "BEFORE" ? "Before" : item.type === "AFTER" ? "After" : "Checklist"}
+                    </span>
+                  </td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top whitespace-nowrap text-t2">{item.department}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top whitespace-nowrap font-semibold text-brand-d">{item.sourceNumber}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top whitespace-nowrap text-t2">{item.uploadedByName || "—"}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-right whitespace-nowrap text-t2">{formatFileSize(item.sizeBytes)}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top whitespace-nowrap text-t2">{item.date ? new Date(item.date).toLocaleDateString() : "—"}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <div className="flex flex-wrap items-center gap-2.5 whitespace-nowrap text-xs font-semibold">
+                      <button
+                        className="text-t2 hover:text-brand-d"
+                        onClick={(e) => { (e.currentTarget.closest("tr")?.querySelector("img") as HTMLImageElement | null)?.click(); }}
+                      >
+                        Preview
+                      </button>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-t2 hover:text-brand-d">Open</a>
+                      <a href={toDownloadUrl(item.url)} className="text-t2 hover:text-brand-d">Download</a>
+                      {isAdmin && (
+                        <button className="text-red hover:text-brand-d" onClick={() => handleDeleteMedia(item.publicId)}>Trash</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

@@ -45,6 +45,19 @@ export async function sendTemplatedEmail(input: {
     });
     return logEmail({ templateKey: template.templateKey, triggerEvent: input.triggerEvent, recipients: input.recipients, cc: input.cc, bcc: input.bcc, subject, status: "sent", relatedAuditId: input.relatedAuditId, relatedFindingId: input.relatedFindingId, sentBySystem: true });
   } catch (error) {
-    return logEmail({ templateKey: template.templateKey, triggerEvent: input.triggerEvent, recipients: input.recipients, cc: input.cc, bcc: input.bcc, subject, status: "failed", errorMessage: error instanceof Error ? error.message : "SMTP failure", relatedAuditId: input.relatedAuditId, relatedFindingId: input.relatedFindingId, sentBySystem: true });
+    return logEmail({
+      templateKey: template.templateKey,
+      triggerEvent: input.triggerEvent,
+      recipients: input.recipients,
+      cc: input.cc,
+      bcc: input.bcc,
+      subject,
+      status: "failed",
+      errorMessage: error instanceof Error ? error.message : "SMTP failure",
+      relatedAuditId: input.relatedAuditId,
+      relatedFindingId: input.relatedFindingId,
+      sentBySystem: true,
+      payload: input
+    });
   }
 }

@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
     const folderSuffix = requestedFolder;
     if (!(file instanceof File)) throw Object.assign(new Error("file is required"), { status: 400 });
-    return ok(await uploadImage(file, folderSuffix));
+    return ok(await uploadImage(file, folderSuffix, { id: user.id, name: user.name }));
   } catch (error) {
     return fail(error);
   }

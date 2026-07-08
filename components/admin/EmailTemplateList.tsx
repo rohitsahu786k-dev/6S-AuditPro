@@ -9,7 +9,7 @@ export function EmailTemplateList() {
   const templates = useApi<Template[]>("/api/email/templates");
   return (
     <>
-      <div className="mb-[18px] flex items-end justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-t1">Email Templates</h1>
           <p className="mt-1 text-sm text-t2">Editable MongoDB-backed notification templates.</p>

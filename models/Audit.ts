@@ -7,7 +7,13 @@ const ChecklistItemSchema = new Schema({
   response: { type: String, enum: ["Adequate", "Not Adequate", "N/A"] },
   observation: String,
   severity: { type: String, enum: ["Critical", "High", "Medium", "Low"] },
-  beforePhotos: [{ secureUrl: String, publicId: String }]
+  beforePhotos: [{
+    secureUrl: String,
+    publicId: String,
+    sizeBytes: Number,
+    uploadedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    uploadedByName: String
+  }]
 }, { _id: false });
 
 const AuditSchema = new Schema({

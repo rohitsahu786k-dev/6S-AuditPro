@@ -1,6 +1,12 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
-const PhotoSchema = new Schema({ secureUrl: String, publicId: String }, { _id: false });
+const PhotoSchema = new Schema({
+  secureUrl: String,
+  publicId: String,
+  sizeBytes: Number,
+  uploadedBy: { type: Schema.Types.ObjectId, ref: "User" },
+  uploadedByName: String
+}, { _id: false });
 const TimelineSchema = new Schema({
   action: String,
   note: String,
@@ -32,6 +38,7 @@ const FindingSchema = new Schema({
   rejectionReason: String,
   timeline: [TimelineSchema],
   status: { type: String, enum: ["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"], default: "OPEN", index: true },
+  overdueNotifiedAt: { type: Date },
   createdBy: { type: Schema.Types.ObjectId, ref: "User" }
 }, { timestamps: true });
 

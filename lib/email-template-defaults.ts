@@ -214,10 +214,18 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
     subject: "6S AuditPro summary",
     htmlBody: wrapEmailLayout(
       `${greeting()}${heading("6S AuditPro Activity Summary")}` +
-        `<p style="margin:0 0 8px;">Here is your 6S audit activity summary.</p>` +
+        `<p style="margin:0 0 8px;">Here is your current 6S audit activity summary.</p>` +
+        infoTable(
+          infoRow("Open Findings", "{{openCount}}") +
+            infoRow("In Progress", "{{inProgressCount}}") +
+            infoRow("Closed", "{{closedCount}}") +
+            infoRow("Overdue", "{{overdueCount}}") +
+            infoRow("Critical Active", "{{criticalCount}}")
+        ) +
         emailButton("{{appUrl}}/dashboard", "Open Dashboard") +
         closing()
     ),
-    textBody: "Hello {{recipientName}},\n\nHere is your 6S audit activity summary.\n\nOpen dashboard: {{appUrl}}/dashboard\n\n{{companyName}}"
+    textBody:
+      "Hello {{recipientName}},\n\nHere is your current 6S audit activity summary.\n\nOpen Findings: {{openCount}}\nIn Progress: {{inProgressCount}}\nClosed: {{closedCount}}\nOverdue: {{overdueCount}}\nCritical Active: {{criticalCount}}\n\nOpen dashboard: {{appUrl}}/dashboard\n\n{{companyName}}"
   }
 ];

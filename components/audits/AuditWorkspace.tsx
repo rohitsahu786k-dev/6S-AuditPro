@@ -15,7 +15,8 @@ import {
   Plus,
   Eye,
   AlertTriangle,
-  ExternalLink
+  ExternalLink,
+  Mail
 } from "lucide-react";
 import { defaultSeverity } from "@/lib/audit-scoring";
 import { processImageToWebP } from "@/utils/media";
@@ -43,7 +44,7 @@ type Audit = {
     response: "Adequate" | "Not Adequate" | "N/A";
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
-    beforePhotos?: Array<{ secureUrl: string; publicId: string }>;
+    beforePhotos?: Array<UploadedPhoto>;
   }>;
   categoryScores: Record<string, number>;
   findingIds?: string[];
@@ -58,7 +59,7 @@ type Finding = {
   observation?: string;
 };
 
-type UploadedPhoto = { secureUrl: string; publicId: string };
+type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
 
 function responseBadgeClass(response: "Adequate" | "Not Adequate" | "N/A") {
   if (response === "Adequate") return "bg-green";
@@ -89,7 +90,7 @@ export function AuditWorkspace() {
     response: "Adequate" | "Not Adequate" | "N/A";
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
-    beforePhotos?: Array<{ secureUrl: string; publicId: string }>;
+    beforePhotos?: Array<UploadedPhoto>;
   }>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
 
@@ -100,7 +101,29 @@ export function AuditWorkspace() {
 
   // Detail Modal State
   const [selectedAuditDetail, setSelectedAuditDetail] = useState<Audit | null>(null);
-  
+
+  // Share Report State
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState("");
+  const [isSharing, setIsSharing] = useState(false);
+  const [shareMsg, setShareMsg] = useState("");
+
+  const handleShareReport = async () => {
+    if (!selectedAuditDetail || !shareEmail.trim()) return;
+    setIsSharing(true);
+    setShareMsg("");
+    try {
+      await apiPost(`/api/audits/${selectedAuditDetail._id}/share`, { email: shareEmail.trim() });
+      setShareMsg("Report shared successfully.");
+      setShareEmail("");
+      setTimeout(() => { setIsShareOpen(false); setShareMsg(""); }, 1500);
+    } catch (err: any) {
+      setShareMsg(err.message || "Failed to share report.");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   // Image Compression Alert State
   const [compressionAlert, setCompressionAlert] = useState<{
     file: File;
@@ -171,7 +194,7 @@ export function AuditWorkspace() {
       setChecklistResponses(prev => {
         const curr = prev[questionId] || { response: "Adequate" };
         const photos = curr.beforePhotos ? [...curr.beforePhotos] : [];
-        photos.push({ secureUrl: uploadResult.secureUrl, publicId: uploadResult.publicId });
+        photos.push({ secureUrl: uploadResult.secureUrl, publicId: uploadResult.publicId, sizeBytes: uploadResult.sizeBytes, uploadedBy: uploadResult.uploadedBy, uploadedByName: uploadResult.uploadedByName });
         return {
           ...prev,
           [questionId]: {
@@ -294,7 +317,7 @@ export function AuditWorkspace() {
   return (
     <>
       {/* Page Header */}
-      <div className="mb-[18px] flex items-end justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-t1">6S Site Audits</h1>
           <p className="mt-1 text-sm text-t2">Establish and verify workplace discipline and safety standards via systematic scoring audits.</p>
@@ -535,7 +558,7 @@ export function AuditWorkspace() {
                           : "border-bd bg-[#f8fafc]"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-5">
+                      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
                         <div>
                           <span className="mb-[3px] block text-[10px] font-black uppercase tracking-[0.06em] text-brand">
                             {q.subSection || "STANDARD"}
@@ -544,7 +567,7 @@ export function AuditWorkspace() {
                         </div>
 
                         {/* Control Buttons */}
-                        <div className="flex shrink-0 gap-1.5">
+                        <div className="flex flex-wrap gap-1.5 sm:shrink-0">
                           <button
                             onClick={() => setChecklistResponses(prev => ({
                               ...prev,
@@ -772,14 +795,14 @@ export function AuditWorkspace() {
           <div className="relative w-full max-w-[800px] max-h-[90vh] overflow-y-auto rounded-lg border border-bd bg-bg1 p-6 shadow-[var(--shadow-sm)]">
             {/* Close Button */}
             <button
-              onClick={() => setSelectedAuditDetail(null)}
+              onClick={() => { setSelectedAuditDetail(null); setIsShareOpen(false); setShareEmail(""); setShareMsg(""); }}
               className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-full border border-bd bg-white text-t2 shadow-[0_4px_14px_rgba(15,23,42,0.12)] hover:bg-bg3"
               aria-label="Close audit details"
             >
               <X size={20} />
             </button>
 
-            <div className="mb-[18px] flex items-start justify-between gap-4 border-b border-bd pb-3.5 pr-12">
+            <div className="mb-[18px] flex flex-wrap items-start justify-between gap-4 border-b border-bd pb-3.5 pr-12">
               <div>
                 <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">COMPLETED REPORT</span>
                 <h3 className="m-0 text-xl">Audit Details: {selectedAuditDetail.auditNumber}</h3>
@@ -792,8 +815,34 @@ export function AuditWorkspace() {
                 <div className={`text-[32px] font-black ${selectedAuditDetail.totalScore >= 90 ? "text-green" : "text-brand"}`}>
                   {selectedAuditDetail.totalScore}%
                 </div>
+                <button
+                  onClick={() => setIsShareOpen((prev) => !prev)}
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-bd bg-white px-2.5 py-1.5 text-xs font-bold text-t1 hover:bg-bg3"
+                >
+                  <Mail size={13} /> Share Report
+                </button>
               </div>
             </div>
+
+            {isShareOpen && (
+              <div className="mb-[18px] flex flex-wrap items-center gap-2 rounded-lg border border-bd bg-bg3 p-3">
+                <input
+                  type="email"
+                  placeholder="recipient@company.com"
+                  className="min-w-[220px] flex-1 rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={shareEmail}
+                  onChange={(e) => setShareEmail(e.target.value)}
+                />
+                <button
+                  onClick={handleShareReport}
+                  disabled={isSharing || !shareEmail.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-[.55]"
+                >
+                  {isSharing ? "Sending..." : "Send"}
+                </button>
+                {shareMsg && <span className="text-xs font-semibold text-t2">{shareMsg}</span>}
+              </div>
+            )}
 
             {/* Audit Info Card */}
             <div className="mb-[18px] grid grid-cols-1 gap-3 rounded-lg border border-bd bg-bg3 p-3 text-sm md:grid-cols-3">

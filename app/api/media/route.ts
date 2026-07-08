@@ -12,19 +12,25 @@ export async function GET() {
 
     const scope = user.role === "SPOC" && user.department ? { department: user.department } : {};
 
-    // 1. Fetch Findings and Audits with media files (department-scoped for SPOC roles)
+    // 1. Fetch Findings and Audits with media files (department-scoped for SPOC roles).
+    // Projected to just the fields this route reads — full documents (esp. timeline
+    // arrays) were being pulled on every load, which is what made this slow.
     const findings = await Finding.find({
       ...scope,
       $or: [
         { "beforePhotos.0": { $exists: true } },
         { "afterPhotos.0": { $exists: true } }
       ]
-    }).lean();
+    })
+      .select("findingNumber category zone department severity assignedTo question capaAction beforePhotos afterPhotos createdAt updatedAt")
+      .lean();
 
     const audits = await Audit.find({
       ...scope,
       "checklist.beforePhotos.0": { $exists: true }
-    }).lean();
+    })
+      .select("auditNumber zone department date createdAt checklist.category checklist.question checklist.severity checklist.beforePhotos")
+      .lean();
 
     const allMedia: any[] = [];
 
@@ -45,7 +51,9 @@ export async function GET() {
             date: f.createdAt ? new Date(f.createdAt).toISOString() : new Date().toISOString(),
             description: f.question,
             severity: f.severity || "Medium",
-            assignedTo: f.assignedTo || ""
+            assignedTo: f.assignedTo || "",
+            uploadedByName: (photo as any).uploadedByName || "",
+            sizeBytes: (photo as any).sizeBytes || 0
           });
         }
       }
@@ -66,7 +74,9 @@ export async function GET() {
             date: f.updatedAt ? new Date(f.updatedAt).toISOString() : (f.createdAt ? new Date(f.createdAt).toISOString() : new Date().toISOString()),
             description: f.capaAction || "CAPA Resolution Image",
             severity: f.severity || "Medium",
-            assignedTo: f.assignedTo || ""
+            assignedTo: f.assignedTo || "",
+            uploadedByName: (photo as any).uploadedByName || "",
+            sizeBytes: (photo as any).sizeBytes || 0
           });
         }
       }
@@ -90,7 +100,9 @@ export async function GET() {
               date: a.date ? new Date(a.date).toISOString() : (a.createdAt ? new Date(a.createdAt).toISOString() : new Date().toISOString()),
               description: item.question,
               severity: item.severity || "Low",
-              assignedTo: ""
+              assignedTo: "",
+              uploadedByName: (photo as any).uploadedByName || "",
+              sizeBytes: (photo as any).sizeBytes || 0
             });
           }
         }

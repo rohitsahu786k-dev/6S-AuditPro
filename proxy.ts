@@ -9,7 +9,7 @@ const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password"
 
 export const proxy = auth((request) => {
   const { pathname } = request.nextUrl;
-  if (pathname.startsWith("/api/auth") || pathname.startsWith("/_next") || pathname.includes(".")) {
+  if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/cron") || pathname.startsWith("/_next") || pathname.includes(".")) {
     return NextResponse.next();
   }
   if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {

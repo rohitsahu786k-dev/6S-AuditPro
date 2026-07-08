@@ -283,7 +283,7 @@ export function AnalyticsClient() {
   return (
     <>
       {/* Top Header */}
-      <div className="mb-[18px] flex items-end justify-between gap-4 print:hidden">
+      <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-extrabold text-t1">Analytics & Compliance Insights</h1>
           <p className="mt-1 text-sm text-t2">Monitor key aggregate trends, category-wise breakdowns, and export print-ready tabular sheets.</p>

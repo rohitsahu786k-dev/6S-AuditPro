@@ -3,6 +3,14 @@ import { z } from "zod";
 export const roleSchema = z.enum(["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"]);
 export const emailSchema = z.string().email().optional().or(z.literal(""));
 
+export const photoSchema = z.object({
+  secureUrl: z.string().url(),
+  publicId: z.string(),
+  sizeBytes: z.number().optional(),
+  uploadedBy: z.string().optional(),
+  uploadedByName: z.string().optional()
+});
+
 export const loginSchema = z.object({
   username: z.string().trim().min(1).max(80),
   password: z.string().min(1).max(200)
@@ -56,7 +64,7 @@ export const auditSchema = z.object({
     response: z.enum(["Adequate", "Not Adequate", "N/A"]),
     observation: z.string().optional(),
     severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
-    beforePhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional().default([])
+    beforePhotos: z.array(photoSchema).optional().default([])
   })).default([])
 });
 
@@ -66,8 +74,8 @@ export const findingUpdateSchema = z.object({
   assignedTo: z.string().trim().optional(),
   dueDate: z.coerce.date().optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"]).optional(),
-  beforePhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional(),
-  afterPhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional()
+  beforePhotos: z.array(photoSchema).optional(),
+  afterPhotos: z.array(photoSchema).optional()
 });
 
 export const findingCreateSchema = z.object({
@@ -77,7 +85,7 @@ export const findingCreateSchema = z.object({
   question: z.string().trim().min(1),
   severity: z.enum(["Critical", "High", "Medium", "Low"]).optional().default("Medium"),
   observation: z.string().trim().optional(),
-  beforePhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).optional().default([]),
+  beforePhotos: z.array(photoSchema).optional().default([]),
   assignedTo: z.string().trim().optional(),
   dueDate: z.coerce.date().optional()
 });
@@ -85,7 +93,7 @@ export const findingCreateSchema = z.object({
 export const capaSchema = z.object({
   capaAction: z.string().trim().min(3),
   closureRemarks: z.string().trim().optional(),
-  afterPhotos: z.array(z.object({ secureUrl: z.string().url(), publicId: z.string() })).default([])
+  afterPhotos: z.array(photoSchema).default([])
 });
 
 export const reviewSchema = z.object({
@@ -124,4 +132,12 @@ export const emailTemplateSchema = z.object({
 export const testEmailSchema = z.object({
   to: z.string().email(),
   sampleData: z.record(z.string()).default({})
+});
+
+export const shareReportSchema = z.object({
+  email: z.string().trim().email()
+});
+
+export const retryEmailSchema = z.object({
+  logId: z.string().min(1)
 });

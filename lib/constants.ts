@@ -85,5 +85,10 @@ export const EMAIL_VARIABLES = [
   "resetUrl",
   "logoUrl",
   "totalScore",
-  "capaAction"
+  "capaAction",
+  "openCount",
+  "inProgressCount",
+  "closedCount",
+  "overdueCount",
+  "criticalCount"
 ];
