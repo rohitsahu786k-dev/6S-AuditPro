@@ -1,39 +1,46 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
+import { apiPost } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { APP_NAME, COMPANY_NAME } from "@/lib/constants";
 
-export function LoginForm() {
+export function SignupForm() {
   const router = useRouter();
-  const search = useSearchParams();
+  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
+    if (password !== confirmPassword) {
+      setError("Password and confirmation do not match");
+      return;
+    }
     setLoading(true);
     try {
+      await apiPost("/api/auth/signup", { name, username, email, password });
       const result = await signIn("credentials", { username, password, redirect: false });
       if (result?.error) {
-        setError("Invalid username or password");
+        router.push("/login");
         return;
       }
-      router.push(search.get("next") || "/dashboard");
+      router.push("/dashboard");
       router.refresh();
-    } catch {
-      setError("Login failed");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Sign up failed");
     } finally {
       setLoading(false);
     }
@@ -50,7 +57,7 @@ export function LoginForm() {
           alt={COMPANY_NAME}
           className="mx-auto mb-4 block w-[220px] max-w-[82%]"
         />
-        <h1 className="mb-1 text-[22px] font-bold text-t1">{APP_NAME}</h1>
+        <h1 className="mb-1 text-[22px] font-bold text-t1">Create your {APP_NAME} account</h1>
         <p className="text-[13px] text-t2">{COMPANY_NAME} — Enterprise Audit System</p>
       </div>
 
@@ -61,11 +68,25 @@ export function LoginForm() {
       ) : null}
 
       <div className="mb-3.5 grid gap-1.5">
-        <Label htmlFor="l-user" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+        <Label htmlFor="s-name" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+          Full Name
+        </Label>
+        <Input
+          id="s-name"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          autoComplete="name"
+          className="h-auto rounded-[7px] border-bd px-3 py-2.5 text-sm focus-visible:border-brand focus-visible:ring-[3px] focus-visible:ring-brand/12"
+          required
+        />
+      </div>
+
+      <div className="mb-3.5 grid gap-1.5">
+        <Label htmlFor="s-user" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
           Username
         </Label>
         <Input
-          id="l-user"
+          id="s-user"
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
@@ -75,16 +96,32 @@ export function LoginForm() {
       </div>
 
       <div className="mb-3.5 grid gap-1.5">
-        <Label htmlFor="l-pass" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+        <Label htmlFor="s-email" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+          Email
+        </Label>
+        <Input
+          id="s-email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          autoComplete="email"
+          className="h-auto rounded-[7px] border-bd px-3 py-2.5 text-sm focus-visible:border-brand focus-visible:ring-[3px] focus-visible:ring-brand/12"
+          required
+        />
+      </div>
+
+      <div className="mb-3.5 grid gap-1.5">
+        <Label htmlFor="s-pass" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
           Password
         </Label>
         <div className="relative">
           <Input
-            id="l-pass"
+            id="s-pass"
             type={showPassword ? "text" : "password"}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            autoComplete="current-password"
+            autoComplete="new-password"
+            minLength={8}
             className="h-auto rounded-[7px] border-bd px-3 py-2.5 pr-11 text-sm focus-visible:border-brand focus-visible:ring-[3px] focus-visible:ring-brand/12"
             required
           />
@@ -99,19 +136,20 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="mb-4 flex items-center justify-between text-[13px]">
-        <label className="flex items-center gap-2 text-t2">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(event) => setRemember(event.target.checked)}
-            className="h-3.5 w-3.5 accent-brand"
-          />
-          Remember me
-        </label>
-        <Link href="/forgot-password" className="font-semibold text-brand hover:text-brand-d">
-          Forgot password?
-        </Link>
+      <div className="mb-4 grid gap-1.5">
+        <Label htmlFor="s-confirm" className="text-[11px] font-bold uppercase tracking-[.5px] text-t2">
+          Confirm Password
+        </Label>
+        <Input
+          id="s-confirm"
+          type={showPassword ? "text" : "password"}
+          value={confirmPassword}
+          onChange={(event) => setConfirmPassword(event.target.value)}
+          autoComplete="new-password"
+          minLength={8}
+          className="h-auto rounded-[7px] border-bd px-3 py-2.5 text-sm focus-visible:border-brand focus-visible:ring-[3px] focus-visible:ring-brand/12"
+          required
+        />
       </div>
 
       <Button
@@ -119,13 +157,13 @@ export function LoginForm() {
         disabled={loading}
         className="h-auto w-full justify-center rounded-lg bg-brand px-[22px] py-3 text-[15px] font-semibold text-white shadow-[0_2px_8px_rgba(239,43,45,.22)] hover:bg-brand-d"
       >
-        {loading ? "Signing in..." : "Login →"}
+        {loading ? "Creating account..." : "Create account →"}
       </Button>
 
       <p className="mt-4 text-center text-[13px] text-t2">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="font-semibold text-brand hover:text-brand-d">
-          Sign up
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-brand hover:text-brand-d">
+          Login
         </Link>
       </p>
     </form>

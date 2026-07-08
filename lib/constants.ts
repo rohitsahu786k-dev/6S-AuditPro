@@ -1,7 +1,7 @@
 import type { EmailTriggerEvent } from "@/types/domain";
 
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "6S AuditPro";
-export const COMPANY_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || "ONEPWS Private Limited";
+export const COMPANY_NAME = process.env.NEXT_PUBLIC_COMPANY_NAME || "OnePWS Private Limited";
 
 export const CATEGORIES = [
   "SORT",
@@ -61,6 +61,7 @@ export const EMAIL_TRIGGER_LABELS: Record<EmailTriggerEvent, string> = {
   AUDIT_COMPLETED: "Audit Completed",
   AUDIT_REPORT_SHARED: "Audit Report Shared",
   PASSWORD_CHANGED: "Password Changed",
+  PASSWORD_RESET_REQUESTED: "Password Reset Requested",
   USER_CREATED: "User Created / Account Activated",
   SUMMARY: "Daily or Weekly Summary"
 };
@@ -80,5 +81,6 @@ export const EMAIL_VARIABLES = [
   "closureRemarks",
   "rejectionReason",
   "appUrl",
-  "companyName"
+  "companyName",
+  "resetUrl"
 ];

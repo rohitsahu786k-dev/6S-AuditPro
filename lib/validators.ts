@@ -28,6 +28,22 @@ export const passwordChangeSchema = z.object({
   newPassword: z.string().min(8).max(200)
 });
 
+export const signupSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  username: z.string().trim().min(3).max(80).toLowerCase(),
+  email: z.string().trim().email(),
+  password: z.string().min(8).max(200)
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().trim().email()
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(10),
+  newPassword: z.string().min(8).max(200)
+});
+
 export const auditSchema = z.object({
   zone: z.string().trim().min(1),
   department: z.string().trim().min(1),
@@ -96,6 +112,7 @@ export const emailTemplateSchema = z.object({
     "AUDIT_COMPLETED",
     "AUDIT_REPORT_SHARED",
     "PASSWORD_CHANGED",
+    "PASSWORD_RESET_REQUESTED",
     "USER_CREATED",
     "SUMMARY"
   ]),

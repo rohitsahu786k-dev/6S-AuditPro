@@ -1,4 +1,4 @@
-# 6S AuditPro - ONEPWS Private Limited
+# 6S AuditPro - OnePWS Private Limited
 
 Modern Next.js redevelopment of the 6S AuditPro Firebase/static app.
 
@@ -6,14 +6,12 @@ Modern Next.js redevelopment of the 6S AuditPro Firebase/static app.
 
 - Next.js App Router + TypeScript
 - MongoDB with Mongoose
-- JWT cookie authentication
+- NextAuth.js (Credentials provider) authentication
 - Role and permission guards
 - Cloudinary server-side uploads
 - Nodemailer SMTP email sending
 - MongoDB-backed email templates and email logs
-- ONEPWS red branding with logo and favicon
-
-The legacy static app is still available as `public/index.html` for reference and rollback during feature-parity migration.
+- OnePWS red branding with logo and favicon
 
 ## Setup
 
@@ -27,7 +25,6 @@ npm install
 
 ```bash
 MONGODB_URI=
-JWT_SECRET=
 NEXTAUTH_SECRET=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=

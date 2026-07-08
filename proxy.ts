@@ -5,7 +5,7 @@ import { ROLE_ROUTES } from "@/lib/roles";
 
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_PATHS = ["/login", "/favicon.png", "/onepws-dark-logo-scaled.png"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/favicon.png", "/onepws-dark-logo-scaled.png"];
 
 export const proxy = auth((request) => {
   const { pathname } = request.nextUrl;

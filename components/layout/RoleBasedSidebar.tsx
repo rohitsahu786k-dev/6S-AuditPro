@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import type { SessionUser } from "@/types/domain";
 import { ROLE_ROUTES } from "@/lib/roles";
 import { isNavItemActive, navItemsForRoutes } from "@/lib/nav-items";
-import { APP_NAME, COMPANY_NAME } from "@/lib/constants";
+import { COMPANY_NAME } from "@/lib/constants";
 
 export function RoleBasedSidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
@@ -13,15 +13,9 @@ export function RoleBasedSidebar({ user }: { user: SessionUser }) {
   const items = navItemsForRoutes(allowed);
 
   return (
-    <aside className="flex w-[244px] shrink-0 flex-col overflow-y-auto border-r border-bd bg-bg1 shadow-[1px_0_0_var(--color-bd)]">
-      <div className="flex items-center gap-2.5 border-b border-bd p-4">
-        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] border border-[#fecaca] bg-white p-[5px] shadow-[0_2px_8px_rgba(239,43,45,.16)]">
-          <img src="/favicon.png" alt="" className="block h-full w-full object-contain" />
-        </div>
-        <div>
-          <div className="text-sm leading-tight font-bold text-t1">{APP_NAME}</div>
-          <div className="text-[10px] text-t2">{COMPANY_NAME}</div>
-        </div>
+    <aside className="sticky top-0 flex h-screen w-[244px] shrink-0 flex-col overflow-y-auto border-r border-bd bg-bg1 shadow-[1px_0_0_var(--color-bd)]">
+      <div className="border-b border-bd p-4">
+        <img src="/onepws-dark-logo-scaled.png" alt={COMPANY_NAME} className="block h-auto w-full max-w-[160px]" />
       </div>
 
       <nav className="flex flex-col gap-0.5 px-2 py-3">

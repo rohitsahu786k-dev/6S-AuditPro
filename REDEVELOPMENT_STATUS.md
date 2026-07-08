@@ -6,7 +6,7 @@
 ## Overall Status
 PARTIAL
 
-The repo has been converted from a Firebase/static deployment package into a buildable Next.js/TypeScript application with MongoDB models, secure auth foundations, role/permission checks, Cloudinary upload service, SMTP email service, editable email templates, email logs, seeded master data, and a usable ONEPWS red-themed UI shell. Full old-app feature parity is not complete yet.
+The repo has been converted from a Firebase/static deployment package into a buildable Next.js/TypeScript application with MongoDB models, secure auth foundations, role/permission checks, Cloudinary upload service, SMTP email service, editable email templates, email logs, seeded master data, and a usable OnePWS red-themed UI shell. Full old-app feature parity is not complete yet.
 
 ## Completed Phases
 - Phase 1: Codebase audit and DOCX brief intake.
@@ -21,7 +21,7 @@ The repo has been converted from a Firebase/static deployment package into a bui
 - Phase 12: README, `.env.example`, seed script, and status docs.
 
 ## Completed Features
-- ONEPWS logo and favicon applied.
+- OnePWS logo and favicon applied.
 - Logo red theme used across the rebuilt app and legacy static file.
 - Legacy `public/index.html` preserved as reference.
 - Next.js routes: login, dashboard, audits, findings, analytics, admin, email templates, email logs, email settings.

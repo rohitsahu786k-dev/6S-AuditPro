@@ -19,7 +19,7 @@ const sample = {
   closureRemarks: "Action completed",
   rejectionReason: "Photo evidence is unclear",
   appUrl: process.env.APP_BASE_URL || "http://localhost:3000",
-  companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "ONEPWS Private Limited"
+  companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "OnePWS Private Limited"
 };
 
 export async function POST(_request: Request, context: { params: Promise<{ id: string }> }) {

@@ -18,6 +18,7 @@ const defaultTemplates = [
   ["audit-completed", "Audit Completed", "AUDIT_COMPLETED", "Audit {{auditNumber}} completed"],
   ["audit-report-shared", "Audit Report Shared", "AUDIT_REPORT_SHARED", "Audit report {{auditNumber}} shared"],
   ["password-changed", "Password Changed", "PASSWORD_CHANGED", "Password changed for {{recipientName}}"],
+  ["password-reset-requested", "Password Reset Requested", "PASSWORD_RESET_REQUESTED", "Reset your 6S AuditPro password"],
   ["user-created", "User Created / Account Activated", "USER_CREATED", "Your 6S AuditPro account is active"],
   ["summary", "Daily or Weekly Summary", "SUMMARY", "6S AuditPro summary"]
 ] as const;
@@ -37,6 +38,13 @@ async function main() {
   await Person.updateOne({ name: "Lead Auditor", type: "AUDITOR" }, { $setOnInsert: { name: "Lead Auditor", type: "AUDITOR", roleTitle: "Lead Auditor", isActive: true } }, { upsert: true });
 
   for (const [templateKey, templateName, triggerEvent, subject] of defaultTemplates) {
+    const isPasswordReset = triggerEvent === "PASSWORD_RESET_REQUESTED";
+    const htmlBody = isPasswordReset
+      ? `<p>Hello {{recipientName}},</p><p>We received a request to reset your 6S AuditPro password. This link expires in 1 hour.</p><p><a href="{{resetUrl}}">Reset your password</a></p><p>If you did not request this, you can safely ignore this email.</p><p>{{companyName}}</p>`
+      : `<p>Hello {{recipientName}},</p><p>${subject}</p><p><a href="{{appUrl}}">Open 6S AuditPro</a></p><p>${"{{companyName}}"}</p>`;
+    const textBody = isPasswordReset
+      ? `Hello {{recipientName}},\nWe received a request to reset your 6S AuditPro password. This link expires in 1 hour.\nReset: {{resetUrl}}\nIf you did not request this, you can safely ignore this email.\n{{companyName}}`
+      : `Hello {{recipientName}},\n${subject}\nOpen: {{appUrl}}\n{{companyName}}`;
     await EmailTemplate.updateOne(
       { templateKey },
       {
@@ -45,8 +53,8 @@ async function main() {
           templateName,
           triggerEvent,
           subject,
-          htmlBody: `<p>Hello {{recipientName}},</p><p>${subject}</p><p><a href="{{appUrl}}">Open 6S AuditPro</a></p><p>${"{{companyName}}"}</p>`,
-          textBody: `Hello {{recipientName}},\n${subject}\nOpen: {{appUrl}}\n{{companyName}}`,
+          htmlBody,
+          textBody,
           supportedVariables: EMAIL_VARIABLES,
           isActive: true,
           allowedRolesToReceive: [],

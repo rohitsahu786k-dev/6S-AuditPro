@@ -29,6 +29,7 @@ export type EmailTriggerEvent =
   | "AUDIT_COMPLETED"
   | "AUDIT_REPORT_SHARED"
   | "PASSWORD_CHANGED"
+  | "PASSWORD_RESET_REQUESTED"
   | "USER_CREATED"
   | "SUMMARY";
 

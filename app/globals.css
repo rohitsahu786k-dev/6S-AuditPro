@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-be-vietnam-pro), "Segoe UI", system-ui, -apple-system, sans-serif;
 
   --color-bg0: #f0f4f8;
   --color-bg1: #ffffff;

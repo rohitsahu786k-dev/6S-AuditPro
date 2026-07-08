@@ -15,7 +15,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     await connectDB();
     const template = await EmailTemplate.findById(id).lean();
     if (!template) throw Object.assign(new Error("Template not found"), { status: 404 });
-    const data = { companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "ONEPWS Private Limited", appUrl: process.env.APP_BASE_URL || "http://localhost:3000", ...input.sampleData };
+    const data = { companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "OnePWS Private Limited", appUrl: process.env.APP_BASE_URL || "http://localhost:3000", ...input.sampleData };
     const subject = renderTemplate(template.subject, data).rendered;
     const html = renderTemplate(template.htmlBody, data).rendered;
     const text = renderTemplate(template.textBody, data).rendered;

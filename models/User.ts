@@ -12,7 +12,9 @@ const UserSchema = new Schema({
   permissions: [{ type: String }],
   forcePasswordChange: { type: Boolean, default: false },
   passwordChangedAt: { type: Date },
-  lastLoginAt: { type: Date }
+  lastLoginAt: { type: Date },
+  passwordResetTokenHash: { type: String, select: false },
+  passwordResetExpires: { type: Date, select: false }
 }, { timestamps: true });
 
 export type UserDocument = InferSchemaType<typeof UserSchema> & { _id: mongoose.Types.ObjectId };
