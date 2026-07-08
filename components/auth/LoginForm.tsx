@@ -2,8 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
-import { apiPost } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,11 +24,15 @@ export function LoginForm() {
     setError("");
     setLoading(true);
     try {
-      await apiPost("/api/auth/login", { username, password, remember });
+      const result = await signIn("credentials", { username, password, redirect: false });
+      if (result?.error) {
+        setError("Invalid username or password");
+        return;
+      }
       router.push(search.get("next") || "/dashboard");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+    } catch {
+      setError("Login failed");
     } finally {
       setLoading(false);
     }
@@ -43,11 +47,8 @@ export function LoginForm() {
         <img
           src="/onepws-dark-logo-scaled.png"
           alt={COMPANY_NAME}
-          className="mx-auto mb-3.5 block w-[220px] max-w-[82%]"
+          className="mx-auto mb-4 block w-[220px] max-w-[82%]"
         />
-        <div className="mb-3 inline-flex h-[72px] w-[72px] items-center justify-center rounded-[18px] border border-[#fecaca] bg-white p-2.5 shadow-[0_8px_20px_rgba(239,43,45,.18)]">
-          <img src="/favicon.png" alt="" className="block h-full w-full object-contain" />
-        </div>
         <h1 className="mb-1 text-[22px] font-bold text-t1">{APP_NAME}</h1>
         <p className="text-[13px] text-t2">{COMPANY_NAME} — Enterprise Audit System</p>
       </div>

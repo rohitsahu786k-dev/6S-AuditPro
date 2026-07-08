@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { ChevronDown, KeyRound, LogOut } from "lucide-react";
 import type { SessionUser } from "@/types/domain";
 import { ROLE_LABELS } from "@/lib/roles";
@@ -15,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ChangePasswordDialog } from "@/components/layout/ChangePasswordDialog";
 
-export function ProfileMenu({ user, logoutAction }: { user: SessionUser; logoutAction: () => Promise<void> }) {
+export function ProfileMenu({ user }: { user: SessionUser }) {
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const initials = user.name
     ? user.name.split(" ").filter(Boolean).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
@@ -50,12 +51,8 @@ export function ProfileMenu({ user, logoutAction }: { user: SessionUser; logoutA
           <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
             <KeyRound size={14} /> Change Password
           </DropdownMenuItem>
-          <DropdownMenuItem asChild variant="destructive">
-            <form action={logoutAction} className="w-full">
-              <button type="submit" className="flex w-full items-center gap-2 text-left">
-                <LogOut size={14} /> Logout
-              </button>
-            </form>
+          <DropdownMenuItem variant="destructive" onSelect={() => signOut({ callbackUrl: "/login" })}>
+            <LogOut size={14} /> Logout
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

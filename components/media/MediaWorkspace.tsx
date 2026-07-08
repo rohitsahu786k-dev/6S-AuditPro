@@ -93,7 +93,7 @@ export function MediaWorkspace() {
   const filteredMedia = useMemo(() => {
     if (!mediaApi.data) return [];
     return mediaApi.data.filter((item) => {
-      const matchesSearch = 
+      const matchesSearch =
         item.sourceNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -256,58 +256,60 @@ export function MediaWorkspace() {
 
   return (
     <>
-      <div className="page-head">
+      <div className="mb-[18px] flex items-end justify-between gap-4">
         <div>
-          <h2 className="page-title">Media Manager</h2>
-          <p className="page-sub">Centralized digital assets, evidence library, and closure confirmations registry.</p>
+          <h2 className="text-2xl font-extrabold text-t1">Media Manager</h2>
+          <p className="mt-1 text-sm text-t2">Centralized digital assets, evidence library, and closure confirmations registry.</p>
         </div>
-        <button className="btn primary" onClick={() => setIsUploadModalOpen(true)}>
+        <button
+          className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
+          onClick={() => setIsUploadModalOpen(true)}
+        >
           <UploadCloud size={16} /> Upload & Link Media
         </button>
       </div>
 
       {/* SUCCESS & ERROR NOTES */}
       {successMsg && (
-        <div style={{ background: "#ecfdf5", border: "1px solid #a7f3d0", color: "#065f46", padding: "12px", borderRadius: "8px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#a7f3d0] bg-[#ecfdf5] p-3 text-sm text-[#065f46]">
           <CheckCircle size={16} /> {successMsg}
         </div>
       )}
       {errorMsg && (
-        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#991b1b", padding: "12px", borderRadius: "8px", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "14px" }}>
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-[#fecaca] bg-[#fef2f2] p-3 text-sm text-[#991b1b]">
           <AlertTriangle size={16} /> {errorMsg}
         </div>
       )}
 
       {/* STATISTICS CARDS */}
-      <div className="grid grid-4" style={{ marginBottom: "20px" }}>
-        <div className="card kpi" style={{ borderLeft: "4px solid var(--muted)" }}>
-          <span className="label">Total Media Files</span>
-          <span className="kpi-value">{mediaApi.loading ? "..." : stats.total}</span>
+      <div className="mb-5 grid grid-cols-2 gap-3.5 md:grid-cols-4">
+        <div className="grid gap-1.5 rounded-lg border border-bd border-l-4 border-l-t2 bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Total Media Files</span>
+          <span className="text-[32px] font-extrabold text-t1">{mediaApi.loading ? "..." : stats.total}</span>
         </div>
-        <div className="card kpi" style={{ borderLeft: "4px solid var(--danger)" }}>
-          <span className="label">Audit Findings (Before)</span>
-          <span className="kpi-value">{mediaApi.loading ? "..." : stats.before}</span>
+        <div className="grid gap-1.5 rounded-lg border border-bd border-l-4 border-l-red bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audit Findings (Before)</span>
+          <span className="text-[32px] font-extrabold text-t1">{mediaApi.loading ? "..." : stats.before}</span>
         </div>
-        <div className="card kpi" style={{ borderLeft: "4px solid var(--ok)" }}>
-          <span className="label">CAPA Resolutions (After)</span>
-          <span className="kpi-value">{mediaApi.loading ? "..." : stats.after}</span>
+        <div className="grid gap-1.5 rounded-lg border border-bd border-l-4 border-l-green bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">CAPA Resolutions (After)</span>
+          <span className="text-[32px] font-extrabold text-t1">{mediaApi.loading ? "..." : stats.after}</span>
         </div>
-        <div className="card kpi" style={{ borderLeft: "4px solid #3b82f6" }}>
-          <span className="label">Checklist References</span>
-          <span className="kpi-value">{mediaApi.loading ? "..." : stats.audit}</span>
+        <div className="grid gap-1.5 rounded-lg border border-bd border-l-4 border-l-[#3b82f6] bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Checklist References</span>
+          <span className="text-[32px] font-extrabold text-t1">{mediaApi.loading ? "..." : stats.audit}</span>
         </div>
       </div>
 
       {/* FILTER PANEL */}
-      <div className="card" style={{ marginBottom: "20px", padding: "16px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: "12px", alignItems: "center" }}>
+      <div className="mb-5 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+        <div className="grid grid-cols-1 items-center gap-3 md:grid-cols-[2fr_1fr_1fr_1fr_1fr]">
           {/* Search bar */}
-          <div style={{ position: "relative" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--muted)" }} />
-            <input 
-              type="text" 
-              className="control" 
-              style={{ paddingLeft: "36px" }}
+          <div className="relative">
+            <Search size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-t2" />
+            <input
+              type="text"
+              className="w-full rounded-lg border border-bd py-2.5 pr-3 pl-9 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
               placeholder="Search ID, description, zone..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -315,7 +317,11 @@ export function MediaWorkspace() {
           </div>
 
           {/* Pillar / Category filter */}
-          <select className="control" value={pillarFilter} onChange={(e) => setPillarFilter(e.target.value)}>
+          <select
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            value={pillarFilter}
+            onChange={(e) => setPillarFilter(e.target.value)}
+          >
             <option value="ALL">All 6S Pillars</option>
             <option value="Sort">Sort (Seiri)</option>
             <option value="Set in Order">Set in Order (Seiton)</option>
@@ -327,7 +333,11 @@ export function MediaWorkspace() {
           </select>
 
           {/* Workflow Phase / Type filter */}
-          <select className="control" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+          <select
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+          >
             <option value="ALL">All Phases</option>
             <option value="BEFORE">Before (Audit)</option>
             <option value="AFTER">After (CAPA)</option>
@@ -335,7 +345,11 @@ export function MediaWorkspace() {
           </select>
 
           {/* Zone filter */}
-          <select className="control" value={zoneFilter} onChange={(e) => setZoneFilter(e.target.value)}>
+          <select
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            value={zoneFilter}
+            onChange={(e) => setZoneFilter(e.target.value)}
+          >
             <option value="ALL">All Zones</option>
             {masters.data?.zones.map(z => (
               <option key={z.name} value={z.name}>{z.name}</option>
@@ -343,7 +357,11 @@ export function MediaWorkspace() {
           </select>
 
           {/* Department filter */}
-          <select className="control" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
+          <select
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+          >
             <option value="ALL">All Depts</option>
             {masters.data?.departments.map(d => (
               <option key={d.name} value={d.name}>{d.name}</option>
@@ -354,80 +372,49 @@ export function MediaWorkspace() {
 
       {/* MEDIA GRID */}
       {mediaApi.loading ? (
-        <div style={{ textAlign: "center", padding: "40px" }} className="muted">
+        <div className="p-10 text-center text-t2">
           Loading optimized media assets...
         </div>
       ) : filteredMedia.length === 0 ? (
-        <div className="card" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", textAlign: "center" }}>
-          <FolderOpen size={48} className="muted" style={{ marginBottom: "16px" }} />
-          <h4 style={{ margin: "0 0 6px", fontWeight: 800 }}>No Media Assets Found</h4>
-          <p className="muted" style={{ fontSize: "14px", maxWidth: "400px", margin: 0 }}>
+        <div className="flex flex-col items-center justify-center rounded-lg border border-bd bg-bg1 px-5 py-15 text-center shadow-[var(--shadow-sm)]">
+          <FolderOpen size={48} className="mb-4 text-t2" />
+          <h4 className="mb-1.5 font-extrabold text-t1">No Media Assets Found</h4>
+          <p className="m-0 max-w-[400px] text-sm text-t2">
             No photos match your current filters. Try resetting search fields or upload a new photo.
           </p>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-5">
           {filteredMedia.map((item) => (
-            <div 
+            <div
               key={item.id}
-              className="card media-card"
-              style={{
-                padding: 0,
-                overflow: "hidden",
-                position: "relative",
-                display: "flex",
-                flexDirection: "column",
-                border: "1px solid var(--line)",
-                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)"
-              }}
+              className="group relative flex flex-col overflow-hidden rounded-lg border border-bd bg-bg1 shadow-[var(--shadow-sm)] transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] hover:-translate-y-1 hover:border-bd2 hover:shadow-[0_12px_32px_rgba(26,35,50,0.12)]"
             >
               {/* Media Thumbnail Container */}
-              <div style={{ position: "relative", paddingBottom: "70%", overflow: "hidden", background: "#0f172a" }}>
-                <img 
-                  src={item.url} 
+              <div className="relative overflow-hidden bg-[#0f172a] pb-[70%]">
+                <img
+                  src={item.url}
                   alt={item.description}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    cursor: "pointer",
-                    transition: "transform 0.5s ease"
-                  }}
-                  className="gallery-image"
+                  className="absolute top-0 left-0 h-full w-full cursor-pointer object-cover transition-transform duration-500 ease-in-out group-hover:scale-[1.06]"
                 />
 
                 {/* Phase Tag Badge */}
-                <span 
-                  className="badge" 
-                  style={{ 
-                    position: "absolute", 
-                    top: "12px", 
-                    left: "12px", 
-                    zIndex: 10,
-                    background: item.type === "BEFORE" ? "rgba(220, 38, 38, 0.9)" : item.type === "AFTER" ? "rgba(21, 128, 61, 0.9)" : "rgba(59, 130, 246, 0.9)",
-                    color: "#fff",
-                    borderColor: "transparent",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                <span
+                  className="absolute top-3 left-3 z-10 inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-extrabold text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                  style={{
+                    background: item.type === "BEFORE" ? "rgba(220, 38, 38, 0.9)" : item.type === "AFTER" ? "rgba(21, 128, 61, 0.9)" : "rgba(59, 130, 246, 0.9)"
                   }}
                 >
                   {item.type === "BEFORE" ? "Before (Audit)" : item.type === "AFTER" ? "After (CAPA)" : "Checklist Ref"}
                 </span>
 
                 {/* Severity Badge */}
-                <span 
-                  className="badge" 
-                  style={{ 
-                    position: "absolute", 
-                    top: "12px", 
-                    right: "12px", 
-                    zIndex: 10,
+                <span
+                  className="absolute top-3 right-3 z-10 inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-extrabold"
+                  style={{
                     background: item.severity === "Critical" ? "#fef2f2" : item.severity === "High" ? "#fff7ed" : item.severity === "Medium" ? "#fefce8" : "#f0fdf4",
                     color: item.severity === "Critical" ? "#991b1b" : item.severity === "High" ? "#c2410c" : item.severity === "Medium" ? "#a16207" : "#166534",
-                    borderColor: item.severity === "Critical" ? "#fee2e2" : item.severity === "High" ? "#ffedd5" : item.severity === "Medium" ? "#fef9c3" : "#dcfce7",
-                    fontSize: "10px"
+                    borderColor: item.severity === "Critical" ? "#fee2e2" : item.severity === "High" ? "#ffedd5" : item.severity === "Medium" ? "#fef9c3" : "#dcfce7"
                   }}
                 >
                   {item.severity}
@@ -435,28 +422,28 @@ export function MediaWorkspace() {
               </div>
 
               {/* Card Meta Content */}
-              <div style={{ padding: "14px", display: "flex", flexDirection: "column", gap: "6px", flexGrow: 1 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontWeight: 800, color: "var(--brand-dark)", fontSize: "14px" }}>
+              <div className="flex flex-grow flex-col gap-1.5 p-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-extrabold text-brand-d">
                     {item.sourceNumber}
                   </span>
-                  <span className="muted" style={{ fontSize: "11px" }}>
+                  <span className="text-[11px] text-t2">
                     {item.date ? new Date(item.date).toLocaleDateString() : ""}
                   </span>
                 </div>
 
-                <p style={{ margin: "4px 0", fontSize: "13px", fontWeight: 500, lineHeight: 1.4, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", height: "36px" }}>
+                <p className="my-1 h-9 overflow-hidden text-[13px] leading-[1.4] font-medium line-clamp-2">
                   {item.description}
                 </p>
 
-                <div style={{ borderTop: "1px solid #f1f5f9", paddingTop: "8px", marginTop: "4px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
-                  <span style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", fontWeight: 600 }}>
+                <div className="mt-1 flex flex-wrap gap-1.5 border-t border-[#f1f5f9] pt-2">
+                  <span className="rounded bg-[#f1f5f9] px-1.5 py-0.5 text-[11px] font-semibold">
                     {item.zone}
                   </span>
-                  <span style={{ background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", fontWeight: 600 }}>
+                  <span className="rounded bg-[#f1f5f9] px-1.5 py-0.5 text-[11px] font-semibold">
                     {item.department}
                   </span>
-                  <span style={{ background: "var(--brand-soft)", color: "var(--brand-dark)", padding: "2px 6px", borderRadius: "4px", fontSize: "11px", fontWeight: 600 }}>
+                  <span className="rounded bg-accent px-1.5 py-0.5 text-[11px] font-semibold text-brand-d">
                     {item.category}
                   </span>
                 </div>
@@ -464,22 +451,9 @@ export function MediaWorkspace() {
 
               {/* Admin Deletion Action */}
               {isAdmin && (
-                <button 
+                <button
                   onClick={() => handleDeleteMedia(item.publicId)}
-                  style={{
-                    position: "absolute",
-                    bottom: "10px",
-                    right: "10px",
-                    background: "rgba(254, 242, 242, 0.8)",
-                    border: "1px solid #fee2e2",
-                    borderRadius: "6px",
-                    color: "var(--danger)",
-                    padding: "6px",
-                    cursor: "pointer",
-                    display: "grid",
-                    placeItems: "center",
-                    zIndex: 20
-                  }}
+                  className="absolute right-2.5 bottom-2.5 z-20 grid cursor-pointer place-items-center rounded-md border border-[#fee2e2] bg-[rgba(254,242,242,0.8)] p-1.5 text-red"
                   title="Delete Media File"
                 >
                   <Trash2 size={14} />
@@ -492,48 +466,26 @@ export function MediaWorkspace() {
 
       {/* UPLOAD & ASSOCIATION MODAL */}
       {isUploadModalOpen && (
-        <div 
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(4px)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 9999,
-            padding: "20px"
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "500px", 
-              position: "relative", 
-              padding: "24px" 
-            }}
-          >
-            <button 
+        <div className="fixed inset-0 z-[9999] grid place-items-center bg-[rgba(15,23,42,0.6)] p-5 backdrop-blur-sm">
+          <div className="relative w-full max-w-[500px] rounded-lg border border-bd bg-bg1 p-6 shadow-[var(--shadow-sm)]">
+            <button
               onClick={() => setIsUploadModalOpen(false)}
-              style={{ position: "absolute", top: "16px", right: "16px", background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}
+              className="absolute top-4 right-4 cursor-pointer border-none bg-transparent text-t2"
             >
               <X size={20} />
             </button>
 
-            <h3 style={{ margin: "0 0 6px", fontSize: "18px", fontWeight: 800 }}>Upload & Link Portal Media</h3>
-            <p className="muted" style={{ fontSize: "13px", margin: "0 0 20px" }}>
+            <h3 className="mb-1.5 text-lg font-extrabold">Upload & Link Portal Media</h3>
+            <p className="mb-5 text-[13px] text-t2">
               Upload optimized evidence photos and link them directly to a live non-conformity finding record.
             </p>
 
-            <div style={{ display: "grid", gap: "14px" }}>
+            <div className="grid gap-3.5">
               <label>
-                <span style={{ fontSize: "12px", fontWeight: 700, display: "block", marginBottom: "6px" }}>1. Target Finding *</span>
-                <select 
-                  className="control" 
-                  value={selectedFindingId} 
+                <span className="mb-1.5 block text-xs font-bold">1. Target Finding *</span>
+                <select
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={selectedFindingId}
                   onChange={(e) => setSelectedFindingId(e.target.value)}
                 >
                   <option value="">Select Target Finding...</option>
@@ -544,10 +496,10 @@ export function MediaWorkspace() {
               </label>
 
               <label>
-                <span style={{ fontSize: "12px", fontWeight: 700, display: "block", marginBottom: "6px" }}>2. Phase Location</span>
-                <select 
-                  className="control" 
-                  value={uploadType} 
+                <span className="mb-1.5 block text-xs font-bold">2. Phase Location</span>
+                <select
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={uploadType}
                   onChange={(e) => setUploadType(e.target.value as any)}
                 >
                   <option value="BEFORE">Before Photo (Evidence / Audit Stage)</option>
@@ -556,60 +508,52 @@ export function MediaWorkspace() {
               </label>
 
               <div>
-                <span style={{ fontSize: "12px", fontWeight: 700, display: "block", marginBottom: "8px" }}>3. Select Photo (WebP Auto-Conversion)</span>
-                
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+                <span className="mb-2 block text-xs font-bold">3. Select Photo (WebP Auto-Conversion)</span>
+
+                <div className="flex flex-wrap items-center gap-2">
                   {uploadedPhotos.map((p, idx) => (
-                    <div key={idx} style={{ position: "relative", width: "65px", height: "65px" }}>
-                      <img src={p.secureUrl} alt="Upload" style={{ width: "100%", height: "100%", borderRadius: "6px", objectFit: "cover", border: "1px solid var(--line)" }} />
-                      <button 
+                    <div key={idx} className="relative h-[65px] w-[65px]">
+                      <img src={p.secureUrl} alt="Upload" className="h-full w-full rounded-md border border-bd object-cover" />
+                      <button
                         onClick={() => removeUploadedPhoto(idx)}
-                        style={{ position: "absolute", top: "-4px", right: "-4px", background: "var(--danger)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", fontSize: "10px", cursor: "pointer", display: "grid", placeItems: "center" }}
+                        className="absolute -top-1 -right-1 grid h-[18px] w-[18px] cursor-pointer place-items-center rounded-full border-none bg-red text-[10px] text-white"
                       >
                         <X size={10} />
                       </button>
                     </div>
                   ))}
 
-                  <label 
-                    className="btn" 
-                    style={{ 
-                      width: "65px", 
-                      height: "65px", 
-                      display: "flex", 
-                      flexDirection: "column", 
-                      alignItems: "center", 
-                      justifyContent: "center", 
-                      border: "1px dashed var(--muted)",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      padding: 0,
-                      background: "transparent"
-                    }}
+                  <label
+                    className="flex h-[65px] w-[65px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-t2 bg-transparent p-0"
                   >
-                    <UploadCloud size={16} className="muted" />
-                    <span style={{ fontSize: "10px", marginTop: "2px" }} className="muted">Add</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleFileUpload} 
-                      style={{ display: "none" }} 
+                    <UploadCloud size={16} className="text-t2" />
+                    <span className="mt-0.5 text-[10px] text-t2">Add</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
                       disabled={isUploading}
                     />
                   </label>
                 </div>
                 {isUploading && (
-                  <span style={{ fontSize: "12px", color: "var(--brand-dark)", marginTop: "6px", display: "block" }}>
+                  <span className="mt-1.5 block text-xs text-brand-d">
                     Uploading & converting to WebP...
                   </span>
                 )}
               </div>
             </div>
 
-            <div style={{ borderTop: "1px solid var(--line)", marginTop: "24px", paddingTop: "14px", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button className="btn" onClick={() => setIsUploadModalOpen(false)}>Cancel</button>
-              <button 
-                className="btn primary" 
+            <div className="mt-6 flex justify-end gap-2.5 border-t border-bd pt-3.5">
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
+                onClick={() => setIsUploadModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-[.55]"
                 onClick={handleSaveAssociation}
                 disabled={isSavingAssociation || uploadedPhotos.length === 0}
               >
@@ -622,78 +566,37 @@ export function MediaWorkspace() {
 
       {/* COMPRESSION WARNING DIALOG */}
       {compressionAlert && (
-        <div 
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(4px)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 100000,
-            padding: "20px"
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "420px", 
-              padding: "24px", 
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "14px"
-            }}
-          >
-            <div style={{ color: "#eab308", background: "#fef9c3", borderRadius: "50%", padding: "12px", display: "inline-flex" }}>
+        <div className="fixed inset-0 z-[100000] grid place-items-center bg-[rgba(15,23,42,0.6)] p-5 backdrop-blur-sm">
+          <div className="flex w-full max-w-[420px] flex-col items-center gap-3.5 rounded-lg border border-bd bg-bg1 p-6 text-center shadow-[var(--shadow-sm)]">
+            <div className="inline-flex rounded-full bg-[#fef9c3] p-3 text-[#eab308]">
               <AlertTriangle size={36} />
             </div>
-            
+
             <div>
-              <h3 style={{ fontSize: "18px", fontWeight: 800, margin: "0 0 6px" }}>Large File Warning</h3>
-              <p className="muted" style={{ fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
+              <h3 className="mb-1.5 text-lg font-extrabold">Large File Warning</h3>
+              <p className="m-0 text-sm leading-normal text-t2">
                 The selected image is <strong>{compressionAlert.sizeMb} MB</strong>, which exceeds the recommended 3 MB limit. For optimal load speeds, please compress it first:
               </p>
             </div>
 
-            <a 
-              href="https://imagecompressor.com/" 
-              target="_blank" 
+            <a
+              href="https://imagecompressor.com/"
+              target="_blank"
               rel="noopener noreferrer"
-              className="btn"
-              style={{ 
-                display: "inline-flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                gap: "8px", 
-                width: "100%", 
-                background: "#f1f5f9",
-                borderColor: "#cbd5e1",
-                color: "#0f172a",
-                padding: "10px",
-                fontWeight: 600,
-                fontSize: "13px"
-              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-[#f1f5f9] p-2.5 text-[13px] font-semibold text-[#0f172a]"
             >
               <ExternalLink size={14} /> Open ImageCompressor.com
             </a>
 
-            <div style={{ display: "flex", gap: "10px", width: "100%", marginTop: "4px" }}>
-              <button 
-                className="btn" 
-                style={{ flex: 1, fontSize: "13px" }} 
+            <div className="mt-1 flex w-full gap-2.5">
+              <button
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-[13px] font-bold text-t1 hover:bg-bg3"
                 onClick={() => setCompressionAlert(null)}
               >
                 Cancel
               </button>
-              <button 
-                className="btn primary" 
-                style={{ flex: 1, fontSize: "13px" }}
+              <button
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-[13px] font-bold text-white hover:bg-brand-d"
                 onClick={() => {
                   const fileToUpload = compressionAlert.file;
                   setCompressionAlert(null);
@@ -706,18 +609,6 @@ export function MediaWorkspace() {
           </div>
         </div>
       )}
-
-      {/* Gallery Hover Effect CSS */}
-      <style jsx global>{`
-        .media-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 32px rgba(26, 35, 50, 0.12) !important;
-          border-color: #cbd5e1 !important;
-        }
-        .media-card:hover .gallery-image {
-          transform: scale(1.06);
-        }
-      `}</style>
     </>
   );
 }

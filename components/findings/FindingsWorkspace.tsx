@@ -17,6 +17,7 @@ import {
   ExternalLink
 } from "lucide-react";
 import { processImageToWebP } from "@/utils/media";
+import { SEVERITY_BADGE_STYLES, STATUS_BADGE_STYLES, badgeStyleToVars } from "@/lib/status-styles";
 
 type Finding = {
   _id: string;
@@ -426,36 +427,38 @@ export function FindingsWorkspace() {
   return (
     <>
       {/* Header */}
-      <div className="page-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="mb-[18px] flex items-center justify-between gap-4">
         <div>
-          <h1 className="page-title">Findings & CAPA Dashboard</h1>
-          <p className="page-sub">Track non-conformities, submit Corrective & Preventive Action plans (CAPA), and verify closures.</p>
+          <h1 className="text-2xl font-extrabold text-t1">Findings & CAPA Dashboard</h1>
+          <p className="mt-1 text-sm text-t2">Track non-conformities, submit Corrective & Preventive Action plans (CAPA), and verify closures.</p>
         </div>
         {user && ["MASTER_ADMIN", "ADMIN", "AUDITOR"].includes(user.role) && (
-          <button className="btn primary" onClick={() => setIsCreateFindingModalOpen(true)} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
+            onClick={() => setIsCreateFindingModalOpen(true)}
+          >
             <Plus size={16} /> Create Ad-Hoc Finding
           </button>
         )}
       </div>
 
-      {note && <div className="alert" style={{ background: "#f0fdf4", color: "#166534", borderColor: "#bbf7d0" }}>{note}</div>}
+      {note && <div className="mb-3 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2.5 text-[13px] text-[#166534]">{note}</div>}
 
       {/* Search and Filters Bar */}
-      <div className="card" style={{ marginBottom: "20px", padding: "16px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: "10px" }}>
-          <div style={{ position: "relative" }}>
-            <Search size={16} style={{ position: "absolute", left: "12px", top: "12px", color: "var(--muted)" }} />
+      <div className="mb-5 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-[2fr_1fr_1fr_1fr]">
+          <div className="relative">
+            <Search size={16} className="pointer-events-none absolute left-3 top-3 text-t2" />
             <input
               type="text"
               placeholder="Search by ID, question, observation..."
-              className="control"
+              className="w-full rounded-lg border border-bd py-2.5 pl-9 pr-3 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              style={{ paddingLeft: "36px" }}
             />
           </div>
 
-          <select className="control" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="ALL">All Statuses</option>
             <option value="OPEN">OPEN</option>
             <option value="SUBMITTED">SUBMITTED</option>
@@ -465,7 +468,7 @@ export function FindingsWorkspace() {
             <option value="OVERDUE">OVERDUE</option>
           </select>
 
-          <select className="control" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
+          <select className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
             <option value="ALL">All Severities</option>
             <option value="Critical">Critical</option>
             <option value="High">High</option>
@@ -473,7 +476,7 @@ export function FindingsWorkspace() {
             <option value="Low">Low</option>
           </select>
 
-          <select className="control" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
+          <select className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
             <option value="ALL">All Departments</option>
             {uniqueDepts.map((d) => (
               <option key={d} value={d}>{d}</option>
@@ -483,90 +486,82 @@ export function FindingsWorkspace() {
       </div>
 
       {/* Main Grid Log */}
-      <div className="card" style={{ padding: 0 }}>
+      <div className="rounded-lg border border-bd bg-bg1 p-0 shadow-[var(--shadow-sm)]">
         {findingsApi.loading ? (
-          <div className="muted" style={{ padding: "24px", textAlign: "center" }}>Loading findings...</div>
+          <div className="p-6 text-center text-t2">Loading findings...</div>
         ) : filteredFindings.length === 0 ? (
-          <div className="muted" style={{ padding: "24px", textAlign: "center" }}>No matching findings found.</div>
+          <div className="p-6 text-center text-t2">No matching findings found.</div>
         ) : (
-          <div className="table-wrap" style={{ border: 0, borderRadius: 0 }}>
-            <table>
+          <div className="overflow-x-auto rounded-lg bg-white">
+            <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th>Finding ID</th>
-                  <th>Audit No</th>
-                  <th>Observation Details</th>
-                  <th>Department / Zone</th>
-                  <th>Severity</th>
-                  <th>Target Due Date</th>
-                  <th>Status</th>
-                  <th style={{ textAlign: "right" }}>Actions</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Finding ID</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit No</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Observation Details</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department / Zone</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Severity</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Target Due Date</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredFindings.map((f) => {
                   const isOverdue = f.status === "OVERDUE" || (f.status !== "CLOSED" && f.dueDate && new Date(f.dueDate) < new Date());
                   return (
-                    <tr 
+                    <tr
                       key={f._id}
-                      style={{ 
-                        background: isOverdue ? "#fff5f5" : "transparent"
-                      }}
+                      className={isOverdue ? "bg-[#fff5f5]" : "bg-transparent"}
                     >
-                      <td><strong>{f.findingNumber}</strong></td>
-                      <td><span className="muted" style={{ fontSize: "12px" }}>{f.auditNumber || "Manual"}</span></td>
-                      <td style={{ maxWidth: "250px" }}>
-                        <div style={{ fontWeight: 600, fontSize: "13px" }}>{f.question}</div>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{f.findingNumber}</strong></td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><span className="text-xs text-t2">{f.auditNumber || "Manual"}</span></td>
+                      <td className="max-w-[250px] border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                        <div className="text-[13px] font-semibold">{f.question}</div>
                         {f.observation && (
-                          <div className="muted" style={{ fontSize: "11px", marginTop: "3px", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
+                          <div className="mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] text-t2">
                             {f.observation}
                           </div>
                         )}
                       </td>
-                      <td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                         <div>{f.department}</div>
-                        <span className="muted" style={{ fontSize: "11px" }}>{f.zone}</span>
+                        <span className="text-[11px] text-t2">{f.zone}</span>
                       </td>
-                      <td>
-                        <span 
-                          className="badge"
-                          style={{
-                            background: f.severity === "Critical" ? "#fee2e2" : f.severity === "High" ? "#ffedd5" : f.severity === "Medium" ? "#fef9c3" : "#f1f5f9",
-                            color: f.severity === "Critical" ? "#991b1b" : f.severity === "High" ? "#c2410c" : f.severity === "Medium" ? "#854d0e" : "#475569",
-                            borderColor: f.severity === "Critical" ? "#fecaca" : f.severity === "High" ? "#fed7aa" : f.severity === "Medium" ? "#fef08a" : "#cbd5e1"
-                          }}
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                        <span
+                          className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
+                          style={badgeStyleToVars(SEVERITY_BADGE_STYLES[f.severity])}
                         >
                           {f.severity}
                         </span>
                       </td>
-                      <td>
-                        <div style={{ display: "flex", gap: "5px", alignItems: "center", color: isOverdue ? "var(--danger)" : "inherit" }}>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                        <div className={`flex items-center gap-[5px] ${isOverdue ? "text-red" : "text-inherit"}`}>
                           {isOverdue && <AlertOctagon size={14} />}
                           <span>{f.dueDate ? new Date(f.dueDate).toLocaleDateString() : "No Date"}</span>
                         </div>
                       </td>
-                      <td>
-                        <span 
-                          className="badge"
-                          style={{
-                            background: f.status === "CLOSED" ? "#dcfce7" : f.status === "SUBMITTED" ? "#e0f2fe" : f.status === "REJECTED" || f.status === "OVERDUE" ? "#fee2e2" : "#f1f5f9",
-                            color: f.status === "CLOSED" ? "#166534" : f.status === "SUBMITTED" ? "#0369a1" : f.status === "REJECTED" || f.status === "OVERDUE" ? "#991b1b" : "#475569",
-                            borderColor: f.status === "CLOSED" ? "#bbf7d0" : f.status === "SUBMITTED" ? "#bae6fd" : f.status === "REJECTED" || f.status === "OVERDUE" ? "#fecaca" : "#cbd5e1"
-                          }}
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                        <span
+                          className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
+                          style={badgeStyleToVars(STATUS_BADGE_STYLES[f.status])}
                         >
                           {f.status}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-                          <button className="btn" onClick={() => openDetails(f)} style={{ padding: "5px 10px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 text-right align-top text-sm">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            className="inline-flex items-center gap-1 rounded-lg border border-bd bg-white px-2.5 py-[5px] text-xs font-bold text-t1 hover:bg-bg3"
+                            onClick={() => openDetails(f)}
+                          >
                             <Eye size={12} /> Open
                           </button>
                           {user && ["MASTER_ADMIN", "ADMIN"].includes(user.role) && (
-                            <button 
-                              className="btn" 
-                              onClick={() => handleDeleteFinding(f._id)} 
-                              style={{ padding: "5px 10px", fontSize: "12px", borderColor: "var(--danger)", color: "var(--danger)", display: "flex", alignItems: "center", gap: "4px" }}
+                            <button
+                              className="inline-flex items-center gap-1 rounded-lg border border-red bg-white px-2.5 py-[5px] text-xs font-bold text-red hover:bg-bg3"
+                              onClick={() => handleDeleteFinding(f._id)}
                             >
                               <Trash2 size={12} /> Delete
                             </button>
@@ -584,65 +579,29 @@ export function FindingsWorkspace() {
 
       {/* DETAIL MODAL PANEL */}
       {selectedFinding && (
-        <div 
-          style={{ 
-            position: "fixed", 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0, 
-            background: "rgba(15, 23, 42, 0.6)", 
-            display: "grid", 
-            placeItems: "center", 
-            zIndex: 9999, 
-            padding: "20px" 
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "850px", 
-              maxHeight: "92vh", 
-              overflowY: "auto", 
-              position: "relative",
-              padding: "24px"
-            }}
-          >
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-5">
+          <div className="relative w-full max-w-[850px] rounded-lg border border-bd bg-bg1 p-6 shadow-[var(--shadow-sm)] max-h-[92vh] overflow-y-auto">
             {/* Close */}
-            <button 
+            <button
               onClick={() => setSelectedFinding(null)}
-              style={{ 
-                position: "absolute", 
-                top: "16px", 
-                right: "16px", 
-                background: "none", 
-                border: "none", 
-                cursor: "pointer", 
-                color: "var(--muted)" 
-              }}
+              className="absolute right-4 top-4 border-none bg-none text-t2"
             >
               <X size={20} />
             </button>
 
             {/* Modal Header */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--line)", paddingBottom: "14px", marginBottom: "18px" }}>
+            <div className="mb-[18px] flex items-start justify-between border-b border-bd pb-3.5">
               <div>
-                <span className="badge" style={{ marginBottom: "6px" }}>CAPA WORKFLOW</span>
-                <h3 style={{ margin: 0, fontSize: "20px" }}>Finding: {selectedFinding.findingNumber}</h3>
-                <span className="muted" style={{ fontSize: "13px" }}>
+                <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">CAPA WORKFLOW</span>
+                <h3 className="m-0 text-xl">Finding: {selectedFinding.findingNumber}</h3>
+                <span className="text-[13px] text-t2">
                   Spawned from Audit <strong>{selectedFinding.auditNumber || "Manual Setup"}</strong>
                 </span>
               </div>
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                <span 
-                  className="badge" 
-                  style={{ 
-                    fontSize: "14px", 
-                    padding: "4px 12px",
-                    background: selectedFinding.status === "CLOSED" ? "#dcfce7" : selectedFinding.status === "SUBMITTED" ? "#e0f2fe" : "#fee2e2",
-                    color: selectedFinding.status === "CLOSED" ? "#166534" : selectedFinding.status === "SUBMITTED" ? "#0369a1" : "#991b1b"
-                  }}
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center rounded-full border px-3 py-1 text-sm font-extrabold"
+                  style={badgeStyleToVars(STATUS_BADGE_STYLES[selectedFinding.status])}
                 >
                   {selectedFinding.status}
                 </span>
@@ -650,18 +609,18 @@ export function FindingsWorkspace() {
             </div>
 
             {/* Body Columns */}
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "20px" }}>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-[1.2fr_1fr]">
               {/* Left Column: Context, Issue Details & Timeline */}
               <div>
-                <div style={{ display: "grid", gap: "14px" }}>
+                <div className="grid gap-3.5">
                   <div>
-                    <h4 style={{ margin: "0 0 4px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Question Context</h4>
-                    <div style={{ fontSize: "14px", fontWeight: "bold" }}>{selectedFinding.question}</div>
+                    <h4 className="mb-1 text-[11px] uppercase tracking-wide text-t2">Question Context</h4>
+                    <div className="text-sm font-bold">{selectedFinding.question}</div>
                   </div>
 
                   <div>
-                    <h4 style={{ margin: "0 0 4px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Observation</h4>
-                    <p style={{ margin: 0, fontSize: "13px", background: "#f8fafc", padding: "10px", borderRadius: "6px", border: "1px solid var(--line)" }}>
+                    <h4 className="mb-1 text-[11px] uppercase tracking-wide text-t2">Observation</h4>
+                    <p className="m-0 rounded-md border border-bd bg-[#f8fafc] p-2.5 text-[13px]">
                       {selectedFinding.observation || "No custom observations logged."}
                     </p>
                   </div>
@@ -669,14 +628,14 @@ export function FindingsWorkspace() {
                   {/* Before Photos */}
                   {selectedFinding.beforePhotos && selectedFinding.beforePhotos.length > 0 && (
                     <div>
-                      <h4 style={{ margin: "0 0 6px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Audit Evidence (Before Photos)</h4>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <h4 className="mb-1.5 text-[11px] uppercase tracking-wide text-t2">Audit Evidence (Before Photos)</h4>
+                      <div className="flex flex-wrap gap-2">
                         {selectedFinding.beforePhotos.map((photo) => (
                           <a href={photo.secureUrl} target="_blank" rel="noopener noreferrer" key={photo.publicId}>
-                            <img 
-                              src={photo.secureUrl} 
-                              alt="Before" 
-                              style={{ width: "70px", height: "70px", borderRadius: "6px", objectFit: "cover", border: "1px solid var(--line)" }} 
+                            <img
+                              src={photo.secureUrl}
+                              alt="Before"
+                              className="h-[70px] w-[70px] rounded-md border border-bd object-cover"
                             />
                           </a>
                         ))}
@@ -685,61 +644,64 @@ export function FindingsWorkspace() {
                   )}
 
                   {/* Metadata Info (Auditor updates available if authorized) */}
-                  <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid var(--line)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                      <strong style={{ fontSize: "13px" }}>Action Metadata</strong>
+                  <div className="rounded-lg border border-bd bg-[#f8fafc] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <strong className="text-[13px]">Action Metadata</strong>
                       {canReviewCapa && !isEditingMetadata && (
-                        <button className="btn" onClick={() => setIsEditingMetadata(true)} style={{ padding: "3px 8px", fontSize: "11px" }}>
+                        <button
+                          className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-2 py-[3px] text-[11px] font-bold text-t1 hover:bg-bg3"
+                          onClick={() => setIsEditingMetadata(true)}
+                        >
                           Edit
                         </button>
                       )}
                     </div>
 
                     {isEditingMetadata ? (
-                      <div style={{ display: "grid", gap: "10px" }}>
-                        <label className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Severity</span>
-                          <select className="control" value={editSeverity} onChange={(e) => setEditSeverity(e.target.value as any)}>
+                      <div className="grid gap-2.5">
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Severity</span>
+                          <select className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editSeverity} onChange={(e) => setEditSeverity(e.target.value as any)}>
                             <option value="Critical">Critical</option>
                             <option value="High">High</option>
                             <option value="Medium">Medium</option>
                             <option value="Low">Low</option>
                           </select>
                         </label>
-                        <label className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Target Due Date</span>
-                          <input type="date" className="control" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Target Due Date</span>
+                          <input type="date" className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
                         </label>
-                        <label className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Assigned Responsbility</span>
-                          <input type="text" className="control" value={editAssignedTo} onChange={(e) => setEditAssignedTo(e.target.value)} />
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Assigned Responsbility</span>
+                          <input type="text" className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editAssignedTo} onChange={(e) => setEditAssignedTo(e.target.value)} />
                         </label>
-                        <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "5px" }}>
-                          <button className="btn" onClick={() => setIsEditingMetadata(false)} style={{ padding: "4px 8px", fontSize: "12px" }}>Cancel</button>
-                          <button className="btn primary" onClick={saveMetadataEdits} style={{ padding: "4px 8px", fontSize: "12px" }}>Save</button>
+                        <div className="mt-[5px] flex justify-end gap-1.5">
+                          <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-2 py-1 text-xs font-bold text-t1 hover:bg-bg3" onClick={() => setIsEditingMetadata(false)}>Cancel</button>
+                          <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-2 py-1 text-xs font-bold text-white hover:bg-brand-d" onClick={saveMetadataEdits}>Save</button>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "12px" }}>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>Zone: <strong>{selectedFinding.zone}</strong></div>
                         <div>Dept: <strong>{selectedFinding.department}</strong></div>
                         <div>Severity: <strong>{selectedFinding.severity}</strong></div>
                         <div>Due Date: <strong>{selectedFinding.dueDate ? new Date(selectedFinding.dueDate).toLocaleDateString() : "No Date"}</strong></div>
-                        <div style={{ gridColumn: "span 2" }}>Assigned To: <strong>{selectedFinding.assignedTo || selectedFinding.department}</strong></div>
+                        <div className="col-span-2">Assigned To: <strong>{selectedFinding.assignedTo || selectedFinding.department}</strong></div>
                       </div>
                     )}
                   </div>
 
                   {/* Timeline History */}
                   <div>
-                    <h4 style={{ margin: "0 0 8px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Audit Trail History</h4>
-                    <div style={{ display: "grid", gap: "10px", borderLeft: "2px solid var(--line)", paddingLeft: "12px", marginLeft: "6px" }}>
+                    <h4 className="mb-2 text-[11px] uppercase tracking-wide text-t2">Audit Trail History</h4>
+                    <div className="ml-1.5 grid gap-2.5 border-l-2 border-bd pl-3">
                       {selectedFinding.timeline.map((step, idx) => (
-                        <div key={idx} style={{ position: "relative", fontSize: "12px" }}>
-                          <div style={{ position: "absolute", left: "-19px", top: "3px", width: "12px", height: "12px", borderRadius: "50%", background: "var(--brand)", border: "2px solid #fff" }} />
-                          <div style={{ fontWeight: 600 }}>{step.action}</div>
-                          <div className="muted" style={{ fontSize: "11px" }}>by {step.byName} on {new Date(step.at || selectedFinding.createdAt).toLocaleString()}</div>
-                          {step.note && <div style={{ marginTop: "2px", color: "var(--muted)", fontStyle: "italic" }}>"{step.note}"</div>}
+                        <div key={idx} className="relative text-xs">
+                          <div className="absolute -left-[19px] top-[3px] h-3 w-3 rounded-full border-2 border-white bg-brand" />
+                          <div className="font-semibold">{step.action}</div>
+                          <div className="text-[11px] text-t2">by {step.byName} on {new Date(step.at || selectedFinding.createdAt).toLocaleString()}</div>
+                          {step.note && <div className="mt-0.5 italic text-t2">"{step.note}"</div>}
                         </div>
                       ))}
                     </div>
@@ -748,32 +710,32 @@ export function FindingsWorkspace() {
               </div>
 
               {/* Right Column: CAPA Submission / Approval Review controls */}
-              <div style={{ borderLeft: "1px solid var(--line)", paddingLeft: "20px" }}>
+              <div className="border-l border-bd pl-5">
                 {/* 1. CLOSED FINDING DISPLAY */}
                 {selectedFinding.status === "CLOSED" && (
-                  <div style={{ display: "grid", gap: "14px" }}>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center", color: "var(--ok)", fontWeight: "bold" }}>
+                  <div className="grid gap-3.5">
+                    <div className="flex items-center gap-2 font-bold text-green">
                       <CheckCircle2 size={20} /> CAPA Closed & Approved
                     </div>
                     <div>
-                      <h4 style={{ margin: "0 0 4px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Corrective Actions Executed</h4>
-                      <p style={{ margin: 0, fontSize: "13px", padding: "10px", background: "#f0fdf4", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                      <h4 className="mb-1 text-[11px] uppercase tracking-wide text-t2">Corrective Actions Executed</h4>
+                      <p className="m-0 rounded-md border border-[#bbf7d0] bg-[#f0fdf4] p-2.5 text-[13px]">
                         {selectedFinding.capaAction}
                       </p>
                     </div>
                     {selectedFinding.closureRemarks && (
                       <div>
-                        <h4 style={{ margin: "0 0 4px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Auditor Verification Notes</h4>
-                        <p className="muted" style={{ margin: 0, fontSize: "12px" }}>"{selectedFinding.closureRemarks}"</p>
+                        <h4 className="mb-1 text-[11px] uppercase tracking-wide text-t2">Auditor Verification Notes</h4>
+                        <p className="m-0 text-xs text-t2">"{selectedFinding.closureRemarks}"</p>
                       </div>
                     )}
                     {selectedFinding.afterPhotos && selectedFinding.afterPhotos.length > 0 && (
                       <div>
-                        <h4 style={{ margin: "0 0 4px", fontSize: "11px", textTransform: "uppercase", color: "var(--muted)", letterSpacing: "0.05em" }}>Closure Proof (After Photos)</h4>
-                        <div style={{ display: "flex", gap: "6px" }}>
+                        <h4 className="mb-1 text-[11px] uppercase tracking-wide text-t2">Closure Proof (After Photos)</h4>
+                        <div className="flex gap-1.5">
                           {selectedFinding.afterPhotos.map((p) => (
                             <a href={p.secureUrl} target="_blank" rel="noopener noreferrer" key={p.publicId}>
-                              <img src={p.secureUrl} style={{ width: "60px", height: "60px", borderRadius: "4px", objectFit: "cover", border: "1px solid var(--line)" }} />
+                              <img src={p.secureUrl} className="h-[60px] w-[60px] rounded border border-bd object-cover" />
                             </a>
                           ))}
                         </div>
@@ -786,57 +748,57 @@ export function FindingsWorkspace() {
                 {(selectedFinding.status === "OPEN" || selectedFinding.status === "REJECTED" || selectedFinding.status === "REOPENED" || selectedFinding.status === "OVERDUE") && (
                   <div>
                     {canSubmitCapa ? (
-                      <div style={{ display: "grid", gap: "14px" }}>
-                        <div style={{ fontWeight: "bold", fontSize: "14px", display: "flex", gap: "6px", alignItems: "center" }}>
-                          <Clock size={16} className="muted" /> Submit CAPA Resolution
+                      <div className="grid gap-3.5">
+                        <div className="flex items-center gap-1.5 text-sm font-bold">
+                          <Clock size={16} className="text-t2" /> Submit CAPA Resolution
                         </div>
 
                         {selectedFinding.status === "REJECTED" && (
-                          <div style={{ padding: "10px", borderRadius: "6px", background: "#fff5f5", border: "1px solid #fecaca", color: "var(--danger)", fontSize: "12px" }}>
+                          <div className="rounded-md border border-[#fecaca] bg-[#fff5f5] p-2.5 text-xs text-red">
                             <strong>Rejection Note:</strong> "{selectedFinding.rejectionReason}"
                           </div>
                         )}
 
-                        <label className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Corrective & Preventive Action Plan</span>
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Corrective & Preventive Action Plan</span>
                           <textarea
                             rows={3}
-                            className="control"
+                            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                             placeholder="Describe the exact actions taken to resolve the non-conformity..."
                             value={capaAction}
                             onChange={(e) => setCapaAction(e.target.value)}
                           />
                         </label>
 
-                        <label className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Closure Remarks (Optional)</span>
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Closure Remarks (Optional)</span>
                           <input
                             type="text"
-                            className="control"
+                            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                             placeholder="Additional closure notes..."
                             value={closureRemarks}
                             onChange={(e) => setClosureRemarks(e.target.value)}
                           />
                         </label>
 
-                        <div className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Upload Resolution Proof (After Photos)</span>
-                          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                            <label className="btn" style={{ cursor: "pointer", fontSize: "12px", padding: "6px 12px" }}>
+                        <div className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Upload Resolution Proof (After Photos)</span>
+                          <div className="flex items-center gap-2.5">
+                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-bd bg-white px-3 py-1.5 text-xs font-bold text-t1 hover:bg-bg3">
                               <UploadCloud size={14} /> {isUploading ? "Uploading..." : "Upload Photo"}
-                              <input type="file" style={{ display: "none" }} disabled={isUploading} onChange={handlePhotoUpload} />
+                              <input type="file" className="hidden" disabled={isUploading} onChange={handlePhotoUpload} />
                             </label>
                           </div>
                         </div>
 
                         {afterPhotos.length > 0 && (
-                          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                          <div className="flex flex-wrap gap-1.5">
                             {afterPhotos.map((p, pIdx) => (
-                              <div key={p.publicId} style={{ position: "relative", width: "60px", height: "60px", borderRadius: "4px", overflow: "hidden", border: "1px solid var(--line)" }}>
-                                <img src={p.secureUrl} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              <div key={p.publicId} className="relative h-[60px] w-[60px] overflow-hidden rounded border border-bd">
+                                <img src={p.secureUrl} className="h-full w-full object-cover" />
                                 <button
                                   onClick={() => removeAfterPhoto(pIdx)}
-                                  style={{ position: "absolute", top: 1, right: 1, background: "red", color: "#fff", border: "none", borderRadius: "50%", width: 14, height: 14, fontSize: 8, padding: 0, cursor: "pointer" }}
+                                  className="absolute right-px top-px h-3.5 w-3.5 rounded-full border-none bg-red p-0 text-[8px] text-white"
                                 >
                                   X
                                 </button>
@@ -845,17 +807,16 @@ export function FindingsWorkspace() {
                           </div>
                         )}
 
-                        <button 
-                          className="btn primary" 
-                          disabled={isSubmittingCapa || !capaAction.trim()} 
+                        <button
+                          className="mt-1.5 inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-55"
+                          disabled={isSubmittingCapa || !capaAction.trim()}
                           onClick={submitCapaForm}
-                          style={{ marginTop: "6px" }}
                         >
                           {isSubmittingCapa ? "Submitting..." : "Submit CAPA"}
                         </button>
                       </div>
                     ) : (
-                      <div className="muted" style={{ fontSize: "13px", padding: "12px", background: "var(--surface)", borderRadius: "6px" }}>
+                      <div className="rounded-md bg-bg3 p-3 text-[13px] text-t2">
                         Waiting for CAPA submission from the department SPOC (<strong>{selectedFinding.department}</strong>).
                       </div>
                     )}
@@ -864,16 +825,16 @@ export function FindingsWorkspace() {
 
                 {/* 3. CAPA SUBMITTED REVIEW WORKFLOW */}
                 {selectedFinding.status === "SUBMITTED" && (
-                  <div style={{ display: "grid", gap: "14px" }}>
-                    <div style={{ padding: "10px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: "6px" }}>
-                      <div style={{ fontSize: "12px", fontWeight: "bold", color: "#0369a1", marginBottom: "4px" }}>Pending Auditor Verification</div>
-                      <div style={{ fontSize: "13px", fontStyle: "italic" }}>"{selectedFinding.capaAction}"</div>
-                      
+                  <div className="grid gap-3.5">
+                    <div className="rounded-md border border-[#bae6fd] bg-[#f0f9ff] p-2.5">
+                      <div className="mb-1 text-xs font-bold text-[#0369a1]">Pending Auditor Verification</div>
+                      <div className="text-[13px] italic">"{selectedFinding.capaAction}"</div>
+
                       {selectedFinding.afterPhotos && selectedFinding.afterPhotos.length > 0 && (
-                        <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+                        <div className="mt-2 flex gap-1.5">
                           {selectedFinding.afterPhotos.map((p) => (
                             <a href={p.secureUrl} target="_blank" rel="noopener noreferrer" key={p.publicId}>
-                              <img src={p.secureUrl} style={{ width: "50px", height: "50px", borderRadius: "4px", objectFit: "cover" }} />
+                              <img src={p.secureUrl} className="h-[50px] w-[50px] rounded object-cover" />
                             </a>
                           ))}
                         </div>
@@ -881,14 +842,14 @@ export function FindingsWorkspace() {
                     </div>
 
                     {canReviewCapa ? (
-                      <div style={{ display: "grid", gap: "10px" }}>
-                        <strong style={{ fontSize: "13px" }}>Auditor Action Panel</strong>
+                      <div className="grid gap-2.5">
+                        <strong className="text-[13px]">Auditor Action Panel</strong>
 
-                        <label className="field" style={{ marginBottom: 0 }}>
-                          <span className="label">Verification / Rejection Comments</span>
+                        <label className="grid gap-1.5">
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Verification / Rejection Comments</span>
                           <textarea
                             rows={2}
-                            className="control"
+                            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                             placeholder="Provide audit signoff notes or rejection remarks..."
                             value={remarks}
                             onChange={(e) => {
@@ -898,27 +859,24 @@ export function FindingsWorkspace() {
                           />
                         </label>
 
-                        <div style={{ display: "flex", gap: "6px" }}>
-                          <button 
-                            className="btn" 
-                            style={{ flex: 1, background: "var(--ok)", color: "#fff", borderColor: "var(--ok)", fontSize: "12px", padding: "8px" }} 
+                        <div className="flex gap-1.5">
+                          <button
+                            className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-green bg-green px-2 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-55"
                             disabled={isSubmittingReview}
                             onClick={() => submitReview("approve")}
                           >
                             <Check size={14} /> Approve Closure
                           </button>
-                          <button 
-                            className="btn danger" 
-                            style={{ flex: 1, fontSize: "12px", padding: "8px" }} 
+                          <button
+                            className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-red bg-red px-2 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-55"
                             disabled={isSubmittingReview || !rejectionReason.trim()}
                             onClick={() => submitReview("reject")}
                           >
                             <X size={14} /> Reject CAPA
                           </button>
                         </div>
-                        <button 
-                          className="btn" 
-                          style={{ width: "100%", fontSize: "12px", padding: "6px" }} 
+                        <button
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-bd bg-white px-2 py-1.5 text-xs font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-55"
                           disabled={isSubmittingReview}
                           onClick={() => submitReview("reopen")}
                         >
@@ -926,7 +884,7 @@ export function FindingsWorkspace() {
                         </button>
                       </div>
                     ) : (
-                      <div className="muted" style={{ fontSize: "13px", padding: "12px", background: "var(--surface)", borderRadius: "6px" }}>
+                      <div className="rounded-md bg-bg3 p-3 text-[13px] text-t2">
                         Waiting for auditor to verify and sign off closure.
                       </div>
                     )}
@@ -936,8 +894,13 @@ export function FindingsWorkspace() {
             </div>
 
             {/* Modal Bottom */}
-            <div style={{ borderTop: "1px solid var(--line)", marginTop: "20px", paddingTop: "14px", display: "flex", justifyContent: "flex-end" }}>
-              <button className="btn" onClick={() => setSelectedFinding(null)}>Close Details</button>
+            <div className="mt-5 flex justify-end border-t border-bd pt-3.5">
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
+                onClick={() => setSelectedFinding(null)}
+              >
+                Close Details
+              </button>
             </div>
           </div>
         </div>
@@ -945,58 +908,26 @@ export function FindingsWorkspace() {
 
       {/* CREATE AD-HOC FINDING MODAL */}
       {isCreateFindingModalOpen && (
-        <div 
-          style={{ 
-            position: "fixed", 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0, 
-            background: "rgba(15, 23, 42, 0.6)", 
-            backdropFilter: "blur(4px)",
-            display: "grid",
-            placeItems: "center", 
-            zIndex: 9999, 
-            padding: "20px" 
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "600px", 
-              maxHeight: "92vh", 
-              overflowY: "auto", 
-              position: "relative",
-              padding: "24px"
-            }}
-          >
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-5 backdrop-blur-sm">
+          <div className="relative w-full max-w-[600px] rounded-lg border border-bd bg-bg1 p-6 shadow-[var(--shadow-sm)] max-h-[92vh] overflow-y-auto">
             {/* Close button */}
-            <button 
+            <button
               onClick={() => setIsCreateFindingModalOpen(false)}
-              style={{ 
-                position: "absolute", 
-                top: "16px", 
-                right: "16px", 
-                background: "none", 
-                border: "none", 
-                cursor: "pointer", 
-                color: "var(--muted)" 
-              }}
+              className="absolute right-4 top-4 border-none bg-none text-t2"
             >
               <X size={20} />
             </button>
 
-            <h3 style={{ margin: "0 0 4px", fontSize: "20px", fontWeight: 800 }}>Create Ad-Hoc Finding</h3>
-            <p className="muted" style={{ fontSize: "13px", margin: "0 0 20px" }}>Log a new non-conformity finding directly to the database without a formal full-site audit.</p>
+            <h3 className="mb-1 text-xl font-extrabold">Create Ad-Hoc Finding</h3>
+            <p className="mb-5 text-[13px] text-t2">Log a new non-conformity finding directly to the database without a formal full-site audit.</p>
 
-            <div style={{ display: "grid", gap: "16px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div className="grid gap-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label>
-                  <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Pillar / Category</span>
-                  <select 
-                    className="control" 
-                    value={createCategory} 
+                  <span className="mb-1.5 block text-xs font-semibold">Pillar / Category</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={createCategory}
                     onChange={(e) => setCreateCategory(e.target.value)}
                   >
                     <option value="Sort">Sort (Seiri)</option>
@@ -1010,10 +941,10 @@ export function FindingsWorkspace() {
                 </label>
 
                 <label>
-                  <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Zone / Area</span>
-                  <select 
-                    className="control" 
-                    value={createZone} 
+                  <span className="mb-1.5 block text-xs font-semibold">Zone / Area</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={createZone}
                     onChange={(e) => setCreateZone(e.target.value)}
                   >
                     <option value="">Select Zone...</option>
@@ -1025,31 +956,31 @@ export function FindingsWorkspace() {
               </div>
 
               {createZone && (
-                <div style={{ background: "#f8fafc", padding: "10px 12px", borderRadius: "6px", fontSize: "13px", border: "1px solid var(--line)" }}>
+                <div className="rounded-md border border-bd bg-[#f8fafc] px-3 py-2.5 text-[13px]">
                   <strong>Auto-detected Department: </strong>
-                  <span style={{ color: "var(--brand-dark)", fontWeight: 600 }}>
+                  <span className="font-semibold text-brand-d">
                     {masters.data?.zones.find(z => z.name === createZone)?.department || "N/A"}
                   </span>
                 </div>
               )}
 
               <label>
-                <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Non-Conformity Description *</span>
-                <textarea 
-                  className="control" 
-                  rows={3} 
+                <span className="mb-1.5 block text-xs font-semibold">Non-Conformity Description *</span>
+                <textarea
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  rows={3}
                   placeholder="Describe the issue or condition found..."
-                  value={createQuestion} 
+                  value={createQuestion}
                   onChange={(e) => setCreateQuestion(e.target.value)}
                 />
               </label>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label>
-                  <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Severity Level</span>
-                  <select 
-                    className="control" 
-                    value={createSeverity} 
+                  <span className="mb-1.5 block text-xs font-semibold">Severity Level</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={createSeverity}
                     onChange={(e) => setCreateSeverity(e.target.value as any)}
                   >
                     <option value="Critical">Critical</option>
@@ -1060,22 +991,22 @@ export function FindingsWorkspace() {
                 </label>
 
                 <label>
-                  <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Target Due Date</span>
-                  <input 
-                    type="date" 
-                    className="control" 
-                    value={createDueDate} 
+                  <span className="mb-1.5 block text-xs font-semibold">Target Due Date</span>
+                  <input
+                    type="date"
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={createDueDate}
                     onChange={(e) => setCreateDueDate(e.target.value)}
                   />
                 </label>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+              <div className="grid grid-cols-1 gap-3">
                 <label>
-                  <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Assignee (SPOC / Person Responsible)</span>
-                  <select 
-                    className="control" 
-                    value={createAssignedTo} 
+                  <span className="mb-1.5 block text-xs font-semibold">Assignee (SPOC / Person Responsible)</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={createAssignedTo}
                     onChange={(e) => setCreateAssignedTo(e.target.value)}
                   >
                     <option value="">Select Assignee...</option>
@@ -1087,66 +1018,60 @@ export function FindingsWorkspace() {
               </div>
 
               <label>
-                <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Additional Observation / Details</span>
-                <textarea 
-                  className="control" 
-                  rows={2} 
+                <span className="mb-1.5 block text-xs font-semibold">Additional Observation / Details</span>
+                <textarea
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  rows={2}
                   placeholder="Optional details, context, or notes..."
-                  value={createObservation} 
+                  value={createObservation}
                   onChange={(e) => setCreateObservation(e.target.value)}
                 />
               </label>
 
               <div>
-                <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "8px" }}>Evidence Photos (Before)</span>
-                
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                <span className="mb-2 block text-xs font-semibold">Evidence Photos (Before)</span>
+
+                <div className="mb-2 flex flex-wrap gap-2">
                   {createFindingPhotos.map((p, idx) => (
-                    <div key={idx} style={{ position: "relative", width: "70px", height: "70px" }}>
-                      <img src={p.secureUrl} alt="Preview" style={{ width: "100%", height: "100%", borderRadius: "6px", objectFit: "cover", border: "1px solid var(--line)" }} />
-                      <button 
+                    <div key={idx} className="relative h-[70px] w-[70px]">
+                      <img src={p.secureUrl} alt="Preview" className="h-full w-full rounded-md border border-bd object-cover" />
+                      <button
                         onClick={() => removeCreatePhoto(idx)}
-                        style={{ position: "absolute", top: "-4px", right: "-4px", background: "var(--danger)", color: "#fff", border: "none", borderRadius: "50%", width: "18px", height: "18px", fontSize: "10px", cursor: "pointer", display: "grid", placeItems: "center" }}
+                        className="absolute -right-1 -top-1 grid h-[18px] w-[18px] place-items-center rounded-full border-none bg-red text-[10px] text-white"
                       >
                         <X size={10} />
                       </button>
                     </div>
                   ))}
 
-                  <label 
-                    className="btn" 
-                    style={{ 
-                      width: "70px", 
-                      height: "70px", 
-                      display: "flex", 
-                      flexDirection: "column", 
-                      alignItems: "center", 
-                      justifyContent: "center", 
-                      border: "1px dashed var(--muted)",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      padding: 0,
-                      background: "transparent"
-                    }}
-                  >
-                    <UploadCloud size={16} className="muted" />
-                    <span style={{ fontSize: "10px", marginTop: "4px" }} className="muted">Add</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleCreatePhotoUpload} 
-                      style={{ display: "none" }} 
+                  <label className="flex h-[70px] w-[70px] cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-t2 bg-transparent p-0">
+                    <UploadCloud size={16} className="text-t2" />
+                    <span className="mt-1 text-[10px] text-t2">Add</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCreatePhotoUpload}
+                      className="hidden"
                       disabled={isUploadingCreatePhoto}
                     />
                   </label>
                 </div>
-                {isUploadingCreatePhoto && <span style={{ fontSize: "12px", color: "var(--brand-dark)" }}>Converting and uploading WebP...</span>}
+                {isUploadingCreatePhoto && <span className="text-xs text-brand-d">Converting and uploading WebP...</span>}
               </div>
             </div>
 
-            <div style={{ borderTop: "1px solid var(--line)", marginTop: "20px", paddingTop: "14px", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
-              <button className="btn" onClick={() => setIsCreateFindingModalOpen(false)}>Cancel</button>
-              <button className="btn primary" onClick={handleCreateFinding} disabled={isCreatingFinding || isUploadingCreatePhoto}>
+            <div className="mt-5 flex justify-end gap-2.5 border-t border-bd pt-3.5">
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
+                onClick={() => setIsCreateFindingModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-55"
+                onClick={handleCreateFinding}
+                disabled={isCreatingFinding || isUploadingCreatePhoto}
+              >
                 {isCreatingFinding ? "Saving..." : "Create Finding"}
               </button>
             </div>
@@ -1156,78 +1081,37 @@ export function FindingsWorkspace() {
 
       {/* Image Size / Compression Alert Modal */}
       {compressionAlert && (
-        <div 
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(4px)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 100000,
-            padding: "20px"
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "420px", 
-              padding: "24px", 
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "14px"
-            }}
-          >
-            <div style={{ color: "#eab308", background: "#fef9c3", borderRadius: "50%", padding: "12px", display: "inline-flex" }}>
+        <div className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/50 p-5 backdrop-blur-sm">
+          <div className="flex w-full max-w-[420px] flex-col items-center gap-3.5 rounded-lg border border-bd bg-bg1 p-6 text-center shadow-[var(--shadow-sm)]">
+            <div className="inline-flex rounded-full bg-[#fef9c3] p-3 text-[#eab308]">
               <AlertTriangle size={36} />
             </div>
-            
+
             <div>
-              <h3 style={{ fontSize: "18px", fontWeight: 800, margin: "0 0 6px" }}>Large File Warning</h3>
-              <p className="muted" style={{ fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
+              <h3 className="mb-1.5 text-lg font-extrabold">Large File Warning</h3>
+              <p className="m-0 text-sm leading-relaxed text-t2">
                 The selected image is <strong>{compressionAlert.sizeMb} MB</strong>, which exceeds the recommended 3 MB limit. For optimal load speeds, please compress it first:
               </p>
             </div>
 
-            <a 
-              href="https://imagecompressor.com/" 
-              target="_blank" 
+            <a
+              href="https://imagecompressor.com/"
+              target="_blank"
               rel="noopener noreferrer"
-              className="btn"
-              style={{ 
-                display: "inline-flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                gap: "8px", 
-                width: "100%", 
-                background: "#f1f5f9",
-                borderColor: "#cbd5e1",
-                color: "#0f172a",
-                padding: "10px",
-                fontWeight: 600,
-                fontSize: "13px"
-              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-[#f1f5f9] p-2.5 text-[13px] font-semibold text-[#0f172a]"
             >
               <ExternalLink size={14} /> Open ImageCompressor.com
             </a>
 
-            <div style={{ display: "flex", gap: "10px", width: "100%", marginTop: "4px" }}>
-              <button 
-                className="btn" 
-                style={{ flex: 1, fontSize: "13px" }} 
+            <div className="mt-1 flex w-full gap-2.5">
+              <button
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-[13px] font-bold text-t1 hover:bg-bg3"
                 onClick={() => setCompressionAlert(null)}
               >
                 Cancel
               </button>
-              <button 
-                className="btn primary" 
-                style={{ flex: 1, fontSize: "13px" }}
+              <button
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-[13px] font-bold text-white hover:bg-brand-d"
                 onClick={() => {
                   const fileToUpload = compressionAlert.file;
                   const isCreate = compressionAlert.isCreateForm;

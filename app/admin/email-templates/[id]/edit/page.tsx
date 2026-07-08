@@ -4,5 +4,5 @@ import { EmailTemplateVariableHelper } from "@/components/admin/EmailTemplateVar
 
 export default async function EditEmailTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <AppShell><div className="grid grid-2"><EmailTemplateForm id={id} /><EmailTemplateVariableHelper /></div></AppShell>;
+  return <AppShell><div className="grid grid-cols-1 gap-5 md:grid-cols-2"><EmailTemplateForm id={id} /><EmailTemplateVariableHelper /></div></AppShell>;
 }

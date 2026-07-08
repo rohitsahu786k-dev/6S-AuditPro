@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProfileMenu } from "@/components/layout/ProfileMenu";
 
-export function Header({ user, logoutAction }: { user: SessionUser; logoutAction: () => Promise<void> }) {
+export function Header({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const currentLabel = breadcrumbLabel(pathname);
 
@@ -38,7 +38,7 @@ export function Header({ user, logoutAction }: { user: SessionUser; logoutAction
             <div className="px-2 py-6 text-center text-[13px] text-t2">No new notifications</div>
           </DropdownMenuContent>
         </DropdownMenu>
-        <ProfileMenu user={user} logoutAction={logoutAction} />
+        <ProfileMenu user={user} />
       </div>
     </header>
   );

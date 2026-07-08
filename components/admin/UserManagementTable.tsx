@@ -26,23 +26,50 @@ export function UserManagementTable() {
   }
 
   return (
-    <div className="grid grid-2">
-      <form className="card" onSubmit={createUser}>
-        <h2 className="card-title">Create User</h2>
-        {message ? <div className="alert">{message}</div> : null}
-        <input className="control" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ marginBottom: 8 }} />
-        <input className="control" placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} style={{ marginBottom: 8 }} />
-        <input className="control" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={{ marginBottom: 8 }} />
-        <input className="control" placeholder="Initial password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} style={{ marginBottom: 8 }} />
-        <select className="control" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} style={{ marginBottom: 8 }}>
+    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
+      <form className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]" onSubmit={createUser}>
+        <h2 className="mb-2.5 font-extrabold text-t1">Create User</h2>
+        {message ? <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red">{message}</div> : null}
+        <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+        <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+        <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Initial password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <select className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
           {["MASTER_ADMIN", "ADMIN", "AUDITOR", "STORES_SPOC", "PRODUCTION_SPOC", "MANAGEMENT"].map((role) => <option key={role}>{role}</option>)}
         </select>
-        <input className="control" placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} style={{ marginBottom: 8 }} />
-        <button className="btn primary">Create</button>
+        <input className="mb-2 w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" placeholder="Department" value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+        <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d">Create</button>
       </form>
-      <div className="card">
-        <h2 className="card-title">Users</h2>
-        <div className="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Status</th><th /></tr></thead><tbody>{users.data?.map((u) => <tr key={u._id}><td><strong>{u.name}</strong><br /><span className="muted">@{u.username} {u.email}</span></td><td>{u.role}</td><td>{u.status}</td><td><button className="btn danger" onClick={() => deactivate(u._id)}>Deactivate</button></td></tr>)}</tbody></table></div>
+      <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+        <h2 className="mb-2.5 font-extrabold text-t1">Users</h2>
+        <div className="overflow-x-auto rounded-lg border border-bd bg-white">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Name</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Role</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2" />
+              </tr>
+            </thead>
+            <tbody>
+              {users.data?.map((u) => (
+                <tr key={u._id}>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <strong>{u.name}</strong>
+                    <br />
+                    <span className="text-t2">@{u.username} {u.email}</span>
+                  </td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{u.role}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{u.status}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                    <button className="inline-flex items-center gap-2 rounded-lg border border-red bg-red px-3.5 py-2.5 text-sm font-bold text-white" onClick={() => deactivate(u._id)}>Deactivate</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

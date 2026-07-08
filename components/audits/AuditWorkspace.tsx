@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import { defaultSeverity } from "@/lib/audit-scoring";
 import { processImageToWebP } from "@/utils/media";
+import { scoreBadgeStyle, SEVERITY_BADGE_STYLES } from "@/lib/status-styles";
+import type { Severity } from "@/types/domain";
 
 type Masters = { 
   zones: Array<{ name: string; department: string }>; 
@@ -294,13 +296,13 @@ export function AuditWorkspace() {
   return (
     <>
       {/* Page Header */}
-      <div className="page-head">
+      <div className="mb-[18px] flex items-end justify-between gap-4">
         <div>
-          <h1 className="page-title">6S Site Audits</h1>
-          <p className="page-sub">Establish and verify workplace discipline and safety standards via systematic scoring audits.</p>
+          <h1 className="text-2xl font-extrabold text-t1">6S Site Audits</h1>
+          <p className="mt-1 text-sm text-t2">Establish and verify workplace discipline and safety standards via systematic scoring audits.</p>
         </div>
         {step === "history" && (
-          <button className="btn primary" onClick={startAuditSetup}>
+          <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d" onClick={startAuditSetup}>
             <Plus size={16} /> Start Audit
           </button>
         )}
@@ -308,65 +310,61 @@ export function AuditWorkspace() {
 
       {/* STEP 1: HISTORY VIEW */}
       {step === "history" && (
-        <div className="grid grid-3" style={{ gridTemplateColumns: "2fr 1fr", gap: "20px" }}>
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-[2fr_1fr]">
           {/* Audit History List */}
-          <div className="card">
-            <h2 className="card-title">Completed Audits Log</h2>
+          <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <h2 className="mb-2.5 font-extrabold text-t1">Completed Audits Log</h2>
             {audits.loading ? (
-              <div className="muted" style={{ padding: "20px 0" }}>Loading completed audits...</div>
+              <div className="py-5 text-t2">Loading completed audits...</div>
             ) : !audits.data || audits.data.length === 0 ? (
-              <div className="muted" style={{ padding: "20px 0" }}>No audits completed yet. Start your first site audit.</div>
+              <div className="py-5 text-t2">No audits completed yet. Start your first site audit.</div>
             ) : (
-              <div className="table-wrap">
-                <table>
+              <div className="overflow-x-auto rounded-lg border border-bd bg-white">
+                <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>
-                      <th>Audit No</th>
-                      <th>Zone / Dept</th>
-                      <th>Auditor</th>
-                      <th>Score</th>
-                      <th>Date</th>
-                      <th style={{ textAlign: "right" }}>Actions</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit No</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Zone / Dept</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Auditor</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Score</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {audits.data.map((audit) => (
+                    {audits.data.map((audit) => {
+                      const scoreBadge = scoreBadgeStyle(audit.totalScore);
+                      return (
                       <tr key={audit._id}>
-                        <td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                           <strong>{audit.auditNumber}</strong>
                         </td>
-                        <td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                           <div>{audit.zone}</div>
-                          <span className="muted" style={{ fontSize: "11px" }}>{audit.department}</span>
+                          <span className="text-[11px] text-t2">{audit.department}</span>
                         </td>
-                        <td>{audit.auditorName}</td>
-                        <td>
-                          <span 
-                            className="badge" 
-                            style={{ 
-                              background: audit.totalScore >= 90 ? "#dcfce7" : audit.totalScore >= 75 ? "#fef9c3" : "#fee2e2",
-                              color: audit.totalScore >= 90 ? "#166534" : audit.totalScore >= 75 ? "#854d0e" : "#991b1b",
-                              borderColor: audit.totalScore >= 90 ? "#bbf7d0" : audit.totalScore >= 75 ? "#fef08a" : "#fecaca"
-                            }}
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{audit.auditorName}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                          <span
+                            className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-extrabold"
+                            style={{ background: scoreBadge.bg, color: scoreBadge.text, borderColor: scoreBadge.border }}
                           >
                             {audit.totalScore}%
                           </span>
                         </td>
-                        <td>{new Date(audit.date).toLocaleDateString()}</td>
-                        <td style={{ textAlign: "right" }}>
-                          <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
-                            <button 
-                              className="btn" 
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{new Date(audit.date).toLocaleDateString()}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              className="inline-flex items-center gap-1 rounded-lg border border-bd bg-white px-2.5 py-[5px] text-xs font-bold text-t1 hover:bg-bg3"
                               onClick={() => setSelectedAuditDetail(audit)}
-                              style={{ padding: "5px 10px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}
                             >
                               <Eye size={12} /> View
                             </button>
                             {isUserAdmin && (
                               <button
-                                className="btn"
+                                className="inline-flex items-center gap-1 rounded-lg border border-red bg-white px-2.5 py-[5px] text-xs font-bold text-red hover:bg-bg3"
                                 onClick={() => handleDeleteAudit(audit._id)}
-                                style={{ padding: "5px 10px", fontSize: "12px", borderColor: "var(--danger)", color: "var(--danger)", display: "flex", alignItems: "center", gap: "4px" }}
                               >
                                 <Trash2 size={12} /> Delete
                               </button>
@@ -374,7 +372,8 @@ export function AuditWorkspace() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -382,20 +381,20 @@ export function AuditWorkspace() {
           </div>
 
           {/* Guidelines Box */}
-          <div className="card" style={{ display: "flex", flexDirection: "column", justifySelf: "stretch" }}>
-            <h2 className="card-title">6S Scoring Guidelines</h2>
-            <div style={{ display: "grid", gap: "12px", fontSize: "13px" }}>
-              <div style={{ padding: "10px", borderRadius: "8px", background: "#f8fafc", borderLeft: "4px solid #ef2b2d" }}>
+          <div className="flex flex-col self-stretch rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <h2 className="mb-2.5 font-extrabold text-t1">6S Scoring Guidelines</h2>
+            <div className="grid gap-3 text-[13px]">
+              <div className="rounded-lg border-l-4 border-l-brand bg-[#f8fafc] p-2.5">
                 <strong>Multi-Step Checklist</strong>
-                <p className="muted" style={{ margin: "4px 0 0" }}>Audits cover 7 pillars: Sort, Set in Order, Shine, Standardize, Sustain, Safety, Environment.</p>
+                <p className="mt-1 text-t2">Audits cover 7 pillars: Sort, Set in Order, Shine, Standardize, Sustain, Safety, Environment.</p>
               </div>
-              <div style={{ padding: "10px", borderRadius: "8px", background: "#f8fafc", borderLeft: "4px solid #16a34a" }}>
+              <div className="rounded-lg border-l-4 border-l-green bg-[#f8fafc] p-2.5">
                 <strong>Scoring Metrics</strong>
-                <p className="muted" style={{ margin: "4px 0 0" }}>Adequate adds 1 point. Not Adequate adds 0 points and requires a description. N/A excludes the question.</p>
+                <p className="mt-1 text-t2">Adequate adds 1 point. Not Adequate adds 0 points and requires a description. N/A excludes the question.</p>
               </div>
-              <div style={{ padding: "10px", borderRadius: "8px", background: "#f8fafc", borderLeft: "4px solid #ea580c" }}>
+              <div className="rounded-lg border-l-4 border-l-orange bg-[#f8fafc] p-2.5">
                 <strong>CAPA Trigger</strong>
-                <p className="muted" style={{ margin: "4px 0 0" }}>Any finding marked "Not Adequate" instantly spawns an active CAPA ticket assigned to the department SPOC.</p>
+                <p className="mt-1 text-t2">Any finding marked "Not Adequate" instantly spawns an active CAPA ticket assigned to the department SPOC.</p>
               </div>
             </div>
           </div>
@@ -404,16 +403,16 @@ export function AuditWorkspace() {
 
       {/* STEP 2: SETUP CONFIG */}
       {step === "setup" && (
-        <div style={{ maxWidth: "600px", margin: "20px auto" }} className="card">
-          <h2 className="card-title">Audit Configurations</h2>
-          {setupError && <div className="alert">{setupError}</div>}
+        <div className="mx-auto my-5 max-w-[600px] rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <h2 className="mb-2.5 font-extrabold text-t1">Audit Configurations</h2>
+          {setupError && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red">{setupError}</div>}
 
-          <div style={{ display: "grid", gap: "16px" }}>
-            <label className="field">
-              <span className="label">Audit Zone</span>
-              <select 
-                className="control" 
-                value={zoneName} 
+          <div className="grid gap-4">
+            <label className="mb-3 grid gap-1.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audit Zone</span>
+              <select
+                className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={zoneName}
                 onChange={(e) => setZoneName(e.target.value)}
               >
                 <option value="">Select Audit Area / Zone</option>
@@ -424,20 +423,20 @@ export function AuditWorkspace() {
             </label>
 
             {selectedZone && (
-              <div style={{ padding: "12px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--line)", display: "flex", gap: "10px", alignItems: "center" }}>
-                <MapPin size={16} className="muted" />
+              <div className="flex items-center gap-2.5 rounded-lg border border-bd bg-bg3 p-3">
+                <MapPin size={16} className="text-t2" />
                 <div>
-                  <div style={{ fontSize: "11px", textTransform: "uppercase", fontWeight: "bold", color: "var(--muted)" }}>Target Department</div>
+                  <div className="text-[11px] font-bold uppercase text-t2">Target Department</div>
                   <strong>{selectedZone.department}</strong>
                 </div>
               </div>
             )}
 
-            <label className="field">
-              <span className="label">Lead Auditor</span>
-              <select 
-                className="control" 
-                value={auditorName} 
+            <label className="mb-3 grid gap-1.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Lead Auditor</span>
+              <select
+                className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={auditorName}
                 onChange={(e) => setAuditorName(e.target.value)}
               >
                 <option value="">Select Auditor</option>
@@ -448,19 +447,19 @@ export function AuditWorkspace() {
               </select>
             </label>
 
-            <label className="field">
-              <span className="label">Audit Date</span>
-              <input 
-                type="date" 
-                className="control" 
-                value={date} 
-                onChange={(e) => setDate(e.target.value)} 
+            <label className="mb-3 grid gap-1.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audit Date</span>
+              <input
+                type="date"
+                className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
               />
             </label>
 
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
-              <button className="btn" onClick={() => setStep("history")}>Cancel</button>
-              <button className="btn primary" onClick={validateSetupAndStart}>
+            <div className="mt-2.5 flex justify-between">
+              <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" onClick={() => setStep("history")}>Cancel</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d" onClick={validateSetupAndStart}>
                 Next: Start Checklist <ChevronRight size={16} />
               </button>
             </div>
@@ -470,29 +469,25 @@ export function AuditWorkspace() {
 
       {/* STEP 3: INTERACTIVE CHECKLIST */}
       {step === "checklist" && masters.data && (
-        <div style={{ display: "grid", gap: "20px" }}>
+        <div className="grid gap-5">
           {/* Progress Header */}
-          <div className="card" style={{ padding: "16px 20px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontWeight: 800 }}>Audit Progress Checklist</span>
-              <span className="muted" style={{ fontSize: "14px" }}>
+          <div className="rounded-lg border border-bd bg-bg1 px-5 py-4 shadow-[var(--shadow-sm)]">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-extrabold">Audit Progress Checklist</span>
+              <span className="text-sm text-t2">
                 {answeredQuestionsCount} of {totalQuestionsCount} Answered ({completionPercentage}%)
               </span>
             </div>
-            <div style={{ height: "8px", background: "var(--surface)", borderRadius: "4px", overflow: "hidden" }}>
-              <div 
-                style={{ 
-                  height: "100%", 
-                  background: "var(--brand)", 
-                  width: `${completionPercentage}%`, 
-                  transition: "width 0.3s ease" 
-                }} 
+            <div className="h-2 w-full overflow-hidden rounded bg-bg3">
+              <div
+                className="h-full bg-brand transition-[width] duration-300 ease-in-out"
+                style={{ width: `${completionPercentage}%` }}
               />
             </div>
           </div>
 
           {/* Category Navigation Pills */}
-          <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "5px" }}>
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {CATEGORIES.map((cat, idx) => {
               const stats = getCategoryStat(cat);
               const isSelected = currentCategoryIndex === idx;
@@ -501,18 +496,15 @@ export function AuditWorkspace() {
                 <button
                   key={cat}
                   onClick={() => setCurrentCategoryIndex(idx)}
-                  className="btn"
-                  style={{
-                    flexShrink: 0,
-                    background: isSelected ? "var(--brand-soft)" : isDone ? "#f0fdf4" : "#fff",
-                    color: isSelected ? "var(--brand-dark)" : isDone ? "#166534" : "var(--ink)",
-                    borderColor: isSelected ? "var(--brand)" : isDone ? "#bbf7d0" : "var(--line)",
-                    padding: "8px 14px",
-                    fontWeight: 700,
-                    fontSize: "13px"
-                  }}
+                  className={`inline-flex shrink-0 items-center gap-2 rounded-lg border px-3.5 py-2 text-[13px] font-bold ${
+                    isSelected
+                      ? "border-brand bg-accent text-brand-d"
+                      : isDone
+                      ? "border-green-200 bg-green-50 text-green-800"
+                      : "border-bd bg-white text-t1"
+                  }`}
                 >
-                  {isDone && <Check size={14} style={{ marginRight: "4px" }} />}
+                  {isDone && <Check size={14} className="mr-1" />}
                   {cat} ({stats.answered}/{stats.total})
                 </button>
               );
@@ -520,106 +512,85 @@ export function AuditWorkspace() {
           </div>
 
           {/* Question Work Area */}
-          <div className="card" style={{ display: "grid", gap: "24px" }}>
-            <div style={{ borderBottom: "1px solid var(--line)", paddingBottom: "10px" }}>
-              <h3 style={{ margin: 0, textTransform: "uppercase", fontSize: "16px", color: "var(--brand)" }}>
+          <div className="grid gap-6 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <div className="border-b border-bd pb-2.5">
+              <h3 className="m-0 text-base uppercase text-brand">
                 Pillar Category: {activeCategory}
               </h3>
             </div>
 
             {categoryQuestions.length === 0 ? (
-              <div className="muted">No questions seeded for this category.</div>
+              <div className="text-t2">No questions seeded for this category.</div>
             ) : (
-              <div style={{ display: "grid", gap: "20px" }}>
+              <div className="grid gap-5">
                 {categoryQuestions.map((q, idx) => {
                   const state = checklistResponses[q._id];
                   const resp = state?.response;
                   return (
-                    <div 
-                      key={q._id} 
-                      style={{ 
-                        padding: "16px", 
-                        borderRadius: "8px", 
-                        background: resp === "Adequate" ? "#f0fdf4" : resp === "Not Adequate" ? "#fef2f2" : "#f8fafc",
-                        border: "1px solid",
-                        borderColor: resp === "Adequate" ? "#bbf7d0" : resp === "Not Adequate" ? "#fecaca" : "var(--line)",
-                        display: "grid",
-                        gap: "12px"
-                      }}
+                    <div
+                      key={q._id}
+                      className={`grid gap-3 rounded-lg border p-4 ${
+                        resp === "Adequate"
+                          ? "border-green-200 bg-green-50"
+                          : resp === "Not Adequate"
+                          ? "border-red-200 bg-red-50"
+                          : "border-bd bg-[#f8fafc]"
+                      }`}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", alignItems: "flex-start" }}>
+                      <div className="flex items-start justify-between gap-5">
                         <div>
-                          <span 
-                            style={{ 
-                              fontSize: "10px", 
-                              fontWeight: 900, 
-                              color: "var(--brand)", 
-                              textTransform: "uppercase", 
-                              letterSpacing: "0.06em",
-                              display: "block",
-                              marginBottom: "3px"
-                            }}
-                          >
+                          <span className="mb-[3px] block text-[10px] font-black uppercase tracking-[0.06em] text-brand">
                             {q.subSection || "STANDARD"}
                           </span>
-                          <strong style={{ fontSize: "15px", lineHeight: 1.4 }}>{idx + 1}. {q.text}</strong>
+                          <strong className="text-[15px] leading-[1.4]">{idx + 1}. {q.text}</strong>
                         </div>
 
                         {/* Control Buttons */}
-                        <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
+                        <div className="flex shrink-0 gap-1.5">
                           <button
-                            className="btn"
-                            onClick={() => setChecklistResponses(prev => ({ 
-                              ...prev, 
-                              [q._id]: { ...prev[q._id], response: "Adequate" } 
+                            onClick={() => setChecklistResponses(prev => ({
+                              ...prev,
+                              [q._id]: { ...prev[q._id], response: "Adequate" }
                             }))}
-                            style={{
-                              background: resp === "Adequate" ? "var(--ok)" : "#fff",
-                              color: resp === "Adequate" ? "#fff" : "var(--ink)",
-                              borderColor: resp === "Adequate" ? "var(--ok)" : "var(--line)",
-                              padding: "6px 12px",
-                              fontSize: "13px"
-                            }}
+                            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-bold ${
+                              resp === "Adequate"
+                                ? "border-green bg-green text-white"
+                                : "border-bd bg-white text-t1"
+                            }`}
                           >
                             Adequate
                           </button>
                           <button
-                            className="btn"
                             onClick={() => {
                               const defaultSev = defaultSeverity("Not Adequate", activeCategory);
-                              setChecklistResponses(prev => ({ 
-                                ...prev, 
-                                [q._id]: { 
-                                  ...prev[q._id], 
-                                  response: "Not Adequate", 
+                              setChecklistResponses(prev => ({
+                                ...prev,
+                                [q._id]: {
+                                  ...prev[q._id],
+                                  response: "Not Adequate",
                                   severity: defaultSev,
                                   observation: prev[q._id]?.observation || ""
-                                } 
+                                }
                               }));
                             }}
-                            style={{
-                              background: resp === "Not Adequate" ? "var(--danger)" : "#fff",
-                              color: resp === "Not Adequate" ? "#fff" : "var(--ink)",
-                              borderColor: resp === "Not Adequate" ? "var(--danger)" : "var(--line)",
-                              padding: "6px 12px",
-                              fontSize: "13px"
-                            }}
+                            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-bold ${
+                              resp === "Not Adequate"
+                                ? "border-red bg-red text-white"
+                                : "border-bd bg-white text-t1"
+                            }`}
                           >
                             Not Adequate
                           </button>
                           <button
-                            className="btn"
-                            onClick={() => setChecklistResponses(prev => ({ 
-                              ...prev, 
-                              [q._id]: { ...prev[q._id], response: "N/A" } 
+                            onClick={() => setChecklistResponses(prev => ({
+                              ...prev,
+                              [q._id]: { ...prev[q._id], response: "N/A" }
                             }))}
-                            style={{
-                              background: resp === "N/A" ? "var(--muted)" : "#fff",
-                              color: resp === "N/A" ? "#fff" : "var(--ink)",
-                              borderColor: resp === "N/A" ? "var(--muted)" : "var(--line)",
-                              padding: "6px 12px",
-                              fontSize: "13px"
-                            }}
+                            className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-bold ${
+                              resp === "N/A"
+                                ? "border-t2 bg-t2 text-white"
+                                : "border-bd bg-white text-t1"
+                            }`}
                           >
                             N/A
                           </button>
@@ -628,20 +599,11 @@ export function AuditWorkspace() {
 
                       {/* Not Adequate Inputs (Observation, Severity, Photos) */}
                       {resp === "Not Adequate" && (
-                        <div 
-                          style={{ 
-                            marginTop: "8px", 
-                            paddingTop: "14px", 
-                            borderTop: "1px dashed #fca5a5", 
-                            display: "grid", 
-                            gap: "12px", 
-                            gridTemplateColumns: "1fr 1fr" 
-                          }}
-                        >
-                          <label className="field" style={{ gridColumn: "span 2", marginBottom: 0 }}>
-                            <span className="label" style={{ color: "var(--brand-dark)" }}>Observation / Non-Conformity Description</span>
+                        <div className="mt-2 grid grid-cols-1 gap-3 border-t border-dashed border-red-300 pt-3.5 md:grid-cols-2">
+                          <label className="col-span-1 mb-0 grid gap-1.5 md:col-span-2">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wide text-brand-d">Observation / Non-Conformity Description</span>
                             <textarea
-                              className="control"
+                              className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                               rows={2}
                               placeholder="Describe the exact issue or standard deviation..."
                               value={state.observation || ""}
@@ -652,10 +614,10 @@ export function AuditWorkspace() {
                             />
                           </label>
 
-                          <label className="field" style={{ marginBottom: 0 }}>
-                            <span className="label">Finding Severity</span>
+                          <label className="mb-0 grid gap-1.5">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Finding Severity</span>
                             <select
-                              className="control"
+                              className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                               value={state.severity || "Medium"}
                               onChange={(e) => setChecklistResponses(prev => ({
                                 ...prev,
@@ -669,27 +631,18 @@ export function AuditWorkspace() {
                             </select>
                           </label>
 
-                          <div className="field" style={{ marginBottom: 0 }}>
-                            <span className="label">Audit Evidence (Before Photos)</span>
-                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                              <label 
-                                className="btn" 
-                                style={{ 
-                                  cursor: "pointer", 
-                                  background: "#fff", 
-                                  borderColor: "var(--line)", 
-                                  fontSize: "13px",
-                                  padding: "8px 12px"
-                                }}
-                              >
-                                <UploadCloud size={16} className="muted" />
+                          <div className="mb-0 grid gap-1.5">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audit Evidence (Before Photos)</span>
+                            <div className="flex items-center gap-2">
+                              <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-bd bg-white px-3 py-2 text-[13px] font-bold text-t1 hover:bg-bg3">
+                                <UploadCloud size={16} className="text-t2" />
                                 {uploading[q._id] ? "Uploading..." : "Upload Photo"}
-                                <input 
-                                  type="file" 
-                                  accept="image/*" 
-                                  style={{ display: "none" }}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
                                   disabled={uploading[q._id]}
-                                  onChange={(e) => handlePhotoUpload(q._id, e)} 
+                                  onChange={(e) => handlePhotoUpload(q._id, e)}
                                 />
                               </label>
                             </div>
@@ -697,41 +650,20 @@ export function AuditWorkspace() {
 
                           {/* Uploaded thumbnails */}
                           {state.beforePhotos && state.beforePhotos.length > 0 && (
-                            <div style={{ gridColumn: "span 2", display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px" }}>
+                            <div className="col-span-1 mt-1 flex flex-wrap gap-2 md:col-span-2">
                               {state.beforePhotos.map((photo, pIdx) => (
-                                <div 
-                                  key={photo.publicId} 
-                                  style={{ 
-                                    position: "relative", 
-                                    width: "80px", 
-                                    height: "80px", 
-                                    borderRadius: "6px", 
-                                    border: "1px solid var(--line)", 
-                                    overflow: "hidden" 
-                                  }}
+                                <div
+                                  key={photo.publicId}
+                                  className="relative h-20 w-20 overflow-hidden rounded-md border border-bd"
                                 >
-                                  <img 
-                                    src={photo.secureUrl} 
-                                    alt="Evidence" 
-                                    style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                                  <img
+                                    src={photo.secureUrl}
+                                    alt="Evidence"
+                                    className="h-full w-full object-cover"
                                   />
                                   <button
                                     onClick={() => handleRemovePhoto(q._id, pIdx)}
-                                    style={{
-                                      position: "absolute",
-                                      top: "2px",
-                                      right: "2px",
-                                      background: "rgba(220, 38, 38, 0.9)",
-                                      color: "#fff",
-                                      border: "none",
-                                      borderRadius: "50%",
-                                      width: "18px",
-                                      height: "18px",
-                                      display: "grid",
-                                      placeItems: "center",
-                                      cursor: "pointer",
-                                      padding: 0
-                                    }}
+                                    className="absolute top-0.5 right-0.5 grid h-[18px] w-[18px] place-items-center rounded-full border-0 bg-[rgba(220,38,38,0.9)] p-0 text-white"
                                   >
                                     <X size={10} />
                                   </button>
@@ -749,9 +681,9 @@ export function AuditWorkspace() {
           </div>
 
           {/* Steps Navigation Controls */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
+          <div className="mt-2.5 flex items-center justify-between">
             <button
-              className="btn"
+              className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
               onClick={() => {
                 if (currentCategoryIndex > 0) {
                   setCurrentCategoryIndex(prev => prev - 1);
@@ -765,14 +697,14 @@ export function AuditWorkspace() {
 
             {currentCategoryIndex < CATEGORIES.length - 1 ? (
               <button
-                className="btn primary"
+                className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
                 onClick={() => setCurrentCategoryIndex(prev => prev + 1)}
               >
                 Next Category <ChevronRight size={16} />
               </button>
             ) : (
               <button
-                className="btn primary"
+                className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-55"
                 onClick={submitFullAudit}
                 disabled={isSubmitting}
               >
@@ -785,41 +717,52 @@ export function AuditWorkspace() {
 
       {/* STEP 4: SUCCESS VIEW */}
       {step === "success" && createdAudit && (
-        <div style={{ maxWidth: "600px", margin: "30px auto", textAlign: "center" }} className="card">
-          <div style={{ color: "var(--ok)", marginBottom: "16px" }}>
-            <CheckCircle2 size={64} style={{ margin: "0 auto" }} />
+        <div className="mx-auto my-[30px] max-w-[600px] rounded-lg border border-bd bg-bg1 p-4 text-center shadow-[var(--shadow-sm)]">
+          <div className="mb-4 text-green">
+            <CheckCircle2 size={64} className="mx-auto" />
           </div>
-          <h2 style={{ fontSize: "24px", fontWeight: 800, margin: "0 0 8px" }}>Audit Submitted Successfully!</h2>
-          <p className="muted" style={{ fontSize: "15px", marginBottom: "24px" }}>
+          <h2 className="m-0 mb-2 text-2xl font-extrabold">Audit Submitted Successfully!</h2>
+          <p className="mb-6 text-[15px] text-t2">
             Audit report <strong>{createdAudit.auditNumber}</strong> has been logged. Scores have been cascaded and department SPOCs notified.
           </p>
 
-          <div style={{ background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "8px", padding: "16px", marginBottom: "24px", textAlign: "left" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "14px" }}>
+          <div className="mb-6 rounded-lg border border-bd bg-bg3 p-4 text-left">
+            <div className="grid grid-cols-1 gap-2.5 text-sm md:grid-cols-2">
               <div>Zone: <strong>{createdAudit.zone}</strong></div>
               <div>Department: <strong>{createdAudit.department}</strong></div>
               <div>Auditor: <strong>{createdAudit.auditorName}</strong></div>
-              <div>Total 6S Score: <strong style={{ color: createdAudit.totalScore >= 90 ? "var(--ok)" : "var(--brand)" }}>{createdAudit.totalScore}%</strong></div>
+              <div>Total 6S Score: <strong className={createdAudit.totalScore >= 90 ? "text-green" : "text-brand"}>{createdAudit.totalScore}%</strong></div>
             </div>
 
             {createdFindings && createdFindings.length > 0 && (
-              <div style={{ marginTop: "16px", borderTop: "1px solid var(--line)", paddingTop: "14px" }}>
-                <div style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "var(--danger)", marginBottom: "8px", display: "flex", gap: "6px", alignItems: "center" }}>
+              <div className="mt-4 border-t border-bd pt-3.5">
+                <div className="mb-2 flex items-center gap-1.5 text-[11px] font-bold uppercase text-red">
                   <AlertTriangle size={14} /> Created {createdFindings.length} Non-Conformity Findings:
                 </div>
-                <div style={{ display: "grid", gap: "6px" }}>
-                  {createdFindings.map((f) => (
-                    <div key={f._id} style={{ fontSize: "13px", padding: "6px 10px", background: "#fff", border: "1px solid #fecaca", borderRadius: "6px", display: "flex", justifyContent: "space-between" }}>
+                <div className="grid gap-1.5">
+                  {createdFindings.map((f) => {
+                    const severityStyle = SEVERITY_BADGE_STYLES[f.severity as Severity] ?? SEVERITY_BADGE_STYLES.Low;
+                    return (
+                    <div key={f._id} className="flex justify-between rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-[13px]">
                       <span><strong>{f.findingNumber}</strong>: {f.question}</span>
-                      <span className="badge" style={{ padding: "1px 6px", fontSize: "10px", background: f.severity === "Critical" ? "#fee2e2" : "#fef3c7", color: f.severity === "Critical" ? "#991b1b" : "#d97706" }}>{f.severity}</span>
+                      <span
+                        className="inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-extrabold"
+                        style={{ background: severityStyle.bg, color: severityStyle.text, borderColor: severityStyle.border }}
+                      >
+                        {f.severity}
+                      </span>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
           </div>
 
-          <button className="btn primary" onClick={() => setStep("history")}>
+          <button
+            className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
+            onClick={() => setStep("history")}
+          >
             Back to Audits List
           </button>
         </div>
@@ -827,89 +770,58 @@ export function AuditWorkspace() {
 
       {/* DETAIL DIALOG MODAL */}
       {selectedAuditDetail && (
-        <div 
-          style={{ 
-            position: "fixed", 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0, 
-            background: "rgba(15, 23, 42, 0.6)", 
-            display: "grid", 
-            placeItems: "center", 
-            zIndex: 9999, 
-            padding: "20px" 
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "800px", 
-              maxHeight: "90vh", 
-              overflowY: "auto", 
-              position: "relative",
-              padding: "24px"
-            }}
-          >
+        <div className="fixed inset-0 z-[9999] grid place-items-center bg-[rgba(15,23,42,0.6)] p-5">
+          <div className="relative w-full max-w-[800px] max-h-[90vh] overflow-y-auto rounded-lg border border-bd bg-bg1 p-6 shadow-[var(--shadow-sm)]">
             {/* Close Button */}
-            <button 
+            <button
               onClick={() => setSelectedAuditDetail(null)}
-              style={{ 
-                position: "absolute", 
-                top: "16px", 
-                right: "16px", 
-                background: "none", 
-                border: "none", 
-                cursor: "pointer", 
-                color: "var(--muted)" 
-              }}
+              className="absolute top-4 right-4 border-0 bg-transparent text-t2"
             >
               <X size={20} />
             </button>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "1px solid var(--line)", paddingBottom: "14px", marginBottom: "18px" }}>
+            <div className="mb-[18px] flex items-start justify-between gap-4 border-b border-bd pb-3.5">
               <div>
-                <span className="badge" style={{ marginBottom: "6px" }}>COMPLETED REPORT</span>
-                <h3 style={{ margin: 0, fontSize: "20px" }}>Audit Details: {selectedAuditDetail.auditNumber}</h3>
-                <span className="muted" style={{ fontSize: "13px" }}>
+                <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">COMPLETED REPORT</span>
+                <h3 className="m-0 text-xl">Audit Details: {selectedAuditDetail.auditNumber}</h3>
+                <span className="text-[13px] text-t2">
                   Performed on {new Date(selectedAuditDetail.date).toLocaleDateString()}
                 </span>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: "11px", fontWeight: "bold", textTransform: "uppercase", color: "var(--muted)" }}>Audit Score</div>
-                <div style={{ fontSize: "32px", fontWeight: 900, color: selectedAuditDetail.totalScore >= 90 ? "var(--ok)" : "var(--brand)" }}>
+              <div className="text-right">
+                <div className="text-[11px] font-bold uppercase text-t2">Audit Score</div>
+                <div className={`text-[32px] font-black ${selectedAuditDetail.totalScore >= 90 ? "text-green" : "text-brand"}`}>
                   {selectedAuditDetail.totalScore}%
                 </div>
               </div>
             </div>
 
             {/* Audit Info Card */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "8px", padding: "12px", marginBottom: "18px", fontSize: "14px" }}>
+            <div className="mb-[18px] grid grid-cols-1 gap-3 rounded-lg border border-bd bg-bg3 p-3 text-sm md:grid-cols-3">
               <div>
-                <div className="muted" style={{ fontSize: "11px" }}>ZONE AREA</div>
+                <div className="text-[11px] text-t2">ZONE AREA</div>
                 <strong>{selectedAuditDetail.zone}</strong>
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px" }}>DEPARTMENT</div>
+                <div className="text-[11px] text-t2">DEPARTMENT</div>
                 <strong>{selectedAuditDetail.department}</strong>
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px" }}>LEAD AUDITOR</div>
+                <div className="text-[11px] text-t2">LEAD AUDITOR</div>
                 <strong>{selectedAuditDetail.auditorName}</strong>
               </div>
             </div>
 
             {/* Category Pillars Breakdown */}
-            <div style={{ marginBottom: "18px" }}>
-              <h4 style={{ margin: "0 0 8px", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
+            <div className="mb-[18px]">
+              <h4 className="m-0 mb-2 text-xs uppercase tracking-wide text-t2">
                 Score breakdown by pillar
               </h4>
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              <div className="flex flex-wrap gap-1.5">
                 {Object.entries(selectedAuditDetail.categoryScores || {}).map(([cat, score]) => (
-                  <div key={cat} style={{ padding: "8px 12px", borderRadius: "6px", background: "#f8fafc", border: "1px solid var(--line)", minWidth: "90px", textAlign: "center" }}>
-                    <div style={{ fontSize: "10px", color: "var(--muted)", fontWeight: "bold" }}>{cat}</div>
-                    <strong style={{ fontSize: "14px" }}>{score}%</strong>
+                  <div key={cat} className="min-w-[90px] rounded-md border border-bd bg-[#f8fafc] px-3 py-2 text-center">
+                    <div className="text-[10px] font-bold text-t2">{cat}</div>
+                    <strong className="text-sm">{score}%</strong>
                   </div>
                 ))}
               </div>
@@ -917,74 +829,66 @@ export function AuditWorkspace() {
 
             {/* Checklist Details */}
             <div>
-              <h4 style={{ margin: "0 0 10px", fontSize: "12px", textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)" }}>
+              <h4 className="m-0 mb-2.5 text-xs uppercase tracking-wide text-t2">
                 Full Response checklist
               </h4>
-              <div style={{ display: "grid", gap: "8px" }}>
+              <div className="grid gap-2">
                 {selectedAuditDetail.checklist.map((item, idx) => (
-                  <div 
-                    key={item.questionId} 
-                    style={{ 
-                      padding: "12px", 
-                      borderRadius: "6px", 
-                      background: item.response === "Adequate" ? "#f0fdf4" : item.response === "Not Adequate" ? "#fef2f2" : "#f8fafc",
-                      border: "1px solid",
-                      borderColor: item.response === "Adequate" ? "#bbf7d0" : item.response === "Not Adequate" ? "#fecaca" : "var(--line)"
-                    }}
+                  <div
+                    key={item.questionId}
+                    className={`rounded-md border p-3 ${
+                      item.response === "Adequate"
+                        ? "border-green-200 bg-green-50"
+                        : item.response === "Not Adequate"
+                        ? "border-red-200 bg-red-50"
+                        : "border-bd bg-[#f8fafc]"
+                    }`}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+                    <div className="flex items-start justify-between gap-2.5">
                       <div>
-                        <span style={{ fontSize: "9px", color: "var(--brand-dark)", fontWeight: "bold", textTransform: "uppercase" }}>
+                        <span className="text-[9px] font-bold uppercase text-brand-d">
                           [{item.category}]
                         </span>
-                        <div style={{ fontSize: "13px", fontWeight: "bold", marginTop: "2px" }}>
+                        <div className="mt-0.5 text-[13px] font-bold">
                           {idx + 1}. {item.question}
                         </div>
                         {item.observation && (
-                          <div style={{ fontSize: "12px", marginTop: "4px", color: "var(--danger)" }}>
+                          <div className="mt-1 text-xs text-red">
                             <strong>Observation:</strong> {item.observation}
                           </div>
                         )}
                       </div>
                       <div>
-                        <span 
-                          className="badge"
-                          style={{
-                            background: item.response === "Adequate" ? "var(--ok)" : item.response === "Not Adequate" ? "var(--danger)" : "var(--muted)",
-                            color: "#fff",
-                            borderColor: "transparent",
-                            fontSize: "11px",
-                            padding: "2px 8px"
-                          }}
+                        <span
+                          className={`inline-flex items-center rounded-full border border-transparent px-2 py-0.5 text-[11px] font-extrabold text-white ${
+                            item.response === "Adequate" ? "bg-green" : item.response === "Not Adequate" ? "bg-red" : "bg-t2"
+                          }`}
                         >
                           {item.response}
                         </span>
-                        {item.severity && (
-                          <span 
-                            className="badge" 
-                            style={{ 
-                              marginLeft: "4px", 
-                              fontSize: "10px",
-                              background: "#fef3c7", 
-                              color: "#d97706",
-                              borderColor: "#fde68a"
-                            }}
-                          >
-                            {item.severity}
-                          </span>
-                        )}
+                        {item.severity && (() => {
+                          const severityStyle = SEVERITY_BADGE_STYLES[item.severity as Severity] ?? SEVERITY_BADGE_STYLES.Low;
+                          return (
+                            <span
+                              className="ml-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-extrabold"
+                              style={{ background: severityStyle.bg, color: severityStyle.text, borderColor: severityStyle.border }}
+                            >
+                              {item.severity}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
 
                     {/* Photo attachments */}
                     {item.beforePhotos && item.beforePhotos.length > 0 && (
-                      <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
+                      <div className="mt-2 flex gap-1.5">
                         {item.beforePhotos.map((p) => (
                           <a href={p.secureUrl} target="_blank" rel="noopener noreferrer" key={p.publicId}>
-                            <img 
-                              src={p.secureUrl} 
-                              alt="Observation evidence" 
-                              style={{ width: "40px", height: "40px", borderRadius: "4px", objectFit: "cover", border: "1px solid var(--line)" }} 
+                            <img
+                              src={p.secureUrl}
+                              alt="Observation evidence"
+                              className="h-10 w-10 rounded border border-bd object-cover"
                             />
                           </a>
                         ))}
@@ -995,8 +899,13 @@ export function AuditWorkspace() {
               </div>
             </div>
 
-            <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
-              <button className="btn" onClick={() => setSelectedAuditDetail(null)}>Close</button>
+            <div className="mt-5 flex justify-end">
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
+                onClick={() => setSelectedAuditDetail(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -1004,78 +913,37 @@ export function AuditWorkspace() {
 
       {/* Image Size / Compression Alert Modal */}
       {compressionAlert && (
-        <div 
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(15, 23, 42, 0.6)",
-            backdropFilter: "blur(4px)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 100000,
-            padding: "20px"
-          }}
-        >
-          <div 
-            className="card" 
-            style={{ 
-              width: "100%", 
-              maxWidth: "420px", 
-              padding: "24px", 
-              textAlign: "center",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "14px"
-            }}
-          >
-            <div style={{ color: "#eab308", background: "#fef9c3", borderRadius: "50%", padding: "12px", display: "inline-flex" }}>
+        <div className="fixed inset-0 z-[100000] grid place-items-center bg-[rgba(15,23,42,0.6)] p-5 backdrop-blur-[4px]">
+          <div className="flex w-full max-w-[420px] flex-col items-center gap-3.5 rounded-lg border border-bd bg-bg1 p-6 text-center shadow-[var(--shadow-sm)]">
+            <div className="inline-flex rounded-full bg-[#fef9c3] p-3 text-[#eab308]">
               <AlertTriangle size={36} />
             </div>
-            
+
             <div>
-              <h3 style={{ fontSize: "18px", fontWeight: 800, margin: "0 0 6px" }}>Large File Warning</h3>
-              <p className="muted" style={{ fontSize: "14px", lineHeight: 1.5, margin: 0 }}>
+              <h3 className="m-0 mb-1.5 text-lg font-extrabold">Large File Warning</h3>
+              <p className="m-0 text-sm leading-relaxed text-t2">
                 The selected image is <strong>{compressionAlert.sizeMb} MB</strong>, which exceeds the recommended 3 MB limit. For optimal load speeds, please compress it first:
               </p>
             </div>
 
-            <a 
-              href="https://imagecompressor.com/" 
-              target="_blank" 
+            <a
+              href="https://imagecompressor.com/"
+              target="_blank"
               rel="noopener noreferrer"
-              className="btn"
-              style={{ 
-                display: "inline-flex", 
-                alignItems: "center", 
-                justifyContent: "center", 
-                gap: "8px", 
-                width: "100%", 
-                background: "#f1f5f9",
-                borderColor: "#cbd5e1",
-                color: "#0f172a",
-                padding: "10px",
-                fontWeight: 600,
-                fontSize: "13px"
-              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] bg-[#f1f5f9] px-3.5 py-2.5 text-[13px] font-semibold text-[#0f172a] hover:bg-bg3"
             >
               <ExternalLink size={14} /> Open ImageCompressor.com
             </a>
 
-            <div style={{ display: "flex", gap: "10px", width: "100%", marginTop: "4px" }}>
-              <button 
-                className="btn" 
-                style={{ flex: 1, fontSize: "13px" }} 
+            <div className="mt-1 flex w-full gap-2.5">
+              <button
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-[13px] font-bold text-t1 hover:bg-bg3"
                 onClick={() => setCompressionAlert(null)}
               >
                 Cancel
               </button>
-              <button 
-                className="btn primary" 
-                style={{ flex: 1, fontSize: "13px" }}
+              <button
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-[13px] font-bold text-white hover:bg-brand-d"
                 onClick={() => {
                   const fileToUpload = compressionAlert.file;
                   const qId = compressionAlert.questionId;

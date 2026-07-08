@@ -68,27 +68,27 @@ export function PersonManagementTable() {
   }
 
   return (
-    <div className="grid grid-2" style={{ gridTemplateColumns: "1fr 2fr", gap: "20px" }}>
+    <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_2fr]">
       {/* Create form */}
-      <form className="card" onSubmit={createPerson} style={{ alignSelf: "start" }}>
-        <h2 className="card-title">Add Staff / Auditor</h2>
-        {message && <div className="alert" style={{ background: "#f0fdf4", color: "#166534", borderColor: "#bbf7d0" }}>{message}</div>}
-        
-        <label className="field">
-          <span className="label">Full Name</span>
-          <input 
-            className="control" 
-            placeholder="e.g. John Doe" 
-            value={form.name} 
-            onChange={(e) => setForm({ ...form, name: e.target.value })} 
+      <form className="h-fit rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]" onSubmit={createPerson}>
+        <h2 className="mb-2.5 font-extrabold text-t1">Add Staff / Auditor</h2>
+        {message && <div className="mb-3 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2.5 text-[13px] text-[#166534]">{message}</div>}
+
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Full Name</span>
+          <input
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            placeholder="e.g. John Doe"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </label>
 
-        <label className="field">
-          <span className="label">Role Type</span>
-          <select 
-            className="control" 
-            value={form.type} 
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Role Type</span>
+          <select
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            value={form.type}
             onChange={(e) => setForm({ ...form, type: e.target.value as any })}
           >
             <option value="AUDITOR">Auditor</option>
@@ -96,11 +96,11 @@ export function PersonManagementTable() {
           </select>
         </label>
 
-        <label className="field">
-          <span className="label">Department (If SPOC)</span>
-          <select 
-            className="control" 
-            value={form.department} 
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Department (If SPOC)</span>
+          <select
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            value={form.department}
             onChange={(e) => setForm({ ...form, department: e.target.value })}
           >
             <option value="">N/A (Auditor/General)</option>
@@ -110,23 +110,23 @@ export function PersonManagementTable() {
           </select>
         </label>
 
-        <button className="btn primary" style={{ width: "100%", marginTop: "10px" }}>
+        <button className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d">
           <Plus size={16} /> Add Person
         </button>
       </form>
 
       {/* List */}
-      <div className="card">
-        <h2 className="card-title">Configured Personnel</h2>
-        <div className="table-wrap">
-          <table>
+      <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+        <h2 className="mb-2.5 font-extrabold text-t1">Configured Personnel</h2>
+        <div className="overflow-x-auto rounded-lg border border-bd bg-white">
+          <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th>Full Name</th>
-                <th>Role Type</th>
-                <th>Department</th>
-                <th>Status</th>
-                <th style={{ textAlign: "right" }}>Actions</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Full Name</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Role Type</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
+                <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -134,31 +134,28 @@ export function PersonManagementTable() {
                 <tr key={p._id}>
                   {editingId === p._id ? (
                     <>
-                      <td>
-                        <input 
-                          className="control" 
-                          value={editForm.name} 
-                          onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} 
-                          style={{ padding: "4px 8px", fontSize: "13px" }}
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <input
+                          className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                          value={editForm.name}
+                          onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         />
                       </td>
-                      <td>
-                        <select 
-                          className="control" 
-                          value={editForm.type} 
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <select
+                          className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                          value={editForm.type}
                           onChange={(e) => setEditForm({ ...editForm, type: e.target.value as any })}
-                          style={{ padding: "4px 8px", fontSize: "13px" }}
                         >
                           <option value="AUDITOR">Auditor</option>
                           <option value="RESPONSIBLE">Responsible</option>
                         </select>
                       </td>
-                      <td>
-                        <select 
-                          className="control" 
-                          value={editForm.department} 
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <select
+                          className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                          value={editForm.department}
                           onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                          style={{ padding: "4px 8px", fontSize: "13px" }}
                         >
                           <option value="">N/A</option>
                           {departments.map((d) => (
@@ -166,46 +163,45 @@ export function PersonManagementTable() {
                           ))}
                         </select>
                       </td>
-                      <td>
-                        <select 
-                          className="control" 
-                          value={editForm.status} 
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <select
+                          className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                          value={editForm.status}
                           onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
-                          style={{ padding: "4px 8px", fontSize: "13px" }}
                         >
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
                         </select>
                       </td>
-                      <td style={{ textAlign: "right", display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                        <button className="btn" onClick={() => saveEdit(p._id)} style={{ padding: "5px" }}>
-                          <Check size={14} style={{ color: "green" }} />
+                      <td className="flex justify-end gap-1 border-b border-[#edf0f4] px-3 py-2.5 text-right align-top">
+                        <button className="rounded-lg border border-bd bg-white p-[5px] hover:bg-bg3" onClick={() => saveEdit(p._id)}>
+                          <Check size={14} className="text-green" />
                         </button>
-                        <button className="btn" onClick={() => setEditingId(null)} style={{ padding: "5px" }}>
-                          <X size={14} style={{ color: "red" }} />
+                        <button className="rounded-lg border border-bd bg-white p-[5px] hover:bg-bg3" onClick={() => setEditingId(null)}>
+                          <X size={14} className="text-red" />
                         </button>
                       </td>
                     </>
                   ) : (
                     <>
-                      <td><strong>{p.name}</strong></td>
-                      <td>
-                        <span className={`badge ${p.type === "AUDITOR" ? "" : "warning"}`} style={{ fontSize: "11px", padding: "1px 6px" }}>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top"><strong>{p.name}</strong></td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
                           {p.type}
                         </span>
                       </td>
-                      <td>{p.department || <span className="muted">All Departments</span>}</td>
-                      <td>
-                        <span className={`badge ${p.status === "active" ? "" : "danger"}`} style={{ fontSize: "11px", padding: "1px 6px" }}>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{p.department || <span className="text-t2">All Departments</span>}</td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
                           {p.status}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
-                        <div style={{ display: "inline-flex", gap: "6px" }}>
-                          <button className="btn" onClick={() => startEdit(p)} style={{ padding: "4px 8px", fontSize: "12px" }}>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 text-right align-top">
+                        <div className="inline-flex gap-1.5">
+                          <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-2 py-1 text-xs font-bold text-t1 hover:bg-bg3" onClick={() => startEdit(p)}>
                             <Edit2 size={12} />
                           </button>
-                          <button className="btn danger" onClick={() => deletePerson(p._id)} style={{ padding: "4px 8px", fontSize: "12px" }}>
+                          <button className="inline-flex items-center gap-2 rounded-lg border border-red bg-red px-2 py-1 text-xs font-bold text-white" onClick={() => deletePerson(p._id)}>
                             <Trash2 size={12} />
                           </button>
                         </div>

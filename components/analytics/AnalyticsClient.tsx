@@ -251,20 +251,24 @@ export function AnalyticsClient() {
   return (
     <>
       {/* Top Header */}
-      <div className="page-head no-print">
+      <div className="mb-[18px] flex items-end justify-between gap-4 print:hidden">
         <div>
-          <h1 className="page-title">Analytics & Compliance Insights</h1>
-          <p className="page-sub">Monitor key aggregate trends, category-wise breakdowns, and export print-ready tabular sheets.</p>
+          <h1 className="text-2xl font-extrabold text-t1">Analytics & Compliance Insights</h1>
+          <p className="mt-1 text-sm text-t2">Monitor key aggregate trends, category-wise breakdowns, and export print-ready tabular sheets.</p>
         </div>
-        <div style={{ display: "flex", gap: "6px" }}>
-          <button 
-            className={`btn ${activeSubView === "dashboard" ? "primary" : ""}`}
+        <div className="flex gap-1.5">
+          <button
+            className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-bold hover:bg-bg3 ${
+              activeSubView === "dashboard" ? "border-brand bg-brand text-white hover:bg-brand-d" : "border-bd bg-white text-t1"
+            }`}
             onClick={() => setActiveSubView("dashboard")}
           >
             <BarChart3 size={16} /> Dashboards
           </button>
-          <button 
-            className={`btn ${activeSubView === "exports" ? "primary" : ""}`}
+          <button
+            className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm font-bold hover:bg-bg3 ${
+              activeSubView === "exports" ? "border-brand bg-brand text-white hover:bg-brand-d" : "border-bd bg-white text-t1"
+            }`}
             onClick={() => setActiveSubView("exports")}
           >
             <Printer size={16} /> Reports & Exports
@@ -274,91 +278,87 @@ export function AnalyticsClient() {
 
       {/* VIEW 1: INTERACTIVE DASHBOARD */}
       {activeSubView === "dashboard" && (
-        <div className="no-print">
+        <div className="print:hidden">
           {/* Live Counters */}
-          <div className="grid grid-5" style={{ marginBottom: "24px" }}>
-            <div className="card" style={{ padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ padding: "10px", background: "#f1f5f9", borderRadius: "8px", color: "var(--text)" }}>
+          <div className="mb-6 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="flex items-center gap-3 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <div className="rounded-lg bg-[#f1f5f9] p-2.5 text-t1">
                 <Layers size={20} />
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px", textTransform: "uppercase" }}>Total Logged</div>
-                <div style={{ fontSize: "20px", fontWeight: "bold" }}>{counters.total}</div>
+                <div className="text-[11px] uppercase text-t2">Total Logged</div>
+                <div className="text-xl font-bold">{counters.total}</div>
               </div>
             </div>
 
-            <div className="card" style={{ padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ padding: "10px", background: "#fffbeb", borderRadius: "8px", color: "#b45309" }}>
+            <div className="flex items-center gap-3 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <div className="rounded-lg bg-[#fffbeb] p-2.5 text-[#b45309]">
                 <Clock size={20} />
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px", textTransform: "uppercase" }}>Open & Active</div>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#b45309" }}>{counters.open}</div>
+                <div className="text-[11px] uppercase text-t2">Open & Active</div>
+                <div className="text-xl font-bold text-[#b45309]">{counters.open}</div>
               </div>
             </div>
 
-            <div className="card" style={{ padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ padding: "10px", background: "#e0f2fe", borderRadius: "8px", color: "#0369a1" }}>
+            <div className="flex items-center gap-3 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <div className="rounded-lg bg-[#e0f2fe] p-2.5 text-[#0369a1]">
                 <TrendingUp size={20} />
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px", textTransform: "uppercase" }}>CAPA Review</div>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#0369a1" }}>{counters.submitted}</div>
+                <div className="text-[11px] uppercase text-t2">CAPA Review</div>
+                <div className="text-xl font-bold text-[#0369a1]">{counters.submitted}</div>
               </div>
             </div>
 
-            <div className="card" style={{ padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ padding: "10px", background: "#fee2e2", borderRadius: "8px", color: "#b91c1c" }}>
+            <div className="flex items-center gap-3 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <div className="rounded-lg bg-[#fee2e2] p-2.5 text-[#b91c1c]">
                 <AlertTriangle size={20} />
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px", textTransform: "uppercase" }}>Overdue Findings</div>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#b91c1c" }}>{counters.overdue}</div>
+                <div className="text-[11px] uppercase text-t2">Overdue Findings</div>
+                <div className="text-xl font-bold text-[#b91c1c]">{counters.overdue}</div>
               </div>
             </div>
 
-            <div className="card" style={{ padding: "16px", display: "flex", alignItems: "center", gap: "12px" }}>
-              <div style={{ padding: "10px", background: "#f0fdf4", borderRadius: "8px", color: "#15803d" }}>
+            <div className="flex items-center gap-3 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <div className="rounded-lg bg-[#f0fdf4] p-2.5 text-[#15803d]">
                 <CheckCircle size={20} />
               </div>
               <div>
-                <div className="muted" style={{ fontSize: "11px", textTransform: "uppercase" }}>Resolved / Closed</div>
-                <div style={{ fontSize: "20px", fontWeight: "bold", color: "#15803d" }}>{counters.closed}</div>
+                <div className="text-[11px] uppercase text-t2">Resolved / Closed</div>
+                <div className="text-xl font-bold text-[#15803d]">{counters.closed}</div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-2" style={{ gap: "24px", marginBottom: "24px" }}>
+          <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Department Performance */}
-            <div className="card">
-              <h3 className="card-title" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <h3 className="mb-2.5 flex items-center justify-between font-extrabold text-t1">
                 <span>Department Audit Scores</span>
-                <span className="muted" style={{ fontSize: "11px" }}>Active Averages</span>
+                <span className="text-[11px] text-t2">Active Averages</span>
               </h3>
-              <div style={{ display: "grid", gap: "14px", marginTop: "10px" }}>
+              <div className="mt-2.5 grid gap-3.5">
                 {departmentStats.length === 0 ? (
-                  <div className="muted" style={{ textAlign: "center", padding: "20px" }}>No audit score data found.</div>
+                  <div className="p-5 text-center text-t2">No audit score data found.</div>
                 ) : (
                   departmentStats.map((d) => (
-                    <div key={d.department} style={{ display: "grid", gap: "4px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
-                        <span style={{ fontWeight: 600 }}>{d.department}</span>
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <span className="muted">{d.auditCount} Audits</span>
-                          <strong style={{ color: d.avgScore >= 80 ? "var(--ok)" : d.avgScore >= 50 ? "#c2410c" : "var(--danger)" }}>{d.avgScore}% avg</strong>
+                    <div key={d.department} className="grid gap-1">
+                      <div className="flex justify-between text-[13px]">
+                        <span className="font-semibold">{d.department}</span>
+                        <div className="flex gap-2.5">
+                          <span className="text-t2">{d.auditCount} Audits</span>
+                          <strong className={d.avgScore >= 80 ? "text-green" : d.avgScore >= 50 ? "text-orange" : "text-red"}>{d.avgScore}% avg</strong>
                         </div>
                       </div>
-                      <div style={{ width: "100%", height: "8px", background: "#f1f5f9", borderRadius: "4px", overflow: "hidden" }}>
-                        <div 
-                          style={{ 
-                            width: `${d.avgScore}%`, 
-                            height: "100%", 
-                            borderRadius: "4px",
-                            background: d.avgScore >= 80 ? "var(--ok)" : d.avgScore >= 50 ? "#f59e0b" : "var(--danger)"
-                          }} 
+                      <div className="h-2 w-full overflow-hidden rounded bg-bg3">
+                        <div
+                          className={`h-full rounded ${d.avgScore >= 80 ? "bg-green" : d.avgScore >= 50 ? "bg-orange" : "bg-red"}`}
+                          style={{ width: `${d.avgScore}%` }}
                         />
                       </div>
-                      <div className="muted" style={{ fontSize: "11px", textAlign: "right" }}>
+                      <div className="text-right text-[11px] text-t2">
                         {d.openFindings} Outstanding CAPA findings
                       </div>
                     </div>
@@ -368,25 +368,21 @@ export function AnalyticsClient() {
             </div>
 
             {/* 6S + 1S Pillar Averages */}
-            <div className="card">
-              <h3 className="card-title">Checklist Pillar Performance</h3>
-              <div style={{ display: "grid", gap: "12px", marginTop: "10px" }}>
+            <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <h3 className="mb-2.5 font-extrabold text-t1">Checklist Pillar Performance</h3>
+              <div className="mt-2.5 grid gap-3">
                 {pillarStats.map((p) => (
-                  <div key={p.pillar} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                    <div style={{ width: "40px", fontWeight: "bold", fontSize: "13px" }}>{p.pillar}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "2px" }}>
-                        <span className="muted">{p.label}</span>
+                  <div key={p.pillar} className="flex items-center gap-3">
+                    <div className="w-10 text-[13px] font-bold">{p.pillar}</div>
+                    <div className="flex-1">
+                      <div className="mb-0.5 flex justify-between text-xs">
+                        <span className="text-t2">{p.label}</span>
                         <strong>{p.avgScore}%</strong>
                       </div>
-                      <div style={{ width: "100%", height: "6px", background: "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
-                        <div 
-                          style={{ 
-                            width: `${p.avgScore}%`, 
-                            height: "100%", 
-                            background: "var(--brand)", 
-                            borderRadius: "3px" 
-                          }} 
+                      <div className="h-1.5 w-full overflow-hidden rounded-[3px] bg-bg3">
+                        <div
+                          className="h-full rounded-[3px] bg-brand"
+                          style={{ width: `${p.avgScore}%` }}
                         />
                       </div>
                     </div>
@@ -402,32 +398,44 @@ export function AnalyticsClient() {
       {activeSubView === "exports" && (
         <div>
           {/* Controls filter sheet */}
-          <div className="card no-print" style={{ padding: "18px", marginBottom: "20px" }}>
-            <h3 style={{ margin: "0 0 14px", fontSize: "15px", display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="mb-5 rounded-lg border border-bd bg-bg1 p-[18px] shadow-[var(--shadow-sm)] print:hidden">
+            <h3 className="mb-3.5 flex items-center gap-2 text-[15px] text-t1">
               <Filter size={16} /> Filters & Parameters
             </h3>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "14px" }}>
-              <label className="field" style={{ marginBottom: 0 }}>
-                <span className="label">Dataset Type</span>
-                <select className="control" value={exportType} onChange={(e) => setExportType(e.target.value as any)}>
+            <div className="mb-3.5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Dataset Type</span>
+                <select
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={exportType}
+                  onChange={(e) => setExportType(e.target.value as any)}
+                >
                   <option value="findings">Findings Log & CAPA Records</option>
                   <option value="audits">Audit Runs Summary</option>
                 </select>
               </label>
 
-              <label className="field" style={{ marginBottom: 0 }}>
-                <span className="label">Department</span>
-                <select className="control" value={filterDept} onChange={(e) => setFilterDept(e.target.value)}>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Department</span>
+                <select
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={filterDept}
+                  onChange={(e) => setFilterDept(e.target.value)}
+                >
                   <option value="ALL">All Departments</option>
                   {uniqueDepts.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </label>
 
               {exportType === "findings" ? (
-                <label className="field" style={{ marginBottom: 0 }}>
-                  <span className="label">Severity</span>
-                  <select className="control" value={filterSeverity} onChange={(e) => setFilterSeverity(e.target.value)}>
+                <label className="grid gap-1.5">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Severity</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={filterSeverity}
+                    onChange={(e) => setFilterSeverity(e.target.value)}
+                  >
                     <option value="ALL">All Severities</option>
                     <option value="Critical">Critical</option>
                     <option value="High">High</option>
@@ -436,9 +444,13 @@ export function AnalyticsClient() {
                   </select>
                 </label>
               ) : (
-                <label className="field" style={{ marginBottom: 0 }}>
-                  <span className="label">Audit Status</span>
-                  <select className="control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                <label className="grid gap-1.5">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audit Status</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                  >
                     <option value="ALL">All Statuses</option>
                     <option value="COMPLETED">COMPLETED</option>
                     <option value="DRAFT">DRAFT</option>
@@ -448,9 +460,13 @@ export function AnalyticsClient() {
               )}
 
               {exportType === "findings" ? (
-                <label className="field" style={{ marginBottom: 0 }}>
-                  <span className="label">Finding Status</span>
-                  <select className="control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                <label className="grid gap-1.5">
+                  <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Finding Status</span>
+                  <select
+                    className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                  >
                     <option value="ALL">All Statuses</option>
                     <option value="OPEN">OPEN</option>
                     <option value="SUBMITTED">SUBMITTED</option>
@@ -464,22 +480,40 @@ export function AnalyticsClient() {
               )}
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 2fr", gap: "12px", alignItems: "end" }}>
-              <label className="field" style={{ marginBottom: 0 }}>
-                <span className="label">From Date</span>
-                <input type="date" className="control" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_1fr_2fr]">
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">From Date</span>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
               </label>
 
-              <label className="field" style={{ marginBottom: 0 }}>
-                <span className="label">To Date</span>
-                <input type="date" className="control" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">To Date</span>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
               </label>
 
-              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-                <button className="btn" onClick={downloadCSV} disabled={filteredData.length === 0}>
+              <div className="flex justify-end gap-2">
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-[0.55]"
+                  onClick={downloadCSV}
+                  disabled={filteredData.length === 0}
+                >
                   <FileSpreadsheet size={15} /> Export CSV
                 </button>
-                <button className="btn primary" onClick={triggerPrint} disabled={filteredData.length === 0}>
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-[0.55]"
+                  onClick={triggerPrint}
+                  disabled={filteredData.length === 0}
+                >
                   <Printer size={15} /> Print/PDF Report
                 </button>
               </div>
@@ -487,75 +521,75 @@ export function AnalyticsClient() {
           </div>
 
           {/* Records grid preview */}
-          <div className="card">
-            <h3 className="card-title no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <h3 className="mb-2.5 flex items-center justify-between font-extrabold text-t1 print:hidden">
               <span>Previewing Data ({filteredData.length} records matched)</span>
             </h3>
 
             {/* Print Header (Only visible in Print) */}
-            <div className="only-print" style={{ marginBottom: "20px", borderBottom: "2px solid #000", paddingBottom: "10px" }}>
-              <h1 style={{ margin: "0 0 4px", fontSize: "24px" }}>6S AuditPro System Report</h1>
-              <p style={{ margin: 0, fontSize: "14px" }}>
-                Type: <strong>{exportType === "audits" ? "Audit Run Ledger" : "Findings & CAPA Non-Conformity Log"}</strong> | 
+            <div className="mb-5 hidden border-b-2 border-black pb-2.5 print:block">
+              <h1 className="mb-1 text-2xl">6S AuditPro System Report</h1>
+              <p className="text-sm">
+                Type: <strong>{exportType === "audits" ? "Audit Run Ledger" : "Findings & CAPA Non-Conformity Log"}</strong> |
                 Generated on: {new Date().toLocaleString()}
               </p>
             </div>
 
-            <div className="table-wrap" style={{ border: 0 }}>
+            <div className="overflow-x-auto rounded-lg bg-white">
               {filteredData.length === 0 ? (
-                <div className="muted" style={{ padding: "30px", textAlign: "center" }}>No records match the current filters.</div>
+                <div className="p-[30px] text-center text-t2">No records match the current filters.</div>
               ) : exportType === "audits" ? (
-                <table>
+                <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>
-                      <th>Audit Number</th>
-                      <th>Auditor</th>
-                      <th>Date</th>
-                      <th>Department</th>
-                      <th>Zone</th>
-                      <th>Score</th>
-                      <th>Status</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit Number</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Auditor</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Zone</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Score</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredData.map((a) => (
                       <tr key={a._id}>
-                        <td><strong>{a.auditNumber}</strong></td>
-                        <td>{a.auditorName}</td>
-                        <td>{a.date ? new Date(a.date).toLocaleDateString() : ""}</td>
-                        <td>{a.department}</td>
-                        <td>{a.zone}</td>
-                        <td><strong>{a.totalScore}%</strong></td>
-                        <td>{a.status}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.auditNumber}</strong></td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.auditorName}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.date ? new Date(a.date).toLocaleDateString() : ""}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.department}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.zone}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.totalScore}%</strong></td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.status}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <table>
+                <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>
-                      <th>Finding ID</th>
-                      <th>Audit Ref</th>
-                      <th>Category</th>
-                      <th>Department / Zone</th>
-                      <th>Severity</th>
-                      <th>Due Date</th>
-                      <th>Status</th>
-                      <th>Observation Details</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Finding ID</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit Ref</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Category</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department / Zone</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Severity</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Due Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Observation Details</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredData.map((f) => (
                       <tr key={f._id}>
-                        <td><strong>{f.findingNumber}</strong></td>
-                        <td><span className="muted" style={{ fontSize: "11px" }}>{f.auditNumber || "Manual"}</span></td>
-                        <td>{f.category}</td>
-                        <td>{f.department} / {f.zone}</td>
-                        <td>{f.severity}</td>
-                        <td>{f.dueDate ? new Date(f.dueDate).toLocaleDateString() : "N/A"}</td>
-                        <td>{f.status}</td>
-                        <td style={{ fontSize: "12px" }}>{f.question}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{f.findingNumber}</strong></td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><span className="text-[11px] text-t2">{f.auditNumber || "Manual"}</span></td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.category}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.department} / {f.zone}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.severity}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.dueDate ? new Date(f.dueDate).toLocaleDateString() : "N/A"}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.status}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-xs">{f.question}</td>
                       </tr>
                     ))}
                   </tbody>

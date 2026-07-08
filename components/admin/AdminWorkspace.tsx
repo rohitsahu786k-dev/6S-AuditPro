@@ -13,92 +13,47 @@ export function AdminWorkspace() {
 
   return (
     <>
-      <div className="page-head">
+      <div className="mb-[18px] flex items-end justify-between gap-4">
         <div>
-          <h1 className="page-title">Admin Management Console</h1>
-          <p className="page-sub">Configure users, audit master registries, custom checklists, templates, and track system notifications.</p>
+          <h1 className="text-2xl font-extrabold text-t1">Admin Management Console</h1>
+          <p className="mt-1 text-sm text-t2">Configure users, audit master registries, custom checklists, templates, and track system notifications.</p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link className="btn" href="/admin/email-templates">Email Templates</Link>
-          <Link className="btn" href="/admin/email-logs">Email Logs</Link>
-          <Link className="btn" href="/admin/email-settings">Email Settings</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/email-templates">Email Templates</Link>
+          <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/email-logs">Email Logs</Link>
+          <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/email-settings">Email Settings</Link>
         </div>
       </div>
 
       {/* Tabs navigation */}
-      <div style={{ display: "flex", borderBottom: "1px solid var(--line)", marginBottom: "20px", gap: "10px" }}>
-        <button 
+      <div className="mb-5 flex gap-2.5 overflow-x-auto border-b border-bd">
+        <button
           onClick={() => setActiveTab("users")}
-          style={{
-            background: "none",
-            border: "none",
-            borderBottom: activeTab === "users" ? "2px solid var(--brand)" : "2px solid transparent",
-            color: activeTab === "users" ? "var(--text)" : "var(--muted)",
-            fontWeight: activeTab === "users" ? "bold" : "normal",
-            padding: "8px 16px",
-            cursor: "pointer",
-            fontSize: "14px"
-          }}
+          className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "users" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
         >
           User Accounts
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab("zones")}
-          style={{
-            background: "none",
-            border: "none",
-            borderBottom: activeTab === "zones" ? "2px solid var(--brand)" : "2px solid transparent",
-            color: activeTab === "zones" ? "var(--text)" : "var(--muted)",
-            fontWeight: activeTab === "zones" ? "bold" : "normal",
-            padding: "8px 16px",
-            cursor: "pointer",
-            fontSize: "14px"
-          }}
+          className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "zones" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
         >
           Workplace Zones
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab("depts")}
-          style={{
-            background: "none",
-            border: "none",
-            borderBottom: activeTab === "depts" ? "2px solid var(--brand)" : "2px solid transparent",
-            color: activeTab === "depts" ? "var(--text)" : "var(--muted)",
-            fontWeight: activeTab === "depts" ? "bold" : "normal",
-            padding: "8px 16px",
-            cursor: "pointer",
-            fontSize: "14px"
-          }}
+          className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "depts" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
         >
           Departments
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab("questions")}
-          style={{
-            background: "none",
-            border: "none",
-            borderBottom: activeTab === "questions" ? "2px solid var(--brand)" : "2px solid transparent",
-            color: activeTab === "questions" ? "var(--text)" : "var(--muted)",
-            fontWeight: activeTab === "questions" ? "bold" : "normal",
-            padding: "8px 16px",
-            cursor: "pointer",
-            fontSize: "14px"
-          }}
+          className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "questions" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
         >
           Checklist Questions
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab("people")}
-          style={{
-            background: "none",
-            border: "none",
-            borderBottom: activeTab === "people" ? "2px solid var(--brand)" : "2px solid transparent",
-            color: activeTab === "people" ? "var(--text)" : "var(--muted)",
-            fontWeight: activeTab === "people" ? "bold" : "normal",
-            padding: "8px 16px",
-            cursor: "pointer",
-            fontSize: "14px"
-          }}
+          className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "people" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
         >
           Personnel Registry
         </button>
