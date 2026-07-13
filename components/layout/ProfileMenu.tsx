@@ -51,7 +51,7 @@ export function ProfileMenu({ user }: { user: SessionUser }) {
           <DropdownMenuItem onSelect={() => setChangePasswordOpen(true)}>
             <KeyRound size={14} /> Change Password
           </DropdownMenuItem>
-          <DropdownMenuItem variant="destructive" onSelect={() => signOut({ callbackUrl: "/login" })}>
+          <DropdownMenuItem variant="destructive" onSelect={() => signOut({ redirectTo: "/login" })}>
             <LogOut size={14} /> Logout
           </DropdownMenuItem>
         </DropdownMenuContent>

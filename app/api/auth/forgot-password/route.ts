@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import User from "@/models/User";
+import { getAppLink } from "@/lib/app-url";
 import { connectDB } from "@/lib/db";
 import { forgotPasswordSchema } from "@/lib/validators";
 import { sendTemplatedEmail } from "@/services/email.service";
@@ -20,8 +21,7 @@ export async function POST(request: Request) {
       user.passwordResetExpires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
       await user.save();
 
-      const appUrl = process.env.APP_BASE_URL || "http://localhost:3000";
-      const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
+      const resetUrl = getAppLink(`/reset-password?token=${rawToken}`);
 
       await sendTemplatedEmail({
         triggerEvent: "PASSWORD_RESET_REQUESTED",

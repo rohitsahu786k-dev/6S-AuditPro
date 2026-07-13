@@ -1,6 +1,11 @@
 import type { NextAuthConfig } from "next-auth";
+import { getAppUrl } from "@/lib/app-url";
 import { permissionsForRole } from "@/lib/roles";
 import type { Role } from "@/types/domain";
+
+// Auth.js otherwise derives absolute redirects from the incoming proxy host,
+// which can be an internal bind address in production.
+process.env.AUTH_URL ||= getAppUrl();
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
