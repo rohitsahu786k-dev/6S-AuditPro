@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { apiPost, apiUpload, useApi } from "@/hooks/useApi";
 import { CATEGORIES } from "@/lib/constants";
 import {
@@ -74,16 +75,24 @@ function responseBadgeClass(response: "Adequate" | "Not Adequate" | "N/A") {
   return "bg-t2";
 }
 
-export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean }) {
+export function AuditWorkspace({ historyOnly = false, newOnly = false }: { historyOnly?: boolean; newOnly?: boolean }) {
+  const router = useRouter();
   const masters = useApi<Masters>("/api/masters");
   const audits = useApi<Audit[]>("/api/audits");
   const meApi = useApi<{ user: any | null }>("/api/auth/me");
-  
+
   const currentUser = meApi.data?.user;
   const isUserAdmin = currentUser && ["MASTER_ADMIN", "ADMIN"].includes(currentUser.role);
-  
-  // Navigation & Step State
-  const [step, setStep] = useState<"history" | "setup" | "checklist" | "success">("history");
+
+  // Navigation & Step State ("New Audit" page jumps straight into the setup form)
+  const [step, setStep] = useState<"history" | "setup" | "checklist" | "success">(newOnly ? "setup" : "history");
+
+  // In newOnly mode the history list lives on /audit-history, so "back to
+  // history" navigates there instead of switching the local step.
+  function goToHistory() {
+    if (newOnly) router.push("/audit-history");
+    else setStep("history");
+  }
   
   // Setup Form State
   const [zoneName, setZoneName] = useState("");
@@ -362,7 +371,7 @@ export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean 
       {/* Page Header */}
       <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-t1">{historyOnly ? "Audit History" : "6S Site Audits"}</h1>
+          <h1 className="text-2xl font-extrabold text-t1">{historyOnly ? "Audit History" : newOnly ? "New 6S Audit" : "6S Site Audits"}</h1>
           <p className="mt-1 text-sm text-t2">
             {historyOnly
               ? "Review completed audits and download full PDF reports."
@@ -459,7 +468,7 @@ export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean 
                               <Eye size={12} /> View
                             </button>
                             <button
-                              className="inline-flex items-center gap-1 rounded-lg border border-[#2a78d6] bg-[#2a78d6] px-2.5 py-[5px] text-xs font-bold text-white hover:bg-[#1f65bd] disabled:cursor-wait disabled:opacity-60"
+                              className="inline-flex items-center gap-1 rounded-lg border border-brand bg-brand px-2.5 py-[5px] text-xs font-bold text-white hover:bg-brand-d disabled:cursor-wait disabled:opacity-60"
                               onClick={() => handleDownloadPdf(audit)}
                               disabled={downloadingAuditId === audit._id}
                             >
@@ -562,7 +571,7 @@ export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean 
             </label>
 
             <div className="mt-2.5 flex justify-between">
-              <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" onClick={() => setStep("history")}>Cancel</button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" onClick={goToHistory}>Cancel</button>
               <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d" onClick={validateSetupAndStart}>
                 Next: Start Checklist <ChevronRight size={16} />
               </button>
@@ -867,7 +876,7 @@ export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean 
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
               onClick={() => {
-                setStep("history");
+                if (!newOnly) setStep("history");
                 setSelectedAuditDetail(createdAudit);
               }}
             >
@@ -875,7 +884,7 @@ export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean 
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
-              onClick={() => setStep("history")}
+              onClick={goToHistory}
             >
               Back to Audit History
             </button>
@@ -918,7 +927,7 @@ export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean 
                 <button
                   onClick={() => handleDownloadPdf(selectedAuditDetail)}
                   disabled={downloadingAuditId === selectedAuditDetail._id}
-                  className="mt-1.5 ml-1.5 inline-flex items-center gap-1.5 rounded-lg border border-[#2a78d6] bg-[#2a78d6] px-2.5 py-1.5 text-xs font-bold text-white hover:bg-[#1f65bd] disabled:cursor-wait disabled:opacity-60"
+                  className="mt-1.5 ml-1.5 inline-flex items-center gap-1.5 rounded-lg border border-brand bg-brand px-2.5 py-1.5 text-xs font-bold text-white hover:bg-brand-d disabled:cursor-wait disabled:opacity-60"
                 >
                   <Download size={13} /> {downloadingAuditId === selectedAuditDetail._id ? "Creating PDF..." : "Download PDF"}
                 </button>

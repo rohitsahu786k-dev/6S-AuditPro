@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, ClipboardCheck, FileSpreadsheet, Gauge, History, Image, ListChecks, Mail, Settings } from "lucide-react";
+import { BarChart3, CirclePlus, FileSpreadsheet, Gauge, History, Image, ListChecks, Mail, Settings } from "lucide-react";
 
 export type NavItem = {
   href: string;
@@ -9,7 +9,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Gauge },
-  { href: "/audits", label: "Audits", icon: ClipboardCheck },
+  { href: "/audits", label: "New Audit", icon: CirclePlus },
   { href: "/audit-history", label: "Audit History", icon: History },
   { href: "/findings", label: "Findings", icon: ListChecks },
   { href: "/register", label: "Register", icon: FileSpreadsheet },

@@ -7,6 +7,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import {
   BarChart3,
   FileSpreadsheet,
+  FileDown,
   Printer,
   TrendingUp,
   AlertTriangle,
@@ -15,6 +16,7 @@ import {
   Layers,
   Filter
 } from "lucide-react";
+import { downloadInsightsPdf } from "@/lib/insights-pdf";
 
 type Audit = {
   _id: string;
@@ -297,6 +299,61 @@ export function AnalyticsClient() {
     window.print();
   }
 
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  async function handleExportAnalyticsPdf() {
+    setExportingPdf(true);
+    try {
+      await downloadInsightsPdf({
+        title: "Analytics & Compliance Insights",
+        subtitle: "Aggregate trends, category-wise breakdowns and severity heatmap",
+        fileName: `6S_Analytics_Report_${new Date().toISOString().split("T")[0]}.pdf`,
+        kpis: [
+          { label: "Total Logged", value: counters.total },
+          { label: "Open & Active", value: counters.open },
+          { label: "CAPA Review", value: counters.submitted },
+          { label: "Overdue Findings", value: counters.overdue },
+          { label: "Resolved / Closed", value: counters.closed }
+        ],
+        sections: [
+          {
+            title: "Department Audit Scores",
+            note: "Active averages",
+            head: ["Department", "Audits", "Avg Score", "Outstanding CAPA Findings"],
+            rows: departmentStats.map((d) => [d.department, d.auditCount, `${d.avgScore}%`, d.openFindings])
+          },
+          {
+            title: "Checklist Pillar Performance",
+            head: ["Pillar", "Category", "Avg Score"],
+            rows: pillarStats.map((p) => [p.pillar, p.label, `${p.avgScore}%`])
+          },
+          {
+            title: `Monthly Audit Count - ${monthlyAuditCount.year}`,
+            head: ["Metric", ...monthlyAuditCount.rows.map((row) => row.month.toUpperCase())],
+            rows: [["Completed Audits", ...monthlyAuditCount.rows.map((row) => row.audits)]]
+          },
+          {
+            title: "Severity Heatmap - Department vs Severity",
+            note: "Open observations only",
+            head: ["Department", "Critical", "High", "Medium", "Low", "Total"],
+            rows: severityHeatmap.map((row) => [
+              row.department,
+              row.Critical || "-",
+              row.High || "-",
+              row.Medium || "-",
+              row.Low || "-",
+              row.total
+            ])
+          }
+        ]
+      });
+    } catch (error) {
+      alert(error instanceof Error ? `Unable to create PDF: ${error.message}` : "Unable to create analytics PDF.");
+    } finally {
+      setExportingPdf(false);
+    }
+  }
+
   return (
     <>
       {/* Top Header */}
@@ -321,6 +378,13 @@ export function AnalyticsClient() {
             onClick={() => setActiveSubView("exports")}
           >
             <Printer size={16} /> Reports & Exports
+          </button>
+          <button
+            className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-wait disabled:opacity-60"
+            onClick={handleExportAnalyticsPdf}
+            disabled={exportingPdf}
+          >
+            <FileDown size={16} /> {exportingPdf ? "Creating PDF..." : "Export PDF"}
           </button>
         </div>
       </div>
