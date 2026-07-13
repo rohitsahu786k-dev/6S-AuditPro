@@ -17,14 +17,18 @@ export function GlobalMediaLightbox() {
       // 1. Check if clicked element is an image (excluding logos/UI buttons)
       if (target.tagName === "IMG") {
         const img = target as HTMLImageElement;
-        
+
+        // data-lightbox opts a thumbnail in regardless of its rendered size
+        const optedIn = img.hasAttribute("data-lightbox");
+
         // Skip small UI icons, avatars, and sidebar logos
         if (
-          img.closest(".brand") ||
-          img.closest(".logo") ||
-          img.closest(".profile-avatar") ||
-          img.width < 50 ||
-          img.height < 50
+          !optedIn &&
+          (img.closest(".brand") ||
+            img.closest(".logo") ||
+            img.closest(".profile-avatar") ||
+            img.width < 50 ||
+            img.height < 50)
         ) {
           return;
         }
@@ -47,6 +51,10 @@ export function GlobalMediaLightbox() {
       // 3. Check if clicked element is an anchor pointing to an image/video
       const anchor = target.closest("a");
       if (anchor) {
+        // Let explicit open-in-tab / download links behave natively
+        if (anchor.hasAttribute("download") || anchor.hasAttribute("data-no-lightbox")) {
+          return;
+        }
         const href = anchor.href.toLowerCase();
         const isImage = /\.(png|jpe?g|gif|webp|svg)(\?.*)?$/i.test(href) || href.includes("cloudinary.com") && !href.includes(".pdf");
         const isVideo = /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(href);

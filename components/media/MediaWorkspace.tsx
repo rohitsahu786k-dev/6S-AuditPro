@@ -224,6 +224,7 @@ export function MediaWorkspace() {
       const a = document.createElement("a");
       a.href = toDownloadUrl(item.url);
       a.rel = "noopener noreferrer";
+      a.setAttribute("download", "");
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -545,7 +546,7 @@ export function MediaWorkspace() {
                     />
                   </td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
-                    <img src={item.url} alt={item.description} className="h-12 w-12 cursor-pointer rounded-md border border-bd object-cover" />
+                    <img data-lightbox="true" src={item.url} alt={item.description} className="h-12 w-12 cursor-pointer rounded-md border border-bd object-cover" />
                   </td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[240px]">
                     <span className="line-clamp-2 text-[13px] font-medium">{item.description}</span>
@@ -574,8 +575,8 @@ export function MediaWorkspace() {
                       >
                         Preview
                       </button>
-                      <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-t2 hover:text-brand-d">Open</a>
-                      <a href={toDownloadUrl(item.url)} className="text-t2 hover:text-brand-d">Download</a>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" data-no-lightbox="true" className="text-t2 hover:text-brand-d">Open</a>
+                      <a href={toDownloadUrl(item.url)} download className="text-t2 hover:text-brand-d">Download</a>
                       {isAdmin && (
                         <button className="text-red hover:text-brand-d" onClick={() => handleDeleteMedia(item.publicId)}>Trash</button>
                       )}

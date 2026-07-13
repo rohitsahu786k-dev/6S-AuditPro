@@ -46,9 +46,14 @@ type Audit = {
     severity?: "Critical" | "High" | "Medium" | "Low";
     beforePhotos?: Array<UploadedPhoto>;
   }>;
-  categoryScores: Record<string, number>;
+  // Stored either as a plain number or as the { adequate, total, score } shape from scoreChecklist()
+  categoryScores: Record<string, number | { adequate: number; total: number; score: number }>;
   findingIds?: string[];
 };
+
+function categoryScoreValue(score: number | { adequate: number; total: number; score: number }): number {
+  return typeof score === "object" && score !== null ? score.score ?? 0 : score;
+}
 
 type Finding = {
   _id: string;
@@ -334,7 +339,7 @@ export function AuditWorkspace() {
         <div className="grid grid-cols-1 gap-5 md:grid-cols-[2fr_1fr]">
           {/* Audit History List */}
           <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
-            <h2 className="mb-2.5 font-extrabold text-t1">Completed Audits Log</h2>
+            <h2 className="mb-2.5 font-extrabold text-t1">Audit History</h2>
             {audits.loading ? (
               <div className="py-5 text-t2">Loading completed audits...</div>
             ) : !audits.data || audits.data.length === 0 ? (
@@ -780,12 +785,23 @@ export function AuditWorkspace() {
             )}
           </div>
 
-          <button
-            className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
-            onClick={() => setStep("history")}
-          >
-            Back to Audits List
-          </button>
+          <div className="flex flex-wrap justify-center gap-2.5">
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
+              onClick={() => {
+                setStep("history");
+                setSelectedAuditDetail(createdAudit);
+              }}
+            >
+              <Eye size={16} /> View Audit Report
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
+              onClick={() => setStep("history")}
+            >
+              Back to Audit History
+            </button>
+          </div>
         </div>
       )}
 
@@ -869,7 +885,7 @@ export function AuditWorkspace() {
                 {Object.entries(selectedAuditDetail.categoryScores || {}).map(([cat, score]) => (
                   <div key={cat} className="min-w-[90px] rounded-md border border-bd bg-[#f8fafc] px-3 py-2 text-center">
                     <div className="text-[10px] font-bold text-t2">{cat}</div>
-                    <strong className="text-sm">{score}%</strong>
+                    <strong className="text-sm">{categoryScoreValue(score)}%</strong>
                   </div>
                 ))}
               </div>

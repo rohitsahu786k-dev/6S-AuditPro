@@ -178,10 +178,11 @@ export function AnalyticsClient() {
     });
   }, [audits]);
 
-  // Department vs Severity heatmap
+  // Department vs Severity heatmap — open observations only, closed findings are excluded
   const severityHeatmap = useMemo(() => {
     const map = new Map<string, { Critical: number; High: number; Medium: number; Low: number; total: number }>();
     for (const f of findings) {
+      if (f.status === "CLOSED") continue;
       const row = map.get(f.department) || { Critical: 0, High: 0, Medium: 0, Low: 0, total: 0 };
       row[f.severity] = (row[f.severity] || 0) + 1;
       row.total += 1;
@@ -425,9 +426,12 @@ export function AnalyticsClient() {
           </div>
 
           <div className="mb-6 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
-            <h3 className="mb-2.5 font-extrabold text-t1">Severity Heatmap - Department vs Severity</h3>
+            <h3 className="mb-2.5 flex items-center justify-between font-extrabold text-t1">
+              <span>Severity Heatmap - Department vs Severity</span>
+              <span className="text-[11px] font-semibold text-t2">Open observations only</span>
+            </h3>
             {severityHeatmap.length === 0 ? (
-              <div className="p-5 text-center text-t2">No findings recorded yet.</div>
+              <div className="p-5 text-center text-t2">No open observations right now.</div>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-bd bg-white">
                 <table className="w-full border-collapse text-sm">

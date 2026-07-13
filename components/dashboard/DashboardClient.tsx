@@ -3,7 +3,21 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useApi } from "@/hooks/useApi";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from "recharts";
 import { FolderOpen, Loader2, CheckCircle2, AlertTriangle, ShieldAlert, Eye, Plus } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
@@ -30,6 +44,8 @@ type Finding = {
   status: string;
   question: string;
   dueDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -39,7 +55,29 @@ const SEVERITY_COLORS: Record<string, string> = {
   Low: "#64748b"
 };
 
+// CVD-validated categorical palette; departments keep their slot by first-seen order.
+const DEPT_SERIES_COLORS = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
+
 const COMPLIANCE_TARGET = 90;
+
+const TREND_MONTHS = 6;
+
+function lastMonths(count: number) {
+  const now = new Date();
+  const months: Array<{ key: string; label: string }> = [];
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: d.toLocaleString("en", { month: "short", year: "2-digit" })
+    });
+  }
+  return months;
+}
+
+function monthKeyOf(isoDate?: string) {
+  return isoDate ? isoDate.slice(0, 7) : "";
+}
 
 export function DashboardClient() {
   const auditsApi = useApi<Audit[]>("/api/audits?view=summary");
@@ -101,6 +139,48 @@ export function DashboardClient() {
       .sort((a, b) => b.total - a.total);
   }, [findings, audits]);
 
+  // Month-wise average audit score per department (issue: Monthly Audit Score)
+  const monthlyAuditScore = useMemo(() => {
+    const months = lastMonths(TREND_MONTHS);
+    const completed = audits.filter((a) => a.status === "COMPLETED");
+    const departments = [...new Set(completed.map((a) => a.department))].sort();
+    const rows = months.map((m) => {
+      const row: Record<string, string | number | null> = { month: m.label };
+      for (const dept of departments) {
+        const monthAudits = completed.filter((a) => a.department === dept && monthKeyOf(a.date) === m.key);
+        row[dept] = monthAudits.length
+          ? Math.round(monthAudits.reduce((sum, a) => sum + (a.totalScore || 0), 0) / monthAudits.length)
+          : null;
+      }
+      return row;
+    });
+    return { rows, departments };
+  }, [audits]);
+
+  // Month-wise closed findings per department (issue: Monthly Closure Trend)
+  const monthlyClosureTrend = useMemo(() => {
+    const months = lastMonths(TREND_MONTHS);
+    const closed = findings.filter((f) => f.status === "CLOSED");
+    const departments = [...new Set(findings.map((f) => f.department))].sort();
+    const rows = months.map((m) => {
+      const row: Record<string, string | number> = { month: m.label };
+      for (const dept of departments) {
+        row[dept] = closed.filter((f) => f.department === dept && monthKeyOf(f.updatedAt) === m.key).length;
+      }
+      return row;
+    });
+    return { rows, departments };
+  }, [findings]);
+
+  // Month-wise raised vs closed findings across the plant
+  const monthlyRaisedVsClosed = useMemo(() => {
+    return lastMonths(TREND_MONTHS).map((m) => ({
+      month: m.label,
+      Raised: findings.filter((f) => monthKeyOf(f.createdAt) === m.key).length,
+      Closed: findings.filter((f) => f.status === "CLOSED" && monthKeyOf(f.updatedAt) === m.key).length
+    }));
+  }, [findings]);
+
   const recentAudits = useMemo(() => {
     return [...audits].sort((a, b) => new Date(b.date || "").getTime() - new Date(a.date || "").getTime()).slice(0, 5);
   }, [audits]);
@@ -142,16 +222,17 @@ export function DashboardClient() {
             <div className="flex h-[260px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
+              <PieChart margin={{ top: 14, right: 48, bottom: 4, left: 48 }}>
                 <Pie
                   data={severityBreakdown}
                   dataKey="value"
                   nameKey="name"
-                  innerRadius="55%"
-                  outerRadius="85%"
+                  innerRadius="45%"
+                  outerRadius="70%"
                   paddingAngle={2}
                   label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
                   labelLine={false}
+                  fontSize={12}
                 >
                   {severityBreakdown.map((entry) => (
                     <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] || "#8896a5"} />
@@ -205,6 +286,82 @@ export function DashboardClient() {
                 </tbody>
               </table>
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <h3 className="mb-3 font-bold text-t1">Monthly Audit Score - Department Wise</h3>
+          {monthlyAuditScore.departments.length === 0 ? (
+            <div className="flex h-[260px] items-center justify-center text-sm text-t2">No completed audits yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={monthlyAuditScore.rows} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(value) => [`${value}%`]} />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {monthlyAuditScore.departments.map((dept, idx) => (
+                  <Line
+                    key={dept}
+                    type="monotone"
+                    dataKey={dept}
+                    stroke={DEPT_SERIES_COLORS[idx % DEPT_SERIES_COLORS.length]}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <h3 className="mb-3 font-bold text-t1">Monthly Closure Trend - Department Wise</h3>
+          {monthlyClosureTrend.departments.length === 0 ? (
+            <div className="flex h-[260px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={260}>
+              <LineChart data={monthlyClosureTrend.rows} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                {monthlyClosureTrend.departments.map((dept, idx) => (
+                  <Line
+                    key={dept}
+                    type="monotone"
+                    dataKey={dept}
+                    stroke={DEPT_SERIES_COLORS[idx % DEPT_SERIES_COLORS.length]}
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                ))}
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)] lg:col-span-2">
+          <h3 className="mb-3 font-bold text-t1">Monthly Findings Raised vs Closed</h3>
+          {findings.length === 0 ? (
+            <div className="flex h-[220px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={monthlyRaisedVsClosed} margin={{ top: 8, right: 12, bottom: 0, left: -16 }} barGap={2}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
+                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Bar dataKey="Raised" fill="#e34948" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                <Bar dataKey="Closed" fill="#008300" radius={[4, 4, 0, 0]} maxBarSize={28} />
+              </BarChart>
+            </ResponsiveContainer>
           )}
         </div>
       </div>

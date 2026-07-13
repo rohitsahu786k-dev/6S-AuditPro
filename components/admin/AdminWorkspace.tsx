@@ -21,6 +21,7 @@ export function AdminWorkspace() {
         <div className="flex flex-wrap gap-2">
           <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/email-templates">Email Templates</Link>
           <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/email-logs">Email Logs</Link>
+          <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/escalation-mails">Escalation Mail</Link>
           <Link className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" href="/admin/email-settings">Email Settings</Link>
         </div>
       </div>
