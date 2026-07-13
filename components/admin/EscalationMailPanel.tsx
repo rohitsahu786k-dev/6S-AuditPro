@@ -85,7 +85,7 @@ export function EscalationMailPanel() {
       <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-t1">Escalation Mail</h1>
-          <p className="mt-1 text-sm text-t2">Overdue findings escalation - review pending overdue observations and send reminder emails to department SPOCs and admins.</p>
+          <p className="mt-1 text-sm text-t2">Automatic overdue reminders for the responsible Manager / HOD, department SPOC, and administrators.</p>
         </div>
         <button
           className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-[.55]"

@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell, Home } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Bell, Home } from "lucide-react";
 import type { SessionUser } from "@/types/domain";
 import { breadcrumbLabel } from "@/lib/nav-items";
 import { COMPANY_NAME } from "@/lib/constants";
@@ -23,6 +24,14 @@ export function Header({ user }: { user: SessionUser }) {
         <span>{COMPANY_NAME}</span>
         <span className="text-t3">›</span>
         <span className="font-semibold text-t1">{currentLabel}</span>
+        {pathname.startsWith("/admin/") ? (
+          <Link
+            href="/admin"
+            className="ml-2 inline-flex items-center gap-1 rounded-md border border-bd bg-white px-2 py-1 font-bold text-t1 hover:bg-bg3"
+          >
+            <ArrowLeft size={12} /> Back to Admin
+          </Link>
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <DropdownMenu>

@@ -56,13 +56,15 @@ export async function notifyOverdueFindings() {
 
   for (const finding of overdue) {
     try {
-      const recipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+      const recipients = await resolveRecipients({ department: finding.department, roles: ["MANAGEMENT", "SPOC", "ADMIN", "MASTER_ADMIN"] });
       await sendTemplatedEmail({
         triggerEvent: "FINDING_OVERDUE",
         recipients,
         data: {
-          recipientName: "Department SPOC",
+          recipientName: "Manager / HOD",
           findingNumber: finding.findingNumber,
+          auditNumber: finding.auditNumber || "",
+          zoneName: finding.zone,
           departmentName: finding.department,
           severity: finding.severity,
           dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : ""

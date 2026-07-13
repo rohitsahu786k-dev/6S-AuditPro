@@ -16,9 +16,11 @@ import {
   Eye,
   AlertTriangle,
   ExternalLink,
-  Mail
+  Mail,
+  Download
 } from "lucide-react";
 import { defaultSeverity } from "@/lib/audit-scoring";
+import { downloadAuditPdf } from "@/lib/audit-pdf";
 import { processImageToWebP } from "@/utils/media";
 import { scoreBadgeStyle, SEVERITY_BADGE_STYLES } from "@/lib/status-styles";
 import type { Severity } from "@/types/domain";
@@ -72,7 +74,7 @@ function responseBadgeClass(response: "Adequate" | "Not Adequate" | "N/A") {
   return "bg-t2";
 }
 
-export function AuditWorkspace() {
+export function AuditWorkspace({ historyOnly = false }: { historyOnly?: boolean }) {
   const masters = useApi<Masters>("/api/masters");
   const audits = useApi<Audit[]>("/api/audits");
   const meApi = useApi<{ user: any | null }>("/api/auth/me");
@@ -106,6 +108,10 @@ export function AuditWorkspace() {
 
   // Detail Modal State
   const [selectedAuditDetail, setSelectedAuditDetail] = useState<Audit | null>(null);
+  const [downloadingAuditId, setDownloadingAuditId] = useState<string | null>(null);
+  const [historySearch, setHistorySearch] = useState("");
+  const [historyDepartment, setHistoryDepartment] = useState("ALL");
+  const [historyZone, setHistoryZone] = useState("ALL");
 
   // Share Report State
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -129,6 +135,17 @@ export function AuditWorkspace() {
     }
   };
 
+  const handleDownloadPdf = async (audit: Audit) => {
+    setDownloadingAuditId(audit._id);
+    try {
+      await downloadAuditPdf(audit);
+    } catch (error) {
+      alert(error instanceof Error ? `Unable to create PDF: ${error.message}` : "Unable to create PDF report.");
+    } finally {
+      setDownloadingAuditId(null);
+    }
+  };
+
   // Image Compression Alert State
   const [compressionAlert, setCompressionAlert] = useState<{
     file: File;
@@ -144,6 +161,27 @@ export function AuditWorkspace() {
   const auditors = useMemo(() => {
     return masters.data?.people.filter((p) => p.type === "AUDITOR") || [];
   }, [masters.data]);
+
+  const historyDepartments = useMemo(
+    () => [...new Set((audits.data || []).map((audit) => audit.department))].sort(),
+    [audits.data]
+  );
+
+  const historyZones = useMemo(
+    () => [...new Set((audits.data || []).map((audit) => audit.zone))].sort(),
+    [audits.data]
+  );
+
+  const filteredAuditHistory = useMemo(() => {
+    const query = historySearch.trim().toLowerCase();
+    return (audits.data || []).filter((audit) => {
+      const matchesSearch = !query || [audit.auditNumber, audit.zone, audit.department, audit.auditorName]
+        .some((value) => value.toLowerCase().includes(query));
+      const matchesDepartment = historyDepartment === "ALL" || audit.department === historyDepartment;
+      const matchesZone = historyZone === "ALL" || audit.zone === historyZone;
+      return matchesSearch && matchesDepartment && matchesZone;
+    });
+  }, [audits.data, historySearch, historyDepartment, historyZone]);
 
   const activeCategory = CATEGORIES[currentCategoryIndex];
 
@@ -324,10 +362,14 @@ export function AuditWorkspace() {
       {/* Page Header */}
       <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-t1">6S Site Audits</h1>
-          <p className="mt-1 text-sm text-t2">Establish and verify workplace discipline and safety standards via systematic scoring audits.</p>
+          <h1 className="text-2xl font-extrabold text-t1">{historyOnly ? "Audit History" : "6S Site Audits"}</h1>
+          <p className="mt-1 text-sm text-t2">
+            {historyOnly
+              ? "Review completed audits and download full PDF reports."
+              : "Establish and verify workplace discipline and safety standards via systematic scoring audits."}
+          </p>
         </div>
-        {step === "history" && (
+        {step === "history" && !historyOnly && (
           <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d" onClick={startAuditSetup}>
             <Plus size={16} /> Start Audit
           </button>
@@ -336,14 +378,43 @@ export function AuditWorkspace() {
 
       {/* STEP 1: HISTORY VIEW */}
       {step === "history" && (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-[2fr_1fr]">
+        <div className={`grid grid-cols-1 gap-5 ${historyOnly ? "" : "md:grid-cols-[2fr_1fr]"}`}>
           {/* Audit History List */}
           <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
-            <h2 className="mb-2.5 font-extrabold text-t1">Audit History</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="font-extrabold text-t1">Audit History</h2>
+              <span className="text-xs text-t2">{filteredAuditHistory.length} audit{filteredAuditHistory.length === 1 ? "" : "s"}</span>
+            </div>
+            <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(220px,1fr)_190px_190px]">
+              <input
+                className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                placeholder="Search audit number, zone, department, auditor..."
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+              />
+              <select
+                className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={historyDepartment}
+                onChange={(event) => setHistoryDepartment(event.target.value)}
+              >
+                <option value="ALL">All Departments</option>
+                {historyDepartments.map((department) => <option key={department} value={department}>{department}</option>)}
+              </select>
+              <select
+                className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={historyZone}
+                onChange={(event) => setHistoryZone(event.target.value)}
+              >
+                <option value="ALL">All Zones</option>
+                {historyZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
+              </select>
+            </div>
             {audits.loading ? (
               <div className="py-5 text-t2">Loading completed audits...</div>
             ) : !audits.data || audits.data.length === 0 ? (
               <div className="py-5 text-t2">No audits completed yet. Start your first site audit.</div>
+            ) : filteredAuditHistory.length === 0 ? (
+              <div className="py-5 text-center text-t2">No audits match the selected filters.</div>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-bd bg-white">
                 <table className="w-full border-collapse text-sm">
@@ -358,7 +429,7 @@ export function AuditWorkspace() {
                     </tr>
                   </thead>
                   <tbody>
-                    {audits.data.map((audit) => {
+                    {filteredAuditHistory.map((audit) => {
                       const scoreBadge = scoreBadgeStyle(audit.totalScore);
                       return (
                       <tr key={audit._id}>
@@ -387,6 +458,13 @@ export function AuditWorkspace() {
                             >
                               <Eye size={12} /> View
                             </button>
+                            <button
+                              className="inline-flex items-center gap-1 rounded-lg border border-[#2a78d6] bg-[#2a78d6] px-2.5 py-[5px] text-xs font-bold text-white hover:bg-[#1f65bd] disabled:cursor-wait disabled:opacity-60"
+                              onClick={() => handleDownloadPdf(audit)}
+                              disabled={downloadingAuditId === audit._id}
+                            >
+                              <Download size={12} /> {downloadingAuditId === audit._id ? "Creating..." : "PDF Report"}
+                            </button>
                             {isUserAdmin && (
                               <button
                                 className="inline-flex items-center gap-1 rounded-lg border border-red bg-white px-2.5 py-[5px] text-xs font-bold text-red hover:bg-bg3"
@@ -407,7 +485,7 @@ export function AuditWorkspace() {
           </div>
 
           {/* Guidelines Box */}
-          <div className="flex flex-col self-stretch rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          {!historyOnly && <div className="flex flex-col self-stretch rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
             <h2 className="mb-2.5 font-extrabold text-t1">6S Scoring Guidelines</h2>
             <div className="grid gap-3 text-[13px]">
               <div className="rounded-lg border-l-4 border-l-brand bg-[#f8fafc] p-2.5">
@@ -423,7 +501,7 @@ export function AuditWorkspace() {
                 <p className="mt-1 text-t2">Any finding marked "Not Adequate" instantly spawns an active CAPA ticket assigned to the department SPOC.</p>
               </div>
             </div>
-          </div>
+          </div>}
         </div>
       )}
 
@@ -836,6 +914,13 @@ export function AuditWorkspace() {
                   className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-bd bg-white px-2.5 py-1.5 text-xs font-bold text-t1 hover:bg-bg3"
                 >
                   <Mail size={13} /> Share Report
+                </button>
+                <button
+                  onClick={() => handleDownloadPdf(selectedAuditDetail)}
+                  disabled={downloadingAuditId === selectedAuditDetail._id}
+                  className="mt-1.5 ml-1.5 inline-flex items-center gap-1.5 rounded-lg border border-[#2a78d6] bg-[#2a78d6] px-2.5 py-1.5 text-xs font-bold text-white hover:bg-[#1f65bd] disabled:cursor-wait disabled:opacity-60"
+                >
+                  <Download size={13} /> {downloadingAuditId === selectedAuditDetail._id ? "Creating PDF..." : "Download PDF"}
                 </button>
               </div>
             </div>

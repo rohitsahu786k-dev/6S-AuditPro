@@ -3,21 +3,6 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useApi } from "@/hooks/useApi";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from "recharts";
 import { FolderOpen, Loader2, CheckCircle2, AlertTriangle, ShieldAlert, Eye, Plus } from "lucide-react";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
@@ -55,28 +40,67 @@ const SEVERITY_COLORS: Record<string, string> = {
   Low: "#64748b"
 };
 
-// CVD-validated categorical palette; departments keep their slot by first-seen order.
-const DEPT_SERIES_COLORS = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"];
-
 const COMPLIANCE_TARGET = 90;
 
-const TREND_MONTHS = 6;
+const TH_CLASS = "bg-bg3 px-2 py-2 text-left text-xs font-bold uppercase tracking-wide text-t2";
+const TH_RIGHT_CLASS = "bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2";
+const TD_CLASS = "border-b border-[#edf0f4] px-2 py-2";
 
-function lastMonths(count: number) {
-  const now = new Date();
-  const months: Array<{ key: string; label: string }> = [];
-  for (let i = count - 1; i >= 0; i -= 1) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({
-      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleString("en", { month: "short", year: "2-digit" })
-    });
-  }
-  return months;
-}
+const DASHBOARD_YEAR = new Date().getFullYear();
+const YEAR_MONTHS = Array.from({ length: 12 }, (_, index) => ({
+  key: `${DASHBOARD_YEAR}-${String(index + 1).padStart(2, "0")}`,
+  label: new Date(DASHBOARD_YEAR, index, 1).toLocaleString("en", { month: "short" }),
+  end: new Date(DASHBOARD_YEAR, index + 1, 0, 23, 59, 59, 999)
+}));
 
 function monthKeyOf(isoDate?: string) {
   return isoDate ? isoDate.slice(0, 7) : "";
+}
+
+function MonthlyDepartmentTable({
+  rows,
+  valueSuffix = "",
+  emptyMessage
+}: {
+  rows: Array<{ department: string; values: Array<number | null> }>;
+  valueSuffix?: string;
+  emptyMessage: string;
+}) {
+  if (rows.length === 0) {
+    return <div className="flex min-h-32 items-center justify-center text-sm text-t2">{emptyMessage}</div>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-bd">
+      <table className="w-full min-w-[900px] border-collapse text-xs">
+        <thead>
+          <tr>
+            <th className={`${TH_CLASS} sticky left-0 z-10 min-w-40`}>Department</th>
+            {YEAR_MONTHS.map((month) => (
+              <th key={month.key} className={`${TH_RIGHT_CLASS} min-w-14`}>{month.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.department}>
+              <td className={`${TD_CLASS} sticky left-0 bg-white font-bold text-t1`}>{row.department}</td>
+              {row.values.map((value, index) => (
+                <td
+                  key={YEAR_MONTHS[index].key}
+                  className={`${TD_CLASS} text-right font-semibold ${
+                    value === null ? "text-t3" : value >= 80 ? "text-green" : value >= 50 ? "text-orange" : "text-red"
+                  }`}
+                >
+                  {value === null ? "-" : `${value}${valueSuffix}`}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function DashboardClient() {
@@ -139,45 +163,45 @@ export function DashboardClient() {
       .sort((a, b) => b.total - a.total);
   }, [findings, audits]);
 
-  // Month-wise average audit score per department (issue: Monthly Audit Score)
+  // Month-wise average audit score per department for the current calendar year.
   const monthlyAuditScore = useMemo(() => {
-    const months = lastMonths(TREND_MONTHS);
     const completed = audits.filter((a) => a.status === "COMPLETED");
     const departments = [...new Set(completed.map((a) => a.department))].sort();
-    const rows = months.map((m) => {
-      const row: Record<string, string | number | null> = { month: m.label };
-      for (const dept of departments) {
-        const monthAudits = completed.filter((a) => a.department === dept && monthKeyOf(a.date) === m.key);
-        row[dept] = monthAudits.length
-          ? Math.round(monthAudits.reduce((sum, a) => sum + (a.totalScore || 0), 0) / monthAudits.length)
+    return departments.map((department) => ({
+      department,
+      values: YEAR_MONTHS.map((month) => {
+        const monthAudits = completed.filter((audit) => audit.department === department && monthKeyOf(audit.date) === month.key);
+        return monthAudits.length
+          ? Math.round(monthAudits.reduce((sum, audit) => sum + (audit.totalScore || 0), 0) / monthAudits.length)
           : null;
-      }
-      return row;
-    });
-    return { rows, departments };
+      })
+    }));
   }, [audits]);
 
-  // Month-wise closed findings per department (issue: Monthly Closure Trend)
+  // Cumulative month-end closure rate: findings closed by month-end / findings raised by month-end.
   const monthlyClosureTrend = useMemo(() => {
-    const months = lastMonths(TREND_MONTHS);
-    const closed = findings.filter((f) => f.status === "CLOSED");
     const departments = [...new Set(findings.map((f) => f.department))].sort();
-    const rows = months.map((m) => {
-      const row: Record<string, string | number> = { month: m.label };
-      for (const dept of departments) {
-        row[dept] = closed.filter((f) => f.department === dept && monthKeyOf(f.updatedAt) === m.key).length;
-      }
-      return row;
-    });
-    return { rows, departments };
+    return departments.map((department) => ({
+      department,
+      values: YEAR_MONTHS.map((month) => {
+        const raised = findings.filter((finding) =>
+          finding.department === department && finding.createdAt && new Date(finding.createdAt) <= month.end
+        );
+        if (raised.length === 0) return null;
+        const closed = raised.filter((finding) =>
+          finding.status === "CLOSED" && finding.updatedAt && new Date(finding.updatedAt) <= month.end
+        ).length;
+        return Math.round((closed / raised.length) * 100);
+      })
+    }));
   }, [findings]);
 
   // Month-wise raised vs closed findings across the plant
   const monthlyRaisedVsClosed = useMemo(() => {
-    return lastMonths(TREND_MONTHS).map((m) => ({
-      month: m.label,
-      Raised: findings.filter((f) => monthKeyOf(f.createdAt) === m.key).length,
-      Closed: findings.filter((f) => f.status === "CLOSED" && monthKeyOf(f.updatedAt) === m.key).length
+    return YEAR_MONTHS.map((month) => ({
+      month: month.label,
+      raised: findings.filter((finding) => monthKeyOf(finding.createdAt) === month.key).length,
+      closed: findings.filter((finding) => finding.status === "CLOSED" && monthKeyOf(finding.updatedAt) === month.key).length
     }));
   }, [findings]);
 
@@ -219,29 +243,41 @@ export function DashboardClient() {
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
           <h3 className="mb-3 font-bold text-t1">Findings by Severity</h3>
           {severityBreakdown.length === 0 ? (
-            <div className="flex h-[260px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
+            <div className="flex h-[220px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
           ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart margin={{ top: 14, right: 48, bottom: 4, left: 48 }}>
-                <Pie
-                  data={severityBreakdown}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius="45%"
-                  outerRadius="70%"
-                  paddingAngle={2}
-                  label={({ name, percent }) => `${name} ${Math.round((percent ?? 0) * 100)}%`}
-                  labelLine={false}
-                  fontSize={12}
-                >
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className={TH_CLASS}>Severity</th>
+                    <th className={TH_RIGHT_CLASS}>Count</th>
+                    <th className={TH_RIGHT_CLASS}>Share</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {severityBreakdown.map((entry) => (
-                    <Cell key={entry.name} fill={SEVERITY_COLORS[entry.name] || "#8896a5"} />
+                    <tr key={entry.name}>
+                      <td className={`${TD_CLASS} font-semibold text-t1`}>
+                        <span
+                          className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
+                          style={{ background: SEVERITY_COLORS[entry.name] || "#8896a5" }}
+                        />
+                        {entry.name}
+                      </td>
+                      <td className={`${TD_CLASS} text-right font-semibold`}>{entry.value}</td>
+                      <td className={`${TD_CLASS} text-right text-t2`}>
+                        {findings.length ? Math.round((entry.value / findings.length) * 100) : 0}%
+                      </td>
+                    </tr>
                   ))}
-                </Pie>
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-              </PieChart>
-            </ResponsiveContainer>
+                  <tr>
+                    <td className={`${TD_CLASS} font-extrabold text-t1`}>Total</td>
+                    <td className={`${TD_CLASS} text-right font-extrabold text-t1`}>{findings.length}</td>
+                    <td className={`${TD_CLASS} text-right font-extrabold text-t1`}>100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -290,79 +326,45 @@ export function DashboardClient() {
         </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-6">
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
-          <h3 className="mb-3 font-bold text-t1">Monthly Audit Score - Department Wise</h3>
-          {monthlyAuditScore.departments.length === 0 ? (
-            <div className="flex h-[260px] items-center justify-center text-sm text-t2">No completed audits yet.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={monthlyAuditScore.rows} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value) => [`${value}%`]} />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {monthlyAuditScore.departments.map((dept, idx) => (
-                  <Line
-                    key={dept}
-                    type="monotone"
-                    dataKey={dept}
-                    stroke={DEPT_SERIES_COLORS[idx % DEPT_SERIES_COLORS.length]}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                    connectNulls
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold text-t1">Monthly Audit Score - {DASHBOARD_YEAR}</h3>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Monthly average score by department</span>
+          </div>
+          <MonthlyDepartmentTable rows={monthlyAuditScore} valueSuffix="%" emptyMessage="No completed audits yet." />
         </div>
 
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
-          <h3 className="mb-3 font-bold text-t1">Monthly Closure Trend - Department Wise</h3>
-          {monthlyClosureTrend.departments.length === 0 ? (
-            <div className="flex h-[260px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={monthlyClosureTrend.rows} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                {monthlyClosureTrend.departments.map((dept, idx) => (
-                  <Line
-                    key={dept}
-                    type="monotone"
-                    dataKey={dept}
-                    stroke={DEPT_SERIES_COLORS[idx % DEPT_SERIES_COLORS.length]}
-                    strokeWidth={2}
-                    dot={{ r: 3 }}
-                  />
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
-          )}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold text-t1">Monthly Closure Rate Trend - {DASHBOARD_YEAR}</h3>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Closed till month-end / findings raised till month-end</span>
+          </div>
+          <MonthlyDepartmentTable rows={monthlyClosureTrend} valueSuffix="%" emptyMessage="No findings recorded yet." />
         </div>
 
-        <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)] lg:col-span-2">
-          <h3 className="mb-3 font-bold text-t1">Monthly Findings Raised vs Closed</h3>
-          {findings.length === 0 ? (
-            <div className="flex h-[220px] items-center justify-center text-sm text-t2">No findings recorded yet.</div>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={monthlyRaisedVsClosed} margin={{ top: 8, right: 12, bottom: 0, left: -16 }} barGap={2}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" />
-                <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Bar dataKey="Raised" fill="#e34948" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                <Bar dataKey="Closed" fill="#008300" radius={[4, 4, 0, 0]} maxBarSize={28} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+        <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <h3 className="mb-3 font-bold text-t1">Monthly Findings Raised vs Closed - {DASHBOARD_YEAR}</h3>
+          <div className="overflow-x-auto rounded-lg border border-bd">
+            <table className="w-full min-w-[720px] border-collapse text-xs">
+              <thead>
+                <tr>
+                  <th className={TH_CLASS}>Metric</th>
+                  {YEAR_MONTHS.map((month) => <th key={month.key} className={TH_RIGHT_CLASS}>{month.label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className={`${TD_CLASS} font-bold text-t1`}>Raised</td>
+                  {monthlyRaisedVsClosed.map((month) => <td key={month.month} className={`${TD_CLASS} text-right font-semibold text-red`}>{month.raised}</td>)}
+                </tr>
+                <tr>
+                  <td className={`${TD_CLASS} font-bold text-t1`}>Closed</td>
+                  {monthlyRaisedVsClosed.map((month) => <td key={month.month} className={`${TD_CLASS} text-right font-semibold text-green`}>{month.closed}</td>)}
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

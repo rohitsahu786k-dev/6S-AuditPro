@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { CATEGORY_META } from "@/lib/constants";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   BarChart3,
   FileSpreadsheet,
@@ -114,6 +115,21 @@ export function AnalyticsClient() {
       openFindings: s.openFindings
     })).sort((a, b) => b.avgScore - a.avgScore);
   }, [audits, findings]);
+
+  const monthlyAuditCount = useMemo(() => {
+    const year = new Date().getFullYear();
+    return {
+      year,
+      rows: Array.from({ length: 12 }, (_, monthIndex) => ({
+        month: new Date(year, monthIndex, 1).toLocaleString("en", { month: "short" }),
+        audits: audits.filter((audit) => {
+          if (audit.status !== "COMPLETED" || !audit.date) return false;
+          const auditDate = new Date(audit.date);
+          return auditDate.getFullYear() === year && auditDate.getMonth() === monthIndex;
+        }).length
+      }))
+    };
+  }, [audits]);
 
   // 1S - 7S Category-Wise Score Breakdowns
   const pillarStats = useMemo(() => {
@@ -423,6 +439,26 @@ export function AnalyticsClient() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="mb-6 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <h3 className="mb-2.5 flex items-center justify-between font-extrabold text-t1">
+              <span>Monthly Audit Count</span>
+              <span className="text-[11px] font-semibold text-t2">{monthlyAuditCount.year}</span>
+            </h3>
+            {monthlyAuditCount.rows.every((row) => row.audits === 0) ? (
+              <div className="flex h-[260px] items-center justify-center text-sm text-t2">No completed audits recorded this year.</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={monthlyAuditCount.rows} margin={{ top: 18, right: 18, bottom: 0, left: -18 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#eef1f5" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip cursor={{ fill: "#f8fafc" }} formatter={(value) => [value, "Completed audits"]} />
+                  <Bar dataKey="audits" name="Completed audits" fill="#2a78d6" radius={[5, 5, 0, 0]} maxBarSize={48} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           <div className="mb-6 rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">

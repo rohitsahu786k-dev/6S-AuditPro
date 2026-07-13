@@ -112,14 +112,16 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
   },
   {
     templateKey: "finding-overdue",
-    templateName: "Finding Overdue Reminder",
+    templateName: "Manager / HOD Overdue Escalation",
     triggerEvent: "FINDING_OVERDUE",
-    subject: "Reminder: Finding {{findingNumber}} is overdue",
+    subject: "Escalation: Finding {{findingNumber}} is overdue",
     htmlBody: wrapEmailLayout(
-      `${greeting()}${heading("Overdue Finding &mdash; Action Needed")}` +
-        `<p style="margin:0 0 8px;">Finding <strong>{{findingNumber}}</strong> has passed its target due date and remains unresolved. Please action it as soon as possible.</p>` +
+      `${greeting()}${heading("Overdue Finding &mdash; Manager / HOD Escalation")}` +
+        `<p style="margin:0 0 8px;">Finding <strong>{{findingNumber}}</strong> has passed its target due date and remains unresolved. This reminder has been escalated to the responsible Manager / HOD for immediate follow-up.</p>` +
         infoTable(
           infoRow("Finding No.", "{{findingNumber}}") +
+            infoRow("Audit No.", "{{auditNumber}}") +
+            infoRow("Zone", "{{zoneName}}") +
             infoRow("Department", "{{departmentName}}") +
             infoRow("Severity", "{{severity}}") +
             infoRow("Due Date", "{{dueDate}}")
@@ -128,7 +130,7 @@ export const DEFAULT_EMAIL_TEMPLATES: DefaultEmailTemplate[] = [
         closing()
     ),
     textBody:
-      "Hello {{recipientName}},\n\nFinding {{findingNumber}} is overdue.\n\nDepartment: {{departmentName}}\nSeverity: {{severity}}\nDue Date: {{dueDate}}\n\nResolve: {{appUrl}}/findings\n\n{{companyName}}"
+      "Hello {{recipientName}},\n\nFinding {{findingNumber}} is overdue and has been escalated for Manager / HOD follow-up.\n\nAudit: {{auditNumber}}\nZone: {{zoneName}}\nDepartment: {{departmentName}}\nSeverity: {{severity}}\nDue Date: {{dueDate}}\n\nResolve: {{appUrl}}/findings\n\n{{companyName}}"
   },
   {
     templateKey: "audit-completed",

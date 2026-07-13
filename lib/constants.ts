@@ -57,7 +57,7 @@ export const EMAIL_TRIGGER_LABELS: Record<EmailTriggerEvent, string> = {
   CAPA_APPROVED: "CAPA Approved / Finding Closed",
   CAPA_REJECTED: "CAPA Rejected",
   FINDING_REOPENED: "Finding Reopened",
-  FINDING_OVERDUE: "Finding Overdue Reminder",
+  FINDING_OVERDUE: "Manager / HOD Overdue Escalation",
   AUDIT_COMPLETED: "Audit Completed",
   AUDIT_REPORT_SHARED: "Audit Report Shared",
   PASSWORD_CHANGED: "Password Changed",

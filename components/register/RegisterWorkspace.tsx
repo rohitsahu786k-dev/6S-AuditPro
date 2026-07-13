@@ -50,11 +50,29 @@ type RegisterRow = {
 
 const PAGE_SIZE = 25;
 
+const FINDING_STATUS_OPTIONS = [
+  { value: "OPEN", label: "Open" },
+  { value: "IN_PROGRESS", label: "In Process" },
+  { value: "SUBMITTED", label: "Pending Auditor Review" },
+  { value: "CLOSED", label: "Closed" },
+  { value: "REOPENED", label: "Reopened" },
+  { value: "OVERDUE", label: "Overdue" }
+] as const;
+
+function normalizedFindingStatus(status?: string) {
+  if (!status) return "";
+  // A rejected CAPA is back with the department for corrective action.
+  return status === "REJECTED" ? "IN_PROGRESS" : status;
+}
+
+function statusLabel(status: string) {
+  return FINDING_STATUS_OPTIONS.find((option) => option.value === status)?.label || "-";
+}
+
 function statusClass(status: string) {
   if (status === "CLOSED") return "border-green-200 bg-green-50 text-green";
-  if (status === "OK") return "border-green-200 bg-green-50 text-green";
-  if (status === "N/A") return "border-slate-200 bg-slate-50 text-t2";
   if (status === "SUBMITTED" || status === "IN_PROGRESS") return "border-amber-200 bg-amber-50 text-orange";
+  if (!status) return "border-slate-200 bg-slate-50 text-t2";
   return "border-red-200 bg-accent text-brand-d";
 }
 
@@ -78,7 +96,7 @@ export function RegisterWorkspace() {
     for (const audit of audits) {
       for (const item of audit.checklist || []) {
         const match = findings.find((f) => f.auditId === audit._id && f.questionId === item.questionId);
-        const status = item.response === "Not Adequate" ? match?.status || "OPEN" : item.response === "N/A" ? "N/A" : "OK";
+        const status = item.response === "Not Adequate" ? normalizedFindingStatus(match?.status || "OPEN") : "";
         const dueOrClosed = match ? (match.status === "CLOSED" ? match.updatedAt : match.dueDate) : undefined;
         out.push({
           key: `${audit._id}-${item.questionId}`,
@@ -134,7 +152,7 @@ export function RegisterWorkspace() {
       r.response,
       r.severity || "",
       `"${(r.observation || "").replace(/"/g, '""')}"`,
-      r.status,
+      statusLabel(r.status),
       r.dueOrClosed ? new Date(r.dueOrClosed).toLocaleDateString() : ""
     ]);
     const csvContent = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n");
@@ -184,15 +202,9 @@ export function RegisterWorkspace() {
             <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Status</span>
             <select className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}>
               <option value="ALL">All Statuses</option>
-              <option value="OK">OK (Adequate)</option>
-              <option value="N/A">N/A</option>
-              <option value="OPEN">OPEN</option>
-              <option value="IN_PROGRESS">IN_PROGRESS</option>
-              <option value="SUBMITTED">SUBMITTED</option>
-              <option value="CLOSED">CLOSED</option>
-              <option value="REJECTED">REJECTED</option>
-              <option value="REOPENED">REOPENED</option>
-              <option value="OVERDUE">OVERDUE</option>
+              {FINDING_STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </label>
           <label className="grid gap-1.5">
@@ -284,11 +296,13 @@ export function RegisterWorkspace() {
                   </td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top max-w-[220px] line-clamp-2 text-t2" title={r.observation}>{r.observation || "-"}</td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
-                    <span
-                      className={`inline-flex min-w-[74px] items-center justify-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusClass(r.status)}`}
-                    >
-                      {r.status || "UNKNOWN"}
-                    </span>
+                    {r.status ? (
+                      <span
+                        className={`inline-flex min-w-[74px] items-center justify-center whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-extrabold ${statusClass(r.status)}`}
+                      >
+                        {statusLabel(r.status)}
+                      </span>
+                    ) : <span className="text-t3">-</span>}
                   </td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{r.dueOrClosed ? new Date(r.dueOrClosed).toLocaleDateString() : "-"}</td>
                 </tr>
