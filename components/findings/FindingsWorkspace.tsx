@@ -14,7 +14,8 @@ import {
   AlertOctagon,
   Trash2,
   Plus,
-  ExternalLink
+  ExternalLink,
+  ImageIcon
 } from "lucide-react";
 import { processImageToWebP } from "@/utils/media";
 import { SEVERITY_BADGE_STYLES, STATUS_BADGE_STYLES, badgeStyleToVars } from "@/lib/status-styles";
@@ -72,6 +73,10 @@ const PAGE_SIZE = 20;
 
 function formatStatus(status?: string) {
   return status ? status.replace(/_/g, " ") : "UNKNOWN";
+}
+
+function cleanTimelineAction(action?: string) {
+  return (action || "").replace(/^[^\p{L}\p{N}]+/u, "").trim() || "Activity";
 }
 
 export function FindingsWorkspace() {
@@ -758,8 +763,20 @@ export function FindingsWorkspace() {
                     <div className="ml-1.5 grid gap-2.5 border-l-2 border-bd pl-3">
                       {selectedFinding.timeline.map((step, idx) => (
                         <div key={idx} className="relative text-xs">
-                          <div className="absolute -left-[19px] top-[3px] h-3 w-3 rounded-full border-2 border-white bg-brand" />
-                          <div className="font-semibold">{step.action}</div>
+                          <div className="absolute -left-[21px] top-[1px] grid h-4 w-4 place-items-center rounded-full border-2 border-white bg-brand text-white">
+                            {cleanTimelineAction(step.action).toLowerCase().includes("closed") || cleanTimelineAction(step.action).toLowerCase().includes("approved") ? (
+                              <CheckCircle2 size={10} />
+                            ) : cleanTimelineAction(step.action).toLowerCase().includes("reject") ? (
+                              <X size={10} />
+                            ) : cleanTimelineAction(step.action).toLowerCase().includes("submit") ? (
+                              <UploadCloud size={10} />
+                            ) : cleanTimelineAction(step.action).toLowerCase().includes("created") ? (
+                              <Plus size={10} />
+                            ) : (
+                              <Clock size={10} />
+                            )}
+                          </div>
+                          <div className="font-semibold">{cleanTimelineAction(step.action)}</div>
                           <div className="text-[11px] text-t2">by {step.byName} on {new Date(step.at || selectedFinding.createdAt).toLocaleString()}</div>
                           {step.note && <div className="mt-0.5 italic text-t2">"{step.note}"</div>}
                         </div>
@@ -821,7 +838,9 @@ export function FindingsWorkspace() {
 
                         <div className="rounded-lg border border-bd bg-[#f8fafc] p-3">
                           <div className="mb-2 flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Before Photos From Audit</span>
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wide text-t2">
+                              <ImageIcon size={13} /> Before Photos From Audit
+                            </span>
                             {selectedFinding.beforePhotos.length > 0 && (
                               <span className="text-[11px] font-semibold text-t2">{selectedFinding.beforePhotos.length} photo{selectedFinding.beforePhotos.length === 1 ? "" : "s"}</span>
                             )}
@@ -843,8 +862,8 @@ export function FindingsWorkspace() {
                                     alt={`Before audit evidence ${index + 1}`}
                                     className="h-full w-full object-cover transition-transform group-hover:scale-105"
                                   />
-                                  <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                                    Before
+                                  <span className="absolute bottom-1 left-1 grid h-6 w-6 place-items-center rounded bg-black/65 text-white">
+                                    <ImageIcon size={14} />
                                   </span>
                                 </a>
                               ))}
