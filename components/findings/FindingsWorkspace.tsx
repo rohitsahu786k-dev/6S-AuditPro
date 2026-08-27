@@ -819,6 +819,41 @@ export function FindingsWorkspace() {
                           </div>
                         )}
 
+                        <div className="rounded-lg border border-bd bg-[#f8fafc] p-3">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Before Photos From Audit</span>
+                            {selectedFinding.beforePhotos.length > 0 && (
+                              <span className="text-[11px] font-semibold text-t2">{selectedFinding.beforePhotos.length} photo{selectedFinding.beforePhotos.length === 1 ? "" : "s"}</span>
+                            )}
+                          </div>
+
+                          {selectedFinding.beforePhotos.length > 0 ? (
+                            <div className="grid grid-cols-3 gap-2">
+                              {selectedFinding.beforePhotos.map((photo, index) => (
+                                <a
+                                  href={photo.secureUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  key={photo.publicId || `${photo.secureUrl}-${index}`}
+                                  className="group relative block aspect-square overflow-hidden rounded-md border border-bd bg-white"
+                                  title="Open before photo"
+                                >
+                                  <img
+                                    src={photo.secureUrl}
+                                    alt={`Before audit evidence ${index + 1}`}
+                                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                  />
+                                  <span className="absolute bottom-1 left-1 rounded bg-black/65 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                                    Before
+                                  </span>
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="m-0 text-xs text-t2">No before photograph was captured for this finding.</p>
+                          )}
+                        </div>
+
                         <label className="grid gap-1.5">
                           <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Corrective & Preventive Action Plan</span>
                           <textarea
