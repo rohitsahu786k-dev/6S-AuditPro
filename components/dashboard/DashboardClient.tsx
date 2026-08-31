@@ -9,6 +9,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
 import { FindingListCard } from "@/components/dashboard/FindingListCard";
 import { COMPANY_NAME } from "@/lib/constants";
+import { scoreLabel } from "@/lib/audit-scoring";
 
 type Audit = {
   _id: string;
@@ -68,6 +69,10 @@ function trendDelta(values: Array<number | null>, index: number): number | null 
   if (current === null || previous === null) return null;
   const delta = current - previous;
   return delta === 0 ? null : delta;
+}
+
+function clampPercent(value: number) {
+  return Math.max(0, Math.min(100, value));
 }
 
 function MonthlyDepartmentTable({
@@ -150,6 +155,19 @@ export function DashboardClient() {
       .filter(([, count]) => count > 0)
       .map(([severity, count]) => ({ name: severity, value: count }));
   }, [findings]);
+
+  const overallAuditRating = useMemo(() => {
+    const completedAudits = audits.filter((audit) => audit.status === "COMPLETED");
+    const score = completedAudits.length
+      ? Math.round(completedAudits.reduce((sum, audit) => sum + (audit.totalScore || 0), 0) / completedAudits.length)
+      : 0;
+    return {
+      auditCount: completedAudits.length,
+      score,
+      rating: scoreLabel(score),
+      compliant: score >= COMPLIANCE_TARGET
+    };
+  }, [audits]);
 
   const departmentSummary = useMemo(() => {
     const map = new Map<string, { total: number; open: number; inProcess: number; closed: number; delayed: number; scoreSum: number; scoreCount: number }>();
@@ -272,6 +290,17 @@ export function DashboardClient() {
         ],
         sections: [
           {
+            title: "Overall 6S Rating - All Departments",
+            head: ["Audits", "Rating", "Score", "Target", "Status"],
+            rows: [[
+              overallAuditRating.auditCount,
+              `${overallAuditRating.rating.label} - ${overallAuditRating.rating.desc}`,
+              `${overallAuditRating.score}%`,
+              `>=${COMPLIANCE_TARGET}%`,
+              overallAuditRating.compliant ? "Compliant" : "Below Target"
+            ]]
+          },
+          {
             title: "Findings by Severity",
             head: ["Severity", "Count", "Share"],
             rows: [
@@ -356,6 +385,42 @@ export function DashboardClient() {
         <KpiCard label="Overdue" value={stats.overdue} caption="Past target due date" icon={AlertTriangle} iconColor="#9a3412" iconBg="#ffedd5" valueColor="#9a3412" />
         <KpiCard label="Critical Active" value={stats.criticalActive} caption="Open critical severity" icon={ShieldAlert} iconColor="#dc2626" iconBg="#fee2e2" valueColor="#dc2626" />
         <KpiCard label="Pending Review" value={stats.pendingReview} caption="CAPA submitted, awaiting review" icon={Eye} iconColor="#6d28d9" iconBg="#f3e8ff" valueColor="#6d28d9" />
+      </div>
+
+      <div className="mb-6 overflow-hidden rounded-[10px] border border-bd bg-bg1 shadow-[var(--shadow-sm)]">
+        <div className={`flex flex-col gap-4 border-l-4 p-4 sm:flex-row sm:items-center sm:justify-between ${overallAuditRating.compliant ? "border-green" : "border-brand-d"}`}>
+          <div>
+            <div className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Overall 6S Rating - All Departments</div>
+            <div className="mt-2 flex flex-wrap items-end gap-3">
+              <span className={`rounded-full border px-3 py-1 text-xs font-extrabold ${overallAuditRating.compliant ? "border-green-200 bg-green-50 text-green" : "border-orange-200 bg-orange-50 text-orange"}`}>
+                {overallAuditRating.rating.label} - {overallAuditRating.rating.desc}
+              </span>
+              <span className={`text-2xl font-extrabold ${overallAuditRating.compliant ? "text-green" : "text-brand-d"}`}>
+                {overallAuditRating.score}%
+              </span>
+            </div>
+            <div className="mt-2 text-xs text-t2">
+              Based on {overallAuditRating.auditCount} completed {overallAuditRating.auditCount === 1 ? "audit" : "audits"} | Target: &gt;={COMPLIANCE_TARGET}% for 6S compliance
+            </div>
+          </div>
+
+          <div className="flex w-full items-end justify-start sm:w-auto sm:justify-end">
+            <div className="relative h-20 w-32">
+              <div
+                aria-hidden="true"
+                className="absolute inset-x-0 bottom-0 h-16 rounded-t-full"
+                style={{
+                  background: `conic-gradient(from 270deg at 50% 100%, ${overallAuditRating.compliant ? "#22863a" : "#b91c1c"} 0deg ${clampPercent(overallAuditRating.score) * 1.8}deg, #e5e7eb ${clampPercent(overallAuditRating.score) * 1.8}deg 180deg, transparent 180deg 360deg)`
+                }}
+              />
+              <div className="absolute inset-x-3 bottom-0 h-12 rounded-t-full bg-bg1" />
+              <div className="absolute inset-x-0 bottom-1 text-center">
+                <div className="text-sm font-extrabold text-t1">{overallAuditRating.rating.label}</div>
+                <div className="text-[11px] font-bold text-t2">{overallAuditRating.score}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
