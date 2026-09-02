@@ -7,6 +7,9 @@ const ChecklistItemSchema = new Schema({
   response: { type: String, enum: ["Adequate", "Not Adequate", "N/A"] },
   observation: String,
   severity: { type: String, enum: ["Critical", "High", "Medium", "Low"] },
+  actionOwnerId: String,
+  actionOwnerName: String,
+  actionOwnerDepartment: String,
   beforePhotos: [{
     secureUrl: String,
     publicId: String,

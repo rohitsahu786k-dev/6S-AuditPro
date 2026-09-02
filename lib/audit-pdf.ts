@@ -19,6 +19,8 @@ export type AuditPdfData = {
     response: string;
     observation?: string;
     severity?: string;
+    actionOwnerName?: string;
+    actionOwnerDepartment?: string;
     beforePhotos?: AuditPdfPhoto[];
   }>;
 };
@@ -28,6 +30,7 @@ type PdfFinding = {
   findingNumber: string;
   auditId?: string;
   auditNumber?: string;
+  questionId?: string;
   category: string;
   question: string;
   severity?: string;
@@ -36,8 +39,16 @@ type PdfFinding = {
   capaAction?: string;
   closureRemarks?: string;
   zone?: string;
+  department?: string;
+  assignedTo?: string;
   beforePhotos?: AuditPdfPhoto[];
   afterPhotos?: AuditPdfPhoto[];
+};
+
+type PdfAuditSummary = {
+  _id?: string;
+  auditNumber: string;
+  department: string;
 };
 
 type MastersData = {
@@ -91,11 +102,6 @@ const STATUS_COLORS: Record<string, [number, number, number]> = {
   Reopened: ORANGE,
   Overdue: VIOLET
 };
-
-function categoryScoreValue(value: number | { score?: number } | undefined) {
-  if (value === undefined || value === null) return undefined;
-  return typeof value === "number" ? value : value.score ?? 0;
-}
 
 function ratingFor(score: number) {
   if (score >= 90) return { code: "6S", label: "Excellent" };
@@ -205,17 +211,44 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   ]);
 
   // Supporting data (best-effort — the report still renders if any call fails).
-  const [allFindings, masters, me] = await Promise.all([
+  const [allFindings, allAudits, masters, me] = await Promise.all([
     fetchApi<PdfFinding[]>("/api/findings?view=full"),
+    fetchApi<PdfAuditSummary[]>("/api/audits?view=summary"),
     fetchApi<MastersData>("/api/masters"),
     fetchApi<{ user?: { name?: string } | null }>("/api/auth/me")
   ]);
 
   const findingIdSet = new Set((audit.findingIds || []).map(String));
-  const auditFindings = (allFindings || []).filter((finding) =>
+  const isLinkedToSelectedAudit = (finding: PdfFinding) =>
     (audit._id && String(finding.auditId) === String(audit._id)) ||
     findingIdSet.has(String(finding._id)) ||
-    (finding.auditNumber && finding.auditNumber === audit.auditNumber)
+    (finding.auditNumber && finding.auditNumber === audit.auditNumber);
+  const linkedFindings = (allFindings || []).filter(isLinkedToSelectedAudit);
+  const sourceAuditDepartmentById = new Map((allAudits || []).map((item) => [String(item._id), item.department]));
+  const sourceAuditDepartmentByNumber = new Map((allAudits || []).map((item) => [item.auditNumber, item.department]));
+  const sourceDepartmentForFinding = (finding: PdfFinding) =>
+    (finding.auditId ? sourceAuditDepartmentById.get(String(finding.auditId)) : undefined) ||
+    (finding.auditNumber ? sourceAuditDepartmentByNumber.get(finding.auditNumber) : undefined);
+  const findingQuestionKey = (auditNumber: string, questionId: string | undefined, question: string) =>
+    questionId ? `${auditNumber}:id:${questionId}` : `${auditNumber}:text:${question}`;
+
+  const linkedFindingByQuestion = new Map(
+    linkedFindings
+      .filter((finding) => finding.question)
+      .map((finding) => [
+        findingQuestionKey(finding.auditNumber || audit.auditNumber, finding.questionId, finding.question),
+        finding
+      ])
+  );
+  const auditFindings = (allFindings || []).filter((finding) =>
+    (isLinkedToSelectedAudit(finding) && (finding.department || audit.department) === audit.department) ||
+    (
+      !isLinkedToSelectedAudit(finding) &&
+      Boolean(finding.auditId || finding.auditNumber) &&
+      finding.department === audit.department &&
+      Boolean(sourceDepartmentForFinding(finding)) &&
+      sourceDepartmentForFinding(finding) !== finding.department
+    )
   );
 
   const subSectionByQuestion = new Map<string, string>();
@@ -226,23 +259,47 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   const generatedBy = me?.user?.name || "System";
 
   // ----- Derived checklist statistics -----
+  const reportChecklist: AuditPdfData["checklist"] = [
+    ...audit.checklist.filter((item) => {
+      if (item.response !== "Not Adequate") return true;
+      const linkedFinding = linkedFindingByQuestion.get(findingQuestionKey(audit.auditNumber, item.questionId, item.question));
+      if (linkedFinding) return (linkedFinding.department || audit.department) === audit.department;
+      return !item.actionOwnerDepartment || item.actionOwnerDepartment === audit.department;
+    }),
+    ...auditFindings
+      .filter((finding) => !isLinkedToSelectedAudit(finding))
+      .map((finding) => ({
+        questionId: String(finding._id),
+        category: finding.category,
+        question: finding.question,
+        response: "Not Adequate",
+        observation: finding.observation,
+        severity: finding.severity || "Medium",
+        actionOwnerName: finding.assignedTo || finding.department || "",
+        actionOwnerDepartment: finding.department || "",
+        beforePhotos: finding.beforePhotos || []
+      }))
+  ];
+
   const orderedCategories = [
-    ...CATEGORIES.filter((category) => audit.checklist.some((item) => item.category === category)),
-    ...[...new Set(audit.checklist.map((item) => item.category))].filter((category) => !(CATEGORIES as readonly string[]).includes(category))
+    ...CATEGORIES.filter((category) => reportChecklist.some((item) => item.category === category)),
+    ...[...new Set(reportChecklist.map((item) => item.category))].filter((category) => !(CATEGORIES as readonly string[]).includes(category))
   ];
 
   const categoryStats = orderedCategories.map((category) => {
-    const items = audit.checklist.filter((item) => item.category === category);
+    const items = reportChecklist.filter((item) => item.category === category);
     const adequate = items.filter((item) => item.response === "Adequate").length;
     const notAdequate = items.filter((item) => item.response === "Not Adequate").length;
     const na = items.filter((item) => item.response === "N/A").length;
-    const stored = categoryScoreValue(audit.categoryScores?.[category]);
     const computed = adequate + notAdequate > 0 ? Math.round((adequate / (adequate + notAdequate)) * 100) : 100;
-    const score = stored ?? computed;
-    return { category, adequate, notAdequate, na, score };
+    return { category, adequate, notAdequate, na, score: computed };
   });
+  const countedCategoryStats = categoryStats.filter((stat) => stat.adequate + stat.notAdequate > 0);
+  const reportTotalScore = countedCategoryStats.length
+    ? Math.round(countedCategoryStats.reduce((sum, stat) => sum + stat.score, 0) / countedCategoryStats.length)
+    : 0;
 
-  const flaggedItems = audit.checklist.filter((item) => item.response === "Not Adequate");
+  const flaggedItems = reportChecklist.filter((item) => item.response === "Not Adequate");
   const severityOrder = ["Critical", "High", "Medium", "Low"];
   const severityCounts = severityOrder.map((severity) => ({
     severity,
@@ -251,7 +308,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   const totalFlagged = flaggedItems.length;
 
   // ----- Safety insight areas (grouped by question sub-section) -----
-  const safetyItems = audit.checklist.filter((item) => item.category === "SAFETY");
+  const safetyItems = reportChecklist.filter((item) => item.category === "SAFETY");
   const safetyAreaNames: string[] = [];
   for (const item of safetyItems) {
     const area = subSectionByQuestion.get(String(item.questionId || "")) || "General Safety";
@@ -283,17 +340,19 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
         severity: finding.severity || "Medium",
         zone: finding.zone || audit.zone,
         question: finding.question,
+        actionOwner: finding.assignedTo || finding.department || "",
         status: STATUS_LABELS[finding.status || ""] || finding.status || "Open",
         capa: finding.capaAction ? finding.capaAction : "Pending"
-      }))
+    }))
     : flaggedItems.map((item) => ({
         category: item.category,
         severity: item.severity || "Medium",
         zone: audit.zone,
         question: item.question,
+        actionOwner: item.actionOwnerName || item.actionOwnerDepartment || "",
         status: "Open",
         capa: "Pending"
-      }));
+    }));
 
   // ----- Before / after photo evidence cards -----
   type PhotoCard = {
@@ -336,7 +395,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
 
   // ----- Document -----
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const rating = ratingFor(audit.totalScore);
+  const rating = ratingFor(reportTotalScore);
   const dateLabel = formatDate(audit.date);
   const tableMargin = { top: 16, bottom: PAGE_H - BOTTOM_LIMIT, left: MARGIN, right: MARGIN };
   let y = 0;
@@ -376,20 +435,20 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   // ===== Score card + category bars + severity =====
   const topY = 36;
   const cardH = 58;
-  const band = scoreBandColor(audit.totalScore);
+  const band = scoreBandColor(reportTotalScore);
   doc.setFillColor(...band);
   doc.roundedRect(MARGIN, topY, 52, cardH, 2.5, 2.5, "F");
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(25);
-  doc.text(`${audit.totalScore}%`, MARGIN + 26, topY + 18, { align: "center" });
+  doc.text(`${reportTotalScore}%`, MARGIN + 26, topY + 18, { align: "center" });
   doc.setDrawColor(255, 255, 255);
   doc.setLineWidth(0.3);
   doc.line(MARGIN + 12, topY + 23, MARGIN + 40, topY + 23);
   doc.setFontSize(16);
   doc.text(rating.code, MARGIN + 26, topY + 33, { align: "center" });
   doc.setFontSize(7);
-  doc.text(audit.totalScore >= 90 ? "SATISFACTORY" : "NEEDS IMPROVEMENT", MARGIN + 26, topY + 43, { align: "center" });
+  doc.text(reportTotalScore >= 90 ? "SATISFACTORY" : "NEEDS IMPROVEMENT", MARGIN + 26, topY + 43, { align: "center" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.text("Target: 90%+", MARGIN + 26, topY + 51, { align: "center" });
@@ -583,7 +642,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
     ["Auditor:", audit.auditorName],
     ["Date:", dateLabel],
     ["Generated By:", generatedBy],
-    ["Total Score:", `${audit.totalScore}%`],
+    ["Total Score:", `${reportTotalScore}%`],
     ["6S Rating:", `${rating.code} (${rating.label})`]
   ];
   for (const [label, value] of infoRows) {
@@ -649,13 +708,14 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
     autoTable(doc, {
       startY: y,
       margin: tableMargin,
-      head: [["#", "Category", "Severity", "Zone", "Question", "Status", "Corrective Action"]],
+      head: [["#", "Category", "Severity", "Zone", "Question", "Action Owner", "Status", "Corrective Action"]],
       body: findingRows.map((row, index) => [
         String(index + 1),
         row.category,
         row.severity,
         row.zone,
         row.question,
+        row.actionOwner,
         row.status,
         row.capa
       ]),
@@ -667,9 +727,10 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
         0: { cellWidth: 7, halign: "center" },
         1: { cellWidth: 22 },
         2: { cellWidth: 16 },
-        3: { cellWidth: 24 },
-        5: { cellWidth: 17 },
-        6: { cellWidth: 28 }
+        3: { cellWidth: 20 },
+        5: { cellWidth: 24 },
+        6: { cellWidth: 17 },
+        7: { cellWidth: 24 }
       },
       didParseCell: (data) => {
         if (data.section !== "body") return;
@@ -679,7 +740,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
           data.cell.styles.textColor = SEVERITY_COLORS[row.severity] || GREY;
           data.cell.styles.fontStyle = "bold";
         }
-        if (data.column.index === 5) {
+        if (data.column.index === 6) {
           data.cell.styles.textColor = STATUS_COLORS[row.status] || GREY;
           data.cell.styles.fontStyle = "bold";
         }
@@ -791,16 +852,17 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   }
 
   // ===== Complete audit responses =====
-  sectionHeading(`Complete Audit Responses (All ${audit.checklist.length} Questions)`);
+  sectionHeading(`Complete Audit Responses (All ${reportChecklist.length} Questions)`);
   autoTable(doc, {
     startY: y,
     margin: tableMargin,
-    head: [["#", "Category", "Question", "Response", "Observation"]],
-    body: audit.checklist.map((item, index) => [
+    head: [["#", "Category", "Question", "Response", "Action Owner", "Observation"]],
+    body: reportChecklist.map((item, index) => [
       String(index + 1),
       item.category,
       item.question,
       item.response,
+      item.actionOwnerName || item.actionOwnerDepartment || "",
       item.observation || ""
     ]),
     theme: "grid",
@@ -811,11 +873,12 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
       0: { cellWidth: 7, halign: "center" },
       1: { cellWidth: 24 },
       3: { cellWidth: 20 },
-      4: { cellWidth: 52 }
+      4: { cellWidth: 28 },
+      5: { cellWidth: 34 }
     },
     didParseCell: (data) => {
       if (data.section !== "body") return;
-      const item = audit.checklist[data.row.index];
+      const item = reportChecklist[data.row.index];
       if (!item) return;
       if (data.column.index === 3) {
         data.cell.styles.fontStyle = "bold";

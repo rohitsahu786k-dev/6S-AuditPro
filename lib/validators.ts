@@ -64,6 +64,9 @@ export const auditSchema = z.object({
     response: z.enum(["Adequate", "Not Adequate", "N/A"]),
     observation: z.string().optional(),
     severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
+    actionOwnerId: z.string().trim().optional(),
+    actionOwnerName: z.string().trim().optional(),
+    actionOwnerDepartment: z.string().trim().optional(),
     beforePhotos: z.array(photoSchema).optional().default([])
   })).default([])
 });
@@ -71,6 +74,7 @@ export const auditSchema = z.object({
 export const findingUpdateSchema = z.object({
   severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
   observation: z.string().trim().optional(),
+  department: z.string().trim().optional(),
   assignedTo: z.string().trim().optional(),
   dueDate: z.coerce.date().optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"]).optional(),

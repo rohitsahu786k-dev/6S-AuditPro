@@ -28,6 +28,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     
     if (input.severity) finding.severity = input.severity;
     if (input.observation) finding.observation = input.observation;
+    if (input.department) finding.department = input.department;
     if (input.assignedTo) finding.assignedTo = input.assignedTo;
     if (input.dueDate) finding.dueDate = input.dueDate;
     if (input.status) finding.status = input.status;

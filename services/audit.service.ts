@@ -11,8 +11,8 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date totalScore status auditorName",
-  analytics: "auditNumber zone department auditorName date status totalScore categoryScores checklist.category checklist.response",
-  register: "auditNumber department zone date status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity"
+  analytics: "auditNumber zone department auditorName date status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerName checklist.actionOwnerDepartment",
+  register: "auditNumber department zone date status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
 export async function nextAuditNumber() {
@@ -44,6 +44,9 @@ export async function createAudit(input: {
     response: "Adequate" | "Not Adequate" | "N/A";
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
+    actionOwnerId?: string;
+    actionOwnerName?: string;
+    actionOwnerDepartment?: string;
     beforePhotos?: Array<{ secureUrl: string; publicId: string }>;
   }>;
 }, user: SessionUser) {
@@ -65,24 +68,28 @@ export async function createAudit(input: {
 
   const findings = await Finding.insertMany(input.checklist
     .filter((item) => item.response === "Not Adequate")
-    .map((item, index) => ({
-      findingNumber: `${audit.auditNumber}-F${String(index + 1).padStart(2, "0")}`,
-      auditId: audit._id,
-      auditNumber: audit.auditNumber,
-      zone: audit.zone,
-      department: audit.department,
-      questionId: item.questionId,
-      category: item.category,
-      question: item.question,
-      severity: item.severity || defaultSeverity(item.response, item.category),
-      observation: item.observation,
-      beforePhotos: item.beforePhotos || [],
-      assignedTo: audit.department,
-      dueDate: addWorkingDays(new Date(), 7),
-      status: "OPEN",
-      createdBy: user.id,
-      timeline: [{ action: "Finding created", note: "Created from audit checklist", by: user.id, byName: user.name }]
-    })));
+    .map((item, index) => {
+      const ownerDepartment = item.actionOwnerDepartment || audit.department;
+      const ownerName = item.actionOwnerName || ownerDepartment;
+      return {
+        findingNumber: `${audit.auditNumber}-F${String(index + 1).padStart(2, "0")}`,
+        auditId: audit._id,
+        auditNumber: audit.auditNumber,
+        zone: audit.zone,
+        department: ownerDepartment,
+        questionId: item.questionId,
+        category: item.category,
+        question: item.question,
+        severity: item.severity || defaultSeverity(item.response, item.category),
+        observation: item.observation,
+        beforePhotos: item.beforePhotos || [],
+        assignedTo: ownerName,
+        dueDate: addWorkingDays(new Date(), 7),
+        status: "OPEN",
+        createdBy: user.id,
+        timeline: [{ action: "Finding created", note: "Created from audit checklist", by: user.id, byName: user.name }]
+      };
+    }));
 
   audit.findingIds = findings.map((finding) => finding._id);
   await audit.save();

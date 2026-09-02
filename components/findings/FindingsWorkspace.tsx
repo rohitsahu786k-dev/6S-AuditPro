@@ -64,9 +64,17 @@ type SessionUser = {
 };
 
 type Masters = {
+  departments: Array<{ _id: string; name: string; isActive?: boolean }>;
   zones: Array<{ name: string; department: string }>; 
   questions: Array<{ _id: string; category: string; text: string; subSection: string }>;
-  people: Array<{ _id: string; name: string; type: string; department?: string }>;
+  people: Array<{ _id: string; name: string; type: string; department?: string; isActive?: boolean }>;
+};
+
+type ActionOwnerOption = {
+  key: string;
+  name: string;
+  department: string;
+  label: string;
 };
 
 const PAGE_SIZE = 20;
@@ -116,6 +124,7 @@ export function FindingsWorkspace() {
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editSeverity, setEditSeverity] = useState<"Critical" | "High" | "Medium" | "Low">("Medium");
   const [editDueDate, setEditDueDate] = useState("");
+  const [editAssignedDepartment, setEditAssignedDepartment] = useState("");
   const [editAssignedTo, setEditAssignedTo] = useState("");
 
   // Ad-hoc Finding form state
@@ -173,6 +182,58 @@ export function FindingsWorkspace() {
   const pageCount = Math.max(1, Math.ceil(filteredFindings.length / PAGE_SIZE));
   const pageRows = filteredFindings.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  const actionOwnerOptions = useMemo<ActionOwnerOption[]>(() => {
+    if (!masters.data) return [];
+    const options = new Map<string, ActionOwnerOption>();
+
+    for (const person of masters.data.people || []) {
+      if (person.type !== "RESPONSIBLE" || person.isActive === false) continue;
+      const department = person.department && person.department !== "All" ? person.department : selectedFinding?.department || "";
+      if (!department) continue;
+      const key = `person:${person._id}`;
+      options.set(key, {
+        key,
+        name: person.name,
+        department,
+        label: `${person.name} (${department})`
+      });
+    }
+
+    for (const department of masters.data.departments || []) {
+      if (department.isActive === false) continue;
+      const key = `department:${department.name}`;
+      options.set(key, {
+        key,
+        name: department.name,
+        department: department.name,
+        label: department.name
+      });
+    }
+
+    if (selectedFinding?.assignedTo || selectedFinding?.department) {
+      const assignedTo = selectedFinding.assignedTo || selectedFinding.department;
+      const department = selectedFinding.department;
+      const exists = [...options.values()].some((option) => option.name === assignedTo && option.department === department);
+      if (!exists) {
+        const key = `current:${assignedTo}:${department}`;
+        options.set(key, {
+          key,
+          name: assignedTo,
+          department,
+          label: `${assignedTo} (${department})`
+        });
+      }
+    }
+
+    return [...options.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [masters.data, selectedFinding?.assignedTo, selectedFinding?.department]);
+
+  const editActionOwnerKey = useMemo(() => {
+    return actionOwnerOptions.find((option) =>
+      option.name === editAssignedTo && option.department === editAssignedDepartment
+    )?.key || "";
+  }, [actionOwnerOptions, editAssignedDepartment, editAssignedTo]);
+
   useEffect(() => {
     setPage((current) => Math.min(current, pageCount));
   }, [pageCount]);
@@ -211,6 +272,7 @@ export function FindingsWorkspace() {
     setIsEditingMetadata(false);
     setEditSeverity(summaryFinding.severity);
     setEditDueDate(summaryFinding.dueDate ? new Date(summaryFinding.dueDate).toISOString().split("T")[0] : "");
+    setEditAssignedDepartment(summaryFinding.department || "");
     setEditAssignedTo(summaryFinding.assignedTo || summaryFinding.department || "");
     setIsLoadingDetails(true);
     try {
@@ -224,6 +286,7 @@ export function FindingsWorkspace() {
       setAfterPhotos(fullFinding.afterPhotos || []);
       setEditSeverity(fullFinding.severity);
       setEditDueDate(fullFinding.dueDate ? new Date(fullFinding.dueDate).toISOString().split("T")[0] : "");
+      setEditAssignedDepartment(fullFinding.department || "");
       setEditAssignedTo(fullFinding.assignedTo || fullFinding.department || "");
     } catch (err: any) {
       alert(`Unable to load finding details: ${err.message}`);
@@ -445,6 +508,7 @@ export function FindingsWorkspace() {
       const updated = await apiPatch<Finding>(`/api/findings/${selectedFinding._id}`, {
         severity: editSeverity,
         dueDate: editDueDate ? new Date(editDueDate) : undefined,
+        department: editAssignedDepartment || selectedFinding.department,
         assignedTo: editAssignedTo
       });
       setSelectedFinding(updated);
@@ -559,6 +623,9 @@ export function FindingsWorkspace() {
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                         <div>{f.department}</div>
                         <span className="text-[11px] text-t2">{f.zone}</span>
+                        {f.assignedTo && f.assignedTo !== f.department && (
+                          <div className="mt-0.5 text-[11px] font-semibold text-t2">Owner: {f.assignedTo}</div>
+                        )}
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                         <span
@@ -738,12 +805,31 @@ export function FindingsWorkspace() {
                           <input type="date" className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editDueDate} onChange={(e) => setEditDueDate(e.target.value)} />
                         </label>
                         <label className="grid gap-1.5">
-                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Assigned Responsbility</span>
-                          <input type="text" className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editAssignedTo} onChange={(e) => setEditAssignedTo(e.target.value)} />
+                          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Action Owner</span>
+                          <select
+                            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                            value={editActionOwnerKey}
+                            onChange={(e) => {
+                              const owner = actionOwnerOptions.find((option) => option.key === e.target.value);
+                              setEditAssignedTo(owner?.name || "");
+                              setEditAssignedDepartment(owner?.department || "");
+                            }}
+                          >
+                            <option value="">Select Action Owner...</option>
+                            {actionOwnerOptions.map((owner) => (
+                              <option key={owner.key} value={owner.key}>{owner.label}</option>
+                            ))}
+                          </select>
                         </label>
                         <div className="mt-[5px] flex justify-end gap-1.5">
                           <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-2 py-1 text-xs font-bold text-t1 hover:bg-bg3" onClick={() => setIsEditingMetadata(false)}>Cancel</button>
-                          <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-2 py-1 text-xs font-bold text-white hover:bg-brand-d" onClick={saveMetadataEdits}>Save</button>
+                          <button
+                            className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-2 py-1 text-xs font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-55"
+                            onClick={saveMetadataEdits}
+                            disabled={!editAssignedTo || !editAssignedDepartment}
+                          >
+                            Save
+                          </button>
                         </div>
                       </div>
                     ) : (

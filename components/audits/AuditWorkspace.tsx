@@ -27,9 +27,10 @@ import { scoreBadgeStyle, SEVERITY_BADGE_STYLES } from "@/lib/status-styles";
 import type { Severity } from "@/types/domain";
 
 type Masters = { 
+  departments: Array<{ _id: string; name: string; isActive?: boolean }>;
   zones: Array<{ name: string; department: string }>; 
   questions: Array<{ _id: string; category: string; text: string; subSection: string }>;
-  people: Array<{ _id: string; name: string; type: string; department?: string }>;
+  people: Array<{ _id: string; name: string; type: string; department?: string; isActive?: boolean }>;
 };
 
 type Audit = { 
@@ -47,6 +48,9 @@ type Audit = {
     response: "Adequate" | "Not Adequate" | "N/A";
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
+    actionOwnerId?: string;
+    actionOwnerName?: string;
+    actionOwnerDepartment?: string;
     beforePhotos?: Array<UploadedPhoto>;
   }>;
   // Stored either as a plain number or as the { adequate, total, score } shape from scoreChecklist()
@@ -65,6 +69,8 @@ type Finding = {
   category: string;
   severity: string;
   observation?: string;
+  assignedTo?: string;
+  department?: string;
 };
 
 type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
@@ -106,6 +112,9 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     response: "Adequate" | "Not Adequate" | "N/A";
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
+    actionOwnerId?: string;
+    actionOwnerName?: string;
+    actionOwnerDepartment?: string;
     beforePhotos?: Array<UploadedPhoto>;
   }>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
@@ -170,6 +179,48 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const auditors = useMemo(() => {
     return masters.data?.people.filter((p) => p.type === "AUDITOR") || [];
   }, [masters.data]);
+
+  const actionOwnerOptions = useMemo(() => {
+    if (!masters.data) return [];
+    const options = new Map<string, { id: string; name: string; department: string; label: string }>();
+
+    for (const person of masters.data.people) {
+      if (person.type !== "RESPONSIBLE" || person.isActive === false) continue;
+      const department = person.department && person.department !== "All" ? person.department : selectedZone?.department || "";
+      if (!department) continue;
+      const key = `person:${person._id}`;
+      options.set(key, {
+        id: person._id,
+        name: person.name,
+        department,
+        label: `${person.name} (${department})`
+      });
+    }
+
+    for (const department of masters.data.departments || []) {
+      if (department.isActive === false) continue;
+      const key = `department:${department.name}`;
+      if (!options.has(key)) {
+        options.set(key, {
+          id: key,
+          name: department.name,
+          department: department.name,
+          label: department.name
+        });
+      }
+    }
+
+    if (selectedZone?.department) {
+      options.set(`area:${selectedZone.department}`, {
+        id: `area:${selectedZone.department}`,
+        name: "Respective Area Owner",
+        department: selectedZone.department,
+        label: `Respective Area Owner (${selectedZone.department})`
+      });
+    }
+
+    return [...options.values()].sort((a, b) => a.label.localeCompare(b.label));
+  }, [masters.data, selectedZone?.department]);
 
   const historyDepartments = useMemo(
     () => [...new Set((audits.data || []).map((audit) => audit.department))].sort(),
@@ -332,6 +383,15 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       return;
     }
 
+    const missingActionOwners = masters.data.questions.filter((q) => {
+      const answer = checklistResponses[q._id];
+      return answer?.response === "Not Adequate" && !answer.actionOwnerName;
+    });
+    if (missingActionOwners.length > 0) {
+      alert(`Please assign an Action Owner for ${missingActionOwners.length} Not Adequate checkpoint${missingActionOwners.length === 1 ? "" : "s"} before submitting.`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const checklistPayload = masters.data.questions.map((q) => {
@@ -343,6 +403,9 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
           response: answer.response,
           observation: answer.response === "Not Adequate" ? answer.observation || "" : undefined,
           severity: answer.response === "Not Adequate" ? answer.severity || defaultSeverity(answer.response, q.category) : undefined,
+          actionOwnerId: answer.response === "Not Adequate" ? answer.actionOwnerId : undefined,
+          actionOwnerName: answer.response === "Not Adequate" ? answer.actionOwnerName : undefined,
+          actionOwnerDepartment: answer.response === "Not Adequate" ? answer.actionOwnerDepartment : undefined,
           beforePhotos: answer.response === "Not Adequate" ? answer.beforePhotos || [] : []
         };
       });
@@ -682,7 +745,10 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                                   ...prev[q._id],
                                   response: "Not Adequate",
                                   severity: defaultSev,
-                                  observation: prev[q._id]?.observation || ""
+                                  observation: prev[q._id]?.observation || "",
+                                  actionOwnerId: prev[q._id]?.actionOwnerId || "",
+                                  actionOwnerName: prev[q._id]?.actionOwnerName || "",
+                                  actionOwnerDepartment: prev[q._id]?.actionOwnerDepartment || ""
                                 }
                               }));
                             }}
@@ -741,6 +807,31 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                               <option value="High">High (Major standard breach)</option>
                               <option value="Medium">Medium (General standard deviation)</option>
                               <option value="Low">Low (Minor housekeeping issue)</option>
+                            </select>
+                          </label>
+
+                          <label className="mb-0 grid gap-1.5">
+                            <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Action Owner</span>
+                            <select
+                              className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                              value={state.actionOwnerId || ""}
+                              onChange={(e) => {
+                                const owner = actionOwnerOptions.find((option) => option.id === e.target.value);
+                                setChecklistResponses(prev => ({
+                                  ...prev,
+                                  [q._id]: {
+                                    ...prev[q._id],
+                                    actionOwnerId: owner?.id || "",
+                                    actionOwnerName: owner?.name || "",
+                                    actionOwnerDepartment: owner?.department || ""
+                                  }
+                                }));
+                              }}
+                            >
+                              <option value="">Select Action Owner...</option>
+                              {actionOwnerOptions.map((owner) => (
+                                <option key={owner.id} value={owner.id}>{owner.label}</option>
+                              ))}
                             </select>
                           </label>
 
@@ -857,7 +948,12 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                     const severityStyle = SEVERITY_BADGE_STYLES[f.severity as Severity] ?? SEVERITY_BADGE_STYLES.Low;
                     return (
                     <div key={f._id} className="flex justify-between rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-[13px]">
-                      <span><strong>{f.findingNumber}</strong>: {f.question}</span>
+                      <span>
+                        <strong>{f.findingNumber}</strong>: {f.question}
+                        {f.assignedTo && (
+                          <span className="ml-1 text-[11px] font-semibold text-t2">Owner: {f.assignedTo}</span>
+                        )}
+                      </span>
                       <span
                         className="inline-flex items-center rounded-full border px-1.5 py-px text-[10px] font-extrabold"
                         style={{ background: severityStyle.bg, color: severityStyle.text, borderColor: severityStyle.border }}
@@ -1013,6 +1109,12 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                         {item.observation && (
                           <div className="mt-1 text-xs text-red">
                             <strong>Observation:</strong> {item.observation}
+                          </div>
+                        )}
+                        {item.actionOwnerName && (
+                          <div className="mt-1 text-xs text-t2">
+                            <strong>Action Owner:</strong> {item.actionOwnerName}
+                            {item.actionOwnerDepartment ? ` (${item.actionOwnerDepartment})` : ""}
                           </div>
                         )}
                       </div>

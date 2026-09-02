@@ -8,9 +8,9 @@ export type FindingListView = "full" | "summary" | "register" | "media-selector"
 
 const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   full: null,
-  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos createdAt updatedAt",
+  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos assignedTo createdAt updatedAt",
   register: "auditId questionId status dueDate updatedAt",
-  "media-selector": "findingNumber question zone department category status beforePhotos afterPhotos"
+  "media-selector": "findingNumber question zone department category status assignedTo beforePhotos afterPhotos"
 };
 
 let lastOverdueRefreshAt = 0;
