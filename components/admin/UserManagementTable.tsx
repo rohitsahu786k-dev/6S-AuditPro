@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { KeyRound } from "lucide-react";
-import { apiPost, useApi } from "@/hooks/useApi";
+import { KeyRound, Pencil } from "lucide-react";
+import { apiPatch, apiPost, useApi } from "@/hooks/useApi";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,7 @@ type Masters = {
 };
 
 const EMPTY_FORM = { name: "", username: "", email: "", password: "", role: "AUDITOR" as Role, department: "" };
+const EMPTY_EDIT_FORM = { name: "", username: "", email: "", role: "AUDITOR" as Role, department: "", status: "active" };
 
 export function UserManagementTable() {
   const users = useApi<UserRow[]>("/api/users");
@@ -44,6 +45,10 @@ export function UserManagementTable() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [resetError, setResetError] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [editUser, setEditUser] = useState<UserRow | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
+  const [editError, setEditError] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const departments = useMemo(
     () => (masters.data?.departments || []).filter((department) => department.isActive !== false),
@@ -73,6 +78,43 @@ export function UserManagementTable() {
       await users.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to deactivate user.");
+    }
+  }
+
+  function openEditDialog(user: UserRow) {
+    setEditUser(user);
+    setEditForm({
+      name: user.name,
+      username: user.username,
+      email: user.email || "",
+      role: user.role,
+      department: user.department || "",
+      status: user.status
+    });
+    setEditError("");
+  }
+
+  function closeEditDialog() {
+    setEditUser(null);
+    setEditForm(EMPTY_EDIT_FORM);
+    setEditError("");
+  }
+
+  async function updateUser(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editUser) return;
+    setEditError("");
+    setMessage("");
+    setSavingEdit(true);
+    try {
+      await apiPatch(`/api/users/${editUser._id}`, editForm);
+      setMessage(`User details updated for ${editForm.name}.`);
+      closeEditDialog();
+      await users.reload();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Unable to update user.");
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -169,6 +211,12 @@ export function UserManagementTable() {
                       <div className="inline-flex gap-1.5">
                         <button
                           className="inline-flex items-center gap-1.5 rounded-lg border border-bd bg-white px-2.5 py-1.5 text-xs font-bold text-t1 hover:bg-bg3"
+                          onClick={() => openEditDialog(user)}
+                        >
+                          <Pencil size={13} /> Edit
+                        </button>
+                        <button
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-bd bg-white px-2.5 py-1.5 text-xs font-bold text-t1 hover:bg-bg3"
                           onClick={() => setResetUser(user)}
                         >
                           <KeyRound size={13} /> Reset Password
@@ -206,6 +254,62 @@ export function UserManagementTable() {
               <Button type="button" variant="outline" onClick={closeResetDialog}>Cancel</Button>
               <Button type="submit" disabled={resetting} className="bg-brand text-white hover:bg-brand-d">
                 {resetting ? "Resetting..." : "Reset Password"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(editUser)} onOpenChange={(open) => { if (!open) closeEditDialog(); }}>
+        <DialogContent className="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>Edit User Login Details</DialogTitle>
+            <DialogDescription>Update the account details used for signing in and user assignment.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={updateUser} className="grid gap-4">
+            {editError ? <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red">{editError}</div> : null}
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-user-name">Name</Label>
+              <Input id="edit-user-name" value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} required minLength={2} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-user-username">Username</Label>
+              <Input id="edit-user-username" value={editForm.username} onChange={(event) => setEditForm({ ...editForm, username: event.target.value })} required minLength={3} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-user-email">Email</Label>
+              <Input id="edit-user-email" type="email" value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-user-role">Role</Label>
+              <select id="edit-user-role" className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value as Role })}>
+                {(["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"] as Role[]).map((role) => <option key={role} value={role}>{role.replace(/_/g, " ")}</option>)}
+              </select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-user-department">Department</Label>
+              <select
+                id="edit-user-department"
+                className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={editForm.department}
+                onChange={(event) => setEditForm({ ...editForm, department: event.target.value })}
+                disabled={masters.loading}
+              >
+                <option value="">Not assigned / All departments</option>
+                {departments.map((department) => <option key={department._id} value={department.name}>{department.name}</option>)}
+              </select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="edit-user-status">Status</Label>
+              <select id="edit-user-status" className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={editForm.status} onChange={(event) => setEditForm({ ...editForm, status: event.target.value })}>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeEditDialog}>Cancel</Button>
+              <Button type="submit" disabled={savingEdit} className="bg-brand text-white hover:bg-brand-d">
+                {savingEdit ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>
