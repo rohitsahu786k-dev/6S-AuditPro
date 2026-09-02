@@ -129,7 +129,7 @@ export function FindingsWorkspace() {
 
   // Ad-hoc Finding form state
   const [isCreateFindingModalOpen, setIsCreateFindingModalOpen] = useState(false);
-  const [createCategory, setCreateCategory] = useState("Safety");
+  const [createCategory, setCreateCategory] = useState("SAFETY");
   const [createZone, setCreateZone] = useState("");
   const [createQuestion, setCreateQuestion] = useState("");
   const [createSeverity, setCreateSeverity] = useState<"Critical" | "High" | "Medium" | "Low">("Medium");
@@ -1131,13 +1131,13 @@ export function FindingsWorkspace() {
                     value={createCategory}
                     onChange={(e) => setCreateCategory(e.target.value)}
                   >
-                    <option value="Sort">Sort (Seiri)</option>
-                    <option value="Set in Order">Set in Order (Seiton)</option>
-                    <option value="Shine">Shine (Seiso)</option>
-                    <option value="Standardize">Standardize (Seiketsu)</option>
-                    <option value="Sustain">Sustain (Shitsuke)</option>
-                    <option value="Safety">Safety (Security)</option>
-                    <option value="Environment">Environment</option>
+                    <option value="SORT">Sort (Seiri)</option>
+                    <option value="SET IN ORDER">Set in Order (Seiton)</option>
+                    <option value="SHINE">Shine (Seiso)</option>
+                    <option value="STANDARDIZE">Standardize (Seiketsu)</option>
+                    <option value="SUSTAIN">Sustain (Shitsuke)</option>
+                    <option value="SAFETY">Safety</option>
+                    <option value="ENVIRONMENT">Environment</option>
                   </select>
                 </label>
 

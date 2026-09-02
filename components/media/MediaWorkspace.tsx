@@ -394,13 +394,13 @@ export function MediaWorkspace() {
             onChange={(e) => setPillarFilter(e.target.value)}
           >
             <option value="ALL">All 6S Pillars</option>
-            <option value="Sort">Sort (Seiri)</option>
-            <option value="Set in Order">Set in Order (Seiton)</option>
-            <option value="Shine">Shine (Seiso)</option>
-            <option value="Standardize">Standardize (Seiketsu)</option>
-            <option value="Sustain">Sustain (Shitsuke)</option>
-            <option value="Safety">Safety</option>
-            <option value="Environment">Environment</option>
+            <option value="SORT">Sort (Seiri)</option>
+            <option value="SET IN ORDER">Set in Order (Seiton)</option>
+            <option value="SHINE">Shine (Seiso)</option>
+            <option value="STANDARDIZE">Standardize (Seiketsu)</option>
+            <option value="SUSTAIN">Sustain (Shitsuke)</option>
+            <option value="SAFETY">Safety</option>
+            <option value="ENVIRONMENT">Environment</option>
           </select>
 
           {/* Workflow Phase / Type filter */}

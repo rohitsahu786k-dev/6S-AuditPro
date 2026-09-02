@@ -32,6 +32,8 @@ function matchesFinding(item: ChecklistItem, finding: {
 }
 
 async function syncLinkedAuditForFinding(finding: any) {
+  if (!finding.auditId && !finding.auditNumber) return;
+
   const audit = await Audit.findOne({
     $or: [
       ...(finding.auditId ? [{ _id: finding.auditId }] : []),

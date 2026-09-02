@@ -1,4 +1,4 @@
-const PRODUCTION_APP_URL = "https://6s-audit-pro.onepws.com";
+const PRODUCTION_APP_URL = "https://safeworkspace.onepws.com";
 
 export function getAppUrl() {
   const configuredUrl = process.env.APP_BASE_URL || process.env.AUTH_URL || process.env.NEXTAUTH_URL;

@@ -143,7 +143,7 @@ export function AnalyticsClient() {
       "4S": "Standardize (Seiketsu)",
       "5S": "Sustain (Shitsuke)",
       "6S": "Safety (Anzen)",
-      "7S": "Security (Bohan)"
+      "7S": "Environment"
     };
 
     const sums: Record<string, number> = {};
