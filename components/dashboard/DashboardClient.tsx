@@ -9,7 +9,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
 import { FindingListCard } from "@/components/dashboard/FindingListCard";
 import { COMPANY_NAME } from "@/lib/constants";
-import { scoreLabel } from "@/lib/audit-scoring";
+import { scoreChecklist, scoreLabel } from "@/lib/audit-scoring";
 
 type Audit = {
   _id: string;
@@ -20,6 +20,11 @@ type Audit = {
   totalScore: number;
   status: string;
   auditorName: string;
+  checklist?: Array<{
+    category: string;
+    response: "Adequate" | "Not Adequate" | "N/A";
+    actionOwnerDepartment?: string;
+  }>;
 };
 
 type Finding = {
@@ -33,6 +38,10 @@ type Finding = {
   dueDate?: string;
   createdAt?: string;
   updatedAt?: string;
+};
+
+type Masters = {
+  departments: Array<{ name: string; isActive?: boolean }>;
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -73,6 +82,27 @@ function trendDelta(values: Array<number | null>, index: number): number | null 
 
 function clampPercent(value: number) {
   return Math.max(0, Math.min(100, value));
+}
+
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function auditScoreForDepartment(audit: Audit, department: string): number | null {
+  const checklist = audit.checklist || [];
+  if (checklist.length === 0) return audit.department === department ? audit.totalScore || 0 : null;
+
+  const departmentChecklist = checklist.filter((item) => {
+    if (audit.department === department) {
+      if (item.response !== "Not Adequate") return true;
+      return !item.actionOwnerDepartment || item.actionOwnerDepartment === department;
+    }
+    return item.response === "Not Adequate" && item.actionOwnerDepartment === department;
+  });
+
+  const counted = departmentChecklist.filter((item) => item.response !== "N/A");
+  if (counted.length === 0) return null;
+  return scoreChecklist(departmentChecklist).totalScore;
 }
 
 function MonthlyDepartmentTable({
@@ -132,11 +162,23 @@ function MonthlyDepartmentTable({
 }
 
 export function DashboardClient() {
-  const auditsApi = useApi<Audit[]>("/api/audits?view=summary");
+  const auditsApi = useApi<Audit[]>("/api/audits?view=analytics");
   const findingsApi = useApi<Finding[]>("/api/findings?view=summary");
+  const mastersApi = useApi<Masters>("/api/masters");
 
   const audits = auditsApi.data || [];
   const findings = findingsApi.data || [];
+  const departments = useMemo(() => {
+    const masterDepartments = (mastersApi.data?.departments || [])
+      .filter((department) => department.isActive !== false)
+      .map((department) => department.name);
+    const auditDepartments = audits.flatMap((audit) => [
+      audit.department,
+      ...(audit.checklist || []).map((item) => item.actionOwnerDepartment || "")
+    ]);
+    const findingDepartments = findings.map((finding) => finding.department);
+    return uniqueSorted([...masterDepartments, ...auditDepartments, ...findingDepartments]);
+  }, [mastersApi.data, audits, findings]);
 
   const stats = useMemo(() => {
     const open = findings.filter((f) => f.status === "OPEN" || f.status === "REOPENED").length;
@@ -171,6 +213,9 @@ export function DashboardClient() {
 
   const departmentSummary = useMemo(() => {
     const map = new Map<string, { total: number; open: number; inProcess: number; closed: number; delayed: number; scoreSum: number; scoreCount: number }>();
+    for (const department of departments) {
+      map.set(department, { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 });
+    }
     for (const f of findings) {
       const row = map.get(f.department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
       row.total += 1;
@@ -182,14 +227,18 @@ export function DashboardClient() {
     }
     for (const a of audits) {
       if (a.status !== "COMPLETED") continue;
-      const row = map.get(a.department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
-      row.scoreSum += a.totalScore || 0;
-      row.scoreCount += 1;
-      map.set(a.department, row);
+      for (const department of departments) {
+        const score = auditScoreForDepartment(a, department);
+        if (score === null) continue;
+        const row = map.get(department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
+        row.scoreSum += score;
+        row.scoreCount += 1;
+        map.set(department, row);
+      }
     }
     return [...map.entries()]
       .map(([department, row]) => {
-        const auditScore = row.scoreCount ? Math.round(row.scoreSum / row.scoreCount) : 0;
+        const auditScore = row.scoreCount ? Math.round(row.scoreSum / row.scoreCount) : null;
         const closurePct = row.total ? Math.round((row.closed / row.total) * 100) : 0;
         return {
           department,
@@ -200,31 +249,33 @@ export function DashboardClient() {
           delayed: row.delayed,
           auditScore,
           closurePct,
-          compliant: auditScore >= COMPLIANCE_TARGET
+          hasAuditScore: auditScore !== null,
+          compliant: auditScore !== null && auditScore >= COMPLIANCE_TARGET
         };
       })
-      .sort((a, b) => b.total - a.total);
-  }, [findings, audits]);
+      .sort((a, b) => b.total - a.total || a.department.localeCompare(b.department));
+  }, [departments, findings, audits]);
 
   // Month-wise average audit score per department for the current calendar year.
   const monthlyAuditScore = useMemo(() => {
     const completed = audits.filter((a) => a.status === "COMPLETED");
-    const departments = [...new Set(completed.map((a) => a.department))].sort();
     return departments.map((department) => ({
       department,
       values: YEAR_MONTHS.map((month) => {
         if (month.isFuture) return null;
-        const monthAudits = completed.filter((audit) => audit.department === department && monthKeyOf(audit.date) === month.key);
-        return monthAudits.length
-          ? Math.round(monthAudits.reduce((sum, audit) => sum + (audit.totalScore || 0), 0) / monthAudits.length)
+        const monthScores = completed
+          .filter((audit) => monthKeyOf(audit.date) === month.key)
+          .map((audit) => auditScoreForDepartment(audit, department))
+          .filter((score): score is number => score !== null);
+        return monthScores.length
+          ? Math.round(monthScores.reduce((sum, score) => sum + score, 0) / monthScores.length)
           : null;
       })
     }));
-  }, [audits]);
+  }, [departments, audits]);
 
   // Cumulative month-end closure rate: findings closed by month-end / findings raised by month-end.
   const monthlyClosureTrend = useMemo(() => {
-    const departments = [...new Set(findings.map((f) => f.department))].sort();
     return departments.map((department) => ({
       department,
       values: YEAR_MONTHS.map((month) => {
@@ -239,7 +290,7 @@ export function DashboardClient() {
         return Math.round((closed / raised.length) * 100);
       })
     }));
-  }, [findings]);
+  }, [departments, findings]);
 
   // Month-wise raised vs closed findings across the plant
   const monthlyRaisedVsClosed = useMemo(() => {
@@ -321,8 +372,8 @@ export function DashboardClient() {
               row.open,
               row.closed,
               row.delayed,
-              `${row.auditScore}%`,
-              row.compliant ? "Compliant" : "Non-Compliant"
+              row.auditScore === null ? "-" : `${row.auditScore}%`,
+              row.auditScore === null ? "No Audit" : row.compliant ? "Compliant" : "Non-Compliant"
             ])
           },
           {
@@ -491,16 +542,18 @@ export function DashboardClient() {
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right text-red font-semibold">{row.open}</td>
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right text-green font-semibold">{row.closed}</td>
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right text-orange font-semibold">{row.delayed}</td>
-                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right font-semibold">{row.auditScore}%</td>
+                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right font-semibold">{row.auditScore === null ? "-" : `${row.auditScore}%`}</td>
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right">
                         <span
                           className={
-                            row.compliant
+                            row.auditScore === null
+                              ? "inline-flex items-center rounded-full border border-bd bg-bg3 px-2 py-0.5 text-[10px] font-extrabold text-t2"
+                              : row.compliant
                               ? "inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-extrabold text-green"
                               : "inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[10px] font-extrabold text-brand-d"
                           }
                         >
-                          {row.compliant ? "Compliant" : "Non-Compliant"}
+                          {row.auditScore === null ? "No Audit" : row.compliant ? "Compliant" : "Non-Compliant"}
                         </span>
                       </td>
                     </tr>
