@@ -1,8 +1,64 @@
 import { requireUser } from "@/lib/auth";
+import { scoreChecklist } from "@/lib/audit-scoring";
 import { findingUpdateSchema } from "@/lib/validators";
+import Audit from "@/models/Audit";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
 import { fail, ok, parseJson } from "@/utils/api";
+
+type ChecklistItem = {
+  questionId?: string;
+  category?: string;
+  question?: string;
+  response?: string;
+  observation?: string;
+  severity?: string;
+  actionOwnerName?: string;
+  actionOwnerDepartment?: string;
+  beforePhotos?: unknown[];
+};
+
+function sameValue(left?: unknown, right?: unknown) {
+  return String(left || "").trim() === String(right || "").trim();
+}
+
+function matchesFinding(item: ChecklistItem, finding: {
+  questionId?: unknown;
+  category?: unknown;
+  question?: unknown;
+}) {
+  if (item.questionId && finding.questionId) return sameValue(item.questionId, finding.questionId);
+  return sameValue(item.category, finding.category) && sameValue(item.question, finding.question);
+}
+
+async function syncLinkedAuditForFinding(finding: any) {
+  const audit = await Audit.findOne({
+    $or: [
+      ...(finding.auditId ? [{ _id: finding.auditId }] : []),
+      ...(finding.auditNumber ? [{ auditNumber: finding.auditNumber }] : [])
+    ]
+  });
+  if (!audit) return;
+
+  const item = (audit.checklist as ChecklistItem[]).find((entry) => matchesFinding(entry, finding));
+  if (item) {
+    item.observation = finding.observation;
+    item.severity = finding.severity;
+    item.actionOwnerName = finding.assignedTo || finding.department;
+    item.actionOwnerDepartment = finding.department;
+    item.beforePhotos = finding.beforePhotos || [];
+    audit.markModified("checklist");
+  }
+
+  const scoredChecklist = (audit.checklist as ChecklistItem[]).filter((entry) => {
+    if (entry.response !== "Not Adequate") return true;
+    return !entry.actionOwnerDepartment || entry.actionOwnerDepartment === audit.department;
+  });
+  const { categoryScores, totalScore } = scoreChecklist(scoredChecklist as any);
+  audit.categoryScores = categoryScores;
+  audit.totalScore = totalScore;
+  await audit.save();
+}
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -43,8 +99,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       at: new Date() 
     });
     
-    await finding.save();
-    return ok(finding);
+    const saved = await finding.save();
+    await syncLinkedAuditForFinding(saved);
+    return ok(saved);
   } catch (error) {
     return fail(error);
   }
