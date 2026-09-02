@@ -3,19 +3,25 @@
 import { useState } from "react";
 import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
+import { CATEGORIES, CATEGORY_META } from "@/lib/constants";
 
-type QuestionRow = { _id: string; category: string; text: string; subSection?: string; sortOrder: number; status: string };
+type QuestionRow = { _id: string; category: string; text: string; subSection?: string; sortOrder: number; isActive?: boolean; status?: string };
 type Masters = { questions: QuestionRow[] };
+
+function categoryLabel(category: string) {
+  const meta = CATEGORY_META[category as keyof typeof CATEGORY_META];
+  return meta ? `${meta.short} - ${category}` : category;
+}
 
 export function QuestionManagementTable() {
   const masters = useApi<Masters>("/api/masters");
-  const [form, setForm] = useState({ category: "1S", text: "", subSection: "", sortOrder: 0 });
+  const [form, setForm] = useState({ category: "SORT", text: "", subSection: "", sortOrder: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ category: "1S", text: "", subSection: "", sortOrder: 0, status: "active" });
+  const [editForm, setEditForm] = useState({ category: "SORT", text: "", subSection: "", sortOrder: 0, isActive: true });
   const [message, setMessage] = useState("");
 
   const questions = masters.data?.questions || [];
-  const categories = ["1S", "2S", "3S", "4S", "5S", "6S", "7S"];
+  const categories = CATEGORIES;
 
   async function createQuestion(event: React.FormEvent) {
     event.preventDefault();
@@ -26,7 +32,7 @@ export function QuestionManagementTable() {
     try {
       await apiPost("/api/masters/questions", form);
       setMessage("Question created successfully.");
-      setForm({ category: "1S", text: "", subSection: "", sortOrder: 0 });
+      setForm({ category: "SORT", text: "", subSection: "", sortOrder: 0 });
       await masters.reload();
     } catch (err: any) {
       alert(`Error creating question: ${err.message}`);
@@ -53,7 +59,7 @@ export function QuestionManagementTable() {
       text: q.text,
       subSection: q.subSection || "",
       sortOrder: q.sortOrder || 0,
-      status: q.status
+      isActive: q.isActive !== false && q.status !== "inactive"
     });
   }
 
@@ -83,7 +89,7 @@ export function QuestionManagementTable() {
             onChange={(e) => setForm({ ...form, category: e.target.value })}
           >
             {categories.map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
+              <option key={cat} value={cat}>{categoryLabel(cat)}</option>
             ))}
           </select>
         </label>
@@ -110,7 +116,7 @@ export function QuestionManagementTable() {
         </label>
 
         <label className="mb-3 grid gap-1.5">
-          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Sort Order (Weight)</span>
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Serial Number</span>
           <input
             type="number"
             className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
@@ -134,7 +140,7 @@ export function QuestionManagementTable() {
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Category</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Checklist Question</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Sub-Section</th>
-                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Order</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Serial Number</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                 <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Actions</th>
               </tr>
@@ -151,7 +157,7 @@ export function QuestionManagementTable() {
                           onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
                         >
                           {categories.map((cat) => (
-                            <option key={cat} value={cat}>{cat}</option>
+                            <option key={cat} value={cat}>{categoryLabel(cat)}</option>
                           ))}
                         </select>
                       </td>
@@ -181,8 +187,8 @@ export function QuestionManagementTable() {
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <select
                           className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
-                          value={editForm.status}
-                          onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
+                          value={editForm.isActive ? "active" : "inactive"}
+                          onChange={(e) => setEditForm({ ...editForm, isActive: e.target.value === "active" })}
                         >
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
@@ -199,13 +205,13 @@ export function QuestionManagementTable() {
                     </>
                   ) : (
                     <>
-                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top"><strong>{q.category}</strong></td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top"><strong>{categoryLabel(q.category)}</strong></td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.text}</td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.subSection || <span className="text-t2">—</span>}</td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.sortOrder}</td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
-                          {q.status}
+                          {q.isActive === false || q.status === "inactive" ? "inactive" : "active"}
                         </span>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 text-right align-top">
