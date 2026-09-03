@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { CalendarRange, RotateCcw } from "lucide-react";
 
 export function FindingsDateFilter() {
   const pathname = usePathname();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
 
@@ -46,7 +45,7 @@ export function FindingsDateFilter() {
     else params.delete("to");
 
     const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    window.location.assign(query ? `${pathname}?${query}` : pathname);
   }
 
   if (!portalTarget) return null;
