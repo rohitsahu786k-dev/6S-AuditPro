@@ -13,10 +13,6 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  // Dashboard department scoring is ownership-aware: adequate responses remain
-  // with the audited department while each non-conformity follows its current
-  // action-owner department. Keep these checklist fields in analytics output so
-  // Department Summary and Monthly Audit Score use the same live ownership data.
   analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerDepartment",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
@@ -40,9 +36,18 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
     Department.find().select("name").lean()
   ]);
   const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+
   return audits.map((audit) => ({
     ...audit,
-    department: canonicalDepartmentName(audit.department, configuredDepartments)
+    department: canonicalDepartmentName(audit.department, configuredDepartments),
+    checklist: Array.isArray(audit.checklist)
+      ? audit.checklist.map((item: any) => ({
+          ...item,
+          ...(item.actionOwnerDepartment
+            ? { actionOwnerDepartment: canonicalDepartmentName(item.actionOwnerDepartment, configuredDepartments) }
+            : {})
+        }))
+      : audit.checklist
   }));
 }
 
@@ -115,9 +120,7 @@ export async function createAudit(input: {
 
   try {
     const recipients = await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
-    if (user.email && !recipients.includes(user.email)) {
-      recipients.push(user.email);
-    }
+    if (user.email && !recipients.includes(user.email)) recipients.push(user.email);
     await sendTemplatedEmail({
       triggerEvent: "AUDIT_COMPLETED",
       recipients,
@@ -136,33 +139,31 @@ export async function createAudit(input: {
     console.error("Error sending audit completion email:", err);
   }
 
-  await Promise.all(
-    findings.map(async (finding) => {
-      try {
-        const spocRecipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
-        await sendTemplatedEmail({
-          triggerEvent: "FINDING_ASSIGNED",
-          recipients: spocRecipients,
-          data: {
-            recipientName: "Department SPOC",
-            findingNumber: finding.findingNumber,
-            auditNumber: audit.auditNumber,
-            departmentName: finding.department,
-            zoneName: finding.zone,
-            severity: finding.severity,
-            dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : "",
-            question: finding.question,
-            assignedTo: finding.assignedTo || finding.department,
-            auditorName: audit.auditorName
-          },
-          relatedAuditId: audit._id.toString(),
-          relatedFindingId: finding._id.toString()
-        });
-      } catch (err) {
-        console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err);
-      }
-    })
-  );
+  await Promise.all(findings.map(async (finding) => {
+    try {
+      const spocRecipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+      await sendTemplatedEmail({
+        triggerEvent: "FINDING_ASSIGNED",
+        recipients: spocRecipients,
+        data: {
+          recipientName: "Department SPOC",
+          findingNumber: finding.findingNumber,
+          auditNumber: audit.auditNumber,
+          departmentName: finding.department,
+          zoneName: finding.zone,
+          severity: finding.severity,
+          dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : "",
+          question: finding.question,
+          assignedTo: finding.assignedTo || finding.department,
+          auditorName: audit.auditorName
+        },
+        relatedAuditId: audit._id.toString(),
+        relatedFindingId: finding._id.toString()
+      });
+    } catch (err) {
+      console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err);
+    }
+  }));
 
   return { audit, findings };
 }
