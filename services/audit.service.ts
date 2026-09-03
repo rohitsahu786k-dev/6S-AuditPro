@@ -13,7 +13,9 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerName checklist.actionOwnerDepartment",
+  // Dashboard audit scores belong to the department that was actually audited.
+  // Action-owner department is finding/CAPA metadata and must not split/reassign an audit score.
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
@@ -109,8 +111,6 @@ export async function createAudit(input: {
   audit.findingIds = findings.map((finding) => finding._id);
   await audit.save();
 
-  // Send Audit Completed + Finding Assigned emails. Awaited (not fire-and-forget) so
-  // sends complete before the serverless function returns and freezes.
   try {
     const recipients = await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
     if (user.email && !recipients.includes(user.email)) {
