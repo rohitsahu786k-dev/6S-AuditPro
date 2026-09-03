@@ -16,7 +16,12 @@ export async function POST(request: Request) {
     await requireUser("masters:create");
     const input = await parseJson(request, zoneCreateSchema);
     await connectDB();
-    const zone = await Zone.create(input);
+    const zone = await Zone.create({
+      name: input.name,
+      department: input.department,
+      location: input.location,
+      isActive: input.status === "active"
+    });
     return ok(zone, { status: 201 });
   } catch (error) {
     return fail(error);

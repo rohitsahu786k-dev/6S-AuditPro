@@ -17,7 +17,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = await parseJson(request, zoneUpdateSchema);
     await connectDB();
-    const zone = await Zone.findByIdAndUpdate(id, { $set: input }, { new: true });
+    const update = {
+      ...(input.name !== undefined ? { name: input.name } : {}),
+      ...(input.department !== undefined ? { department: input.department } : {}),
+      ...(input.location !== undefined ? { location: input.location } : {}),
+      ...(input.status === undefined ? {} : { isActive: input.status === "active" })
+    };
+    const zone = await Zone.findByIdAndUpdate(id, { $set: update }, { new: true });
     if (!zone) throw Object.assign(new Error("Zone not found"), { status: 404 });
     return ok(zone);
   } catch (error) {
