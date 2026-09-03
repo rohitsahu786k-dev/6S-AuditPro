@@ -1,15 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { AlertTriangle, CheckCircle2, Eye, FileDown, FolderOpen, Loader2, Plus, ShieldAlert } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
-import { FolderOpen, Loader2, CheckCircle2, AlertTriangle, ShieldAlert, Eye, Plus, FileDown } from "lucide-react";
 import { downloadInsightsPdf } from "@/lib/insights-pdf";
-import { KpiCard } from "@/components/dashboard/KpiCard";
+import { scoreLabel } from "@/lib/audit-scoring";
+import { COMPANY_NAME } from "@/lib/constants";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
 import { FindingListCard } from "@/components/dashboard/FindingListCard";
-import { COMPANY_NAME } from "@/lib/constants";
-import { scoreChecklist, scoreLabel } from "@/lib/audit-scoring";
+import { KpiCard } from "@/components/dashboard/KpiCard";
 
 type Audit = {
   _id: string;
@@ -22,11 +22,6 @@ type Audit = {
   totalScore: number;
   status: string;
   auditorName: string;
-  checklist?: Array<{
-    category: string;
-    response: "Adequate" | "Not Adequate" | "N/A";
-    actionOwnerDepartment?: string;
-  }>;
 };
 
 type Finding = {
@@ -46,6 +41,21 @@ type Masters = {
   departments: Array<{ name: string; isActive?: boolean }>;
 };
 
+type MonthlyRow = {
+  department: string;
+  values: Array<number | null>;
+};
+
+type DepartmentState = {
+  total: number;
+  open: number;
+  inProcess: number;
+  closed: number;
+  delayed: number;
+  latestAuditScore: number | null;
+  latestAuditAt: number;
+};
+
 const SEVERITY_COLORS: Record<string, string> = {
   Critical: "#dc2626",
   High: "#f97316",
@@ -54,38 +64,56 @@ const SEVERITY_COLORS: Record<string, string> = {
 };
 
 const COMPLIANCE_TARGET = 90;
-
+const DASHBOARD_YEAR = new Date().getFullYear();
+const CURRENT_MONTH_INDEX = new Date().getMonth();
 const TH_CLASS = "bg-bg3 px-2 py-2 text-left text-xs font-bold uppercase tracking-wide text-t2";
 const TH_RIGHT_CLASS = "bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2";
 const TD_CLASS = "border-b border-[#edf0f4] px-2 py-2";
 
-const DASHBOARD_YEAR = new Date().getFullYear();
-const CURRENT_MONTH_INDEX = new Date().getMonth();
 const YEAR_MONTHS = Array.from({ length: 12 }, (_, index) => ({
   key: `${DASHBOARD_YEAR}-${String(index + 1).padStart(2, "0")}`,
   label: new Date(DASHBOARD_YEAR, index, 1).toLocaleString("en", { month: "short" }),
   end: new Date(DASHBOARD_YEAR, index + 1, 0, 23, 59, 59, 999),
-  // Future months carry no data yet and must render blank on the dashboard.
   isFuture: index > CURRENT_MONTH_INDEX
 }));
 
-function monthKeyOf(isoDate?: string) {
-  if (!isoDate) return "";
-  const date = new Date(isoDate);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+function newDepartmentState(): DepartmentState {
+  return {
+    total: 0,
+    open: 0,
+    inProcess: 0,
+    closed: 0,
+    delayed: 0,
+    latestAuditScore: null,
+    latestAuditAt: -1
+  };
 }
 
 function auditStartDate(audit: Audit) {
   return audit.startDate || audit.date || undefined;
 }
 
+function timestampOf(value?: string | null) {
+  if (!value) return -1;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? -1 : timestamp;
+}
+
+function monthKeyOf(value?: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function uniqueSorted(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
 function trendDelta(values: Array<number | null>, index: number): number | null {
-  if (index === 0) return null;
-  const current = values[index];
-  const previous = values[index - 1];
-  if (current === null || previous === null) return null;
-  const delta = current - previous;
+  if (index === 0 || values[index] === null || values[index - 1] === null) return null;
+  const delta = (values[index] as number) - (values[index - 1] as number);
   return delta === 0 ? null : delta;
 }
 
@@ -93,35 +121,12 @@ function clampPercent(value: number) {
   return Math.max(0, Math.min(100, value));
 }
 
-function uniqueSorted(values: string[]) {
-  return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-}
-
-function auditScoreForDepartment(audit: Audit, department: string): number | null {
-  const checklist = audit.checklist || [];
-  if (checklist.length === 0) return audit.department === department ? audit.totalScore || 0 : null;
-
-  const departmentChecklist = checklist.filter((item) => {
-    if (audit.department === department) {
-      if (item.response !== "Not Adequate") return true;
-      return !item.actionOwnerDepartment || item.actionOwnerDepartment === department;
-    }
-    return item.response === "Not Adequate" && item.actionOwnerDepartment === department;
-  });
-
-  const counted = departmentChecklist.filter((item) => item.response !== "N/A");
-  if (counted.length === 0) return null;
-  return scoreChecklist(departmentChecklist).totalScore;
-}
-
 function MonthlyDepartmentTable({
   rows,
-  valueSuffix = "",
   emptyMessage,
   showTrend = false
 }: {
-  rows: Array<{ department: string; values: Array<number | null> }>;
-  valueSuffix?: string;
+  rows: MonthlyRow[];
   emptyMessage: string;
   showTrend?: boolean;
 }) {
@@ -153,12 +158,12 @@ function MonthlyDepartmentTable({
                       value === null ? "text-t3" : value >= 80 ? "text-green" : value >= 50 ? "text-orange" : "text-red"
                     }`}
                   >
-                    {value === null ? "-" : `${value}${valueSuffix}`}
-                    {delta !== null && (
+                    {value === null ? "-" : `${value}%`}
+                    {delta !== null ? (
                       <span className={`ml-0.5 align-middle text-[9px] font-extrabold ${delta > 0 ? "text-green" : "text-red"}`}>
                         {delta > 0 ? "▲" : "▼"}{Math.abs(delta)}
                       </span>
-                    )}
+                    ) : null}
                   </td>
                 );
               })}
@@ -177,38 +182,61 @@ export function DashboardClient() {
 
   const audits = auditsApi.data || [];
   const findings = findingsApi.data || [];
+
+  useEffect(() => {
+    const reloadDashboard = () => {
+      void Promise.all([auditsApi.reload(), findingsApi.reload()]);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") reloadDashboard();
+    };
+
+    window.addEventListener("focus", reloadDashboard);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    const intervalId = window.setInterval(reloadDashboard, 30_000);
+
+    return () => {
+      window.removeEventListener("focus", reloadDashboard);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [auditsApi.reload, findingsApi.reload]);
+
   const departments = useMemo(() => {
     const masterDepartments = (mastersApi.data?.departments || [])
       .filter((department) => department.isActive !== false)
       .map((department) => department.name);
-    const auditDepartments = audits.flatMap((audit) => [
-      audit.department,
-      ...(audit.checklist || []).map((item) => item.actionOwnerDepartment || "")
+    return uniqueSorted([
+      ...masterDepartments,
+      ...audits.map((audit) => audit.department),
+      ...findings.map((finding) => finding.department)
     ]);
-    const findingDepartments = findings.map((finding) => finding.department);
-    return uniqueSorted([...masterDepartments, ...auditDepartments, ...findingDepartments]);
   }, [mastersApi.data, audits, findings]);
 
   const stats = useMemo(() => {
-    const open = findings.filter((f) => f.status === "OPEN" || f.status === "REOPENED").length;
-    const inProgress = findings.filter((f) => f.status === "IN_PROGRESS").length;
-    const closed = findings.filter((f) => f.status === "CLOSED").length;
-    const overdue = findings.filter((f) => f.status === "OVERDUE").length;
-    const criticalActive = findings.filter((f) => f.status !== "CLOSED" && f.severity === "Critical").length;
-    const pendingReview = findings.filter((f) => f.status === "SUBMITTED").length;
+    const open = findings.filter((finding) => finding.status === "OPEN" || finding.status === "REOPENED").length;
+    const inProgress = findings.filter((finding) => finding.status === "IN_PROGRESS").length;
+    const closed = findings.filter((finding) => finding.status === "CLOSED").length;
+    const overdue = findings.filter((finding) => finding.status === "OVERDUE").length;
+    const criticalActive = findings.filter((finding) => finding.status !== "CLOSED" && finding.severity === "Critical").length;
+    const pendingReview = findings.filter((finding) => finding.status === "SUBMITTED").length;
     return { open, inProgress, closed, overdue, criticalActive, pendingReview };
   }, [findings]);
 
   const severityBreakdown = useMemo(() => {
     const counts: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
-    for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
+    for (const finding of findings) counts[finding.severity] = (counts[finding.severity] || 0) + 1;
     return Object.entries(counts)
       .filter(([, count]) => count > 0)
       .map(([severity, count]) => ({ name: severity, value: count }));
   }, [findings]);
 
+  const completedAudits = useMemo(
+    () => audits.filter((audit) => audit.status === "COMPLETED"),
+    [audits]
+  );
+
   const overallAuditRating = useMemo(() => {
-    const completedAudits = audits.filter((audit) => audit.status === "COMPLETED");
     const score = completedAudits.length
       ? Math.round(completedAudits.reduce((sum, audit) => sum + (audit.totalScore || 0), 0) / completedAudits.length)
       : 0;
@@ -218,73 +246,63 @@ export function DashboardClient() {
       rating: scoreLabel(score),
       compliant: score >= COMPLIANCE_TARGET
     };
-  }, [audits]);
+  }, [completedAudits]);
 
   const departmentSummary = useMemo(() => {
-    const map = new Map<string, { total: number; open: number; inProcess: number; closed: number; delayed: number; scoreSum: number; scoreCount: number }>();
-    for (const department of departments) {
-      map.set(department, { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 });
-    }
-    for (const f of findings) {
-      const row = map.get(f.department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
-      row.total += 1;
-      if (f.status === "OPEN" || f.status === "REOPENED" || f.status === "OVERDUE" || f.status === "SUBMITTED") row.open += 1;
-      if (f.status === "IN_PROGRESS") row.inProcess += 1;
-      if (f.status === "CLOSED") row.closed += 1;
-      if (f.status === "OVERDUE") row.delayed += 1;
-      map.set(f.department, row);
-    }
-    for (const a of audits) {
-      if (a.status !== "COMPLETED") continue;
-      for (const department of departments) {
-        const score = auditScoreForDepartment(a, department);
-        if (score === null) continue;
-        const row = map.get(department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
-        row.scoreSum += score;
-        row.scoreCount += 1;
-        map.set(department, row);
-      }
-    }
-    return [...map.entries()]
-      .map(([department, row]) => {
-        const auditScore = row.scoreCount ? Math.round(row.scoreSum / row.scoreCount) : null;
-        const closurePct = row.total ? Math.round((row.closed / row.total) * 100) : 0;
-        return {
-          department,
-          total: row.total,
-          open: row.open,
-          inProcess: row.inProcess,
-          closed: row.closed,
-          delayed: row.delayed,
-          auditScore,
-          closurePct,
-          hasAuditScore: auditScore !== null,
-          compliant: auditScore !== null && auditScore >= COMPLIANCE_TARGET
-        };
-      })
-      .sort((a, b) => b.total - a.total || a.department.localeCompare(b.department));
-  }, [departments, findings, audits]);
+    const map = new Map<string, DepartmentState>();
+    for (const department of departments) map.set(department, newDepartmentState());
 
-  // Month-wise average audit score per department for the current calendar year.
-  const monthlyAuditScore = useMemo(() => {
-    const completed = audits.filter((a) => a.status === "COMPLETED");
+    for (const finding of findings) {
+      const row = map.get(finding.department) || newDepartmentState();
+      row.total += 1;
+      if (["OPEN", "REOPENED", "OVERDUE", "SUBMITTED"].includes(finding.status)) row.open += 1;
+      if (finding.status === "IN_PROGRESS") row.inProcess += 1;
+      if (finding.status === "CLOSED") row.closed += 1;
+      if (finding.status === "OVERDUE") row.delayed += 1;
+      map.set(finding.department, row);
+    }
+
+    for (const audit of completedAudits) {
+      const row = map.get(audit.department) || newDepartmentState();
+      const auditAt = timestampOf(auditStartDate(audit));
+      if (row.latestAuditScore === null || auditAt > row.latestAuditAt) {
+        row.latestAuditScore = audit.totalScore || 0;
+        row.latestAuditAt = auditAt;
+      }
+      map.set(audit.department, row);
+    }
+
+    return [...map.entries()]
+      .map(([department, row]) => ({
+        department,
+        total: row.total,
+        open: row.open,
+        inProcess: row.inProcess,
+        closed: row.closed,
+        delayed: row.delayed,
+        auditScore: row.latestAuditScore,
+        closurePct: row.total ? Math.round((row.closed / row.total) * 100) : 0,
+        compliant: row.latestAuditScore !== null && row.latestAuditScore >= COMPLIANCE_TARGET
+      }))
+      .sort((left, right) => right.total - left.total || left.department.localeCompare(right.department));
+  }, [departments, findings, completedAudits]);
+
+  const monthlyAuditScore = useMemo<MonthlyRow[]>(() => {
     return departments.map((department) => ({
       department,
       values: YEAR_MONTHS.map((month) => {
         if (month.isFuture) return null;
-        const monthScores = completed
-          .filter((audit) => monthKeyOf(auditStartDate(audit)) === month.key)
-          .map((audit) => auditScoreForDepartment(audit, department))
-          .filter((score): score is number => score !== null);
-        return monthScores.length
-          ? Math.round(monthScores.reduce((sum, score) => sum + score, 0) / monthScores.length)
+        const scores = completedAudits
+          .filter((audit) => audit.department === department && monthKeyOf(auditStartDate(audit)) === month.key)
+          .map((audit) => audit.totalScore || 0);
+        return scores.length
+          ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
           : null;
       })
     }));
-  }, [departments, audits]);
+  }, [departments, completedAudits]);
 
-  // Cumulative month-end closure rate: findings closed by month-end / findings raised by month-end.
-  const monthlyClosureTrend = useMemo(() => {
+  const monthlyClosureTrend = useMemo<MonthlyRow[]>(() => {
     return departments.map((department) => ({
       department,
       values: YEAR_MONTHS.map((month) => {
@@ -301,7 +319,6 @@ export function DashboardClient() {
     }));
   }, [departments, findings]);
 
-  // Month-wise raised vs closed findings across the plant
   const monthlyRaisedVsClosed = useMemo(() => {
     return YEAR_MONTHS.map((month) => ({
       month: month.label,
@@ -310,15 +327,19 @@ export function DashboardClient() {
     }));
   }, [findings]);
 
-  const recentAudits = useMemo(() => {
-    return [...audits].sort((a, b) => new Date(auditStartDate(b) || "").getTime() - new Date(auditStartDate(a) || "").getTime()).slice(0, 5);
-  }, [audits]);
+  const recentAudits = useMemo(
+    () => [...completedAudits]
+      .sort((left, right) => timestampOf(auditStartDate(right)) - timestampOf(auditStartDate(left)))
+      .slice(0, 5),
+    [completedAudits]
+  );
 
-  const urgentFindings = useMemo(() => {
-    return [...findings]
-      .filter((f) => f.status !== "CLOSED" && (f.severity === "Critical" || f.severity === "High" || f.status === "OVERDUE"))
-      .slice(0, 5);
-  }, [findings]);
+  const urgentFindings = useMemo(
+    () => findings
+      .filter((finding) => finding.status !== "CLOSED" && (finding.severity === "Critical" || finding.severity === "High" || finding.status === "OVERDUE"))
+      .slice(0, 5),
+    [findings]
+  );
 
   const [exportingPdf, setExportingPdf] = useState(false);
 
@@ -326,19 +347,18 @@ export function DashboardClient() {
     setExportingPdf(true);
     try {
       const monthHeads = YEAR_MONTHS.map((month) => month.label.toUpperCase());
-      const monthlyRowsWithTrend = (rows: Array<{ department: string; values: Array<number | null> }>, withTrend: boolean) =>
-        rows.map((row) => [
-          row.department,
-          ...row.values.map((value, index) => {
-            if (value === null) return "-";
-            const delta = withTrend ? trendDelta(row.values, index) : null;
-            return delta !== null ? `${value}% (${delta > 0 ? "+" : ""}${delta})` : `${value}%`;
-          })
-        ]);
+      const monthlyRows = (rows: MonthlyRow[], withTrend: boolean) => rows.map((row) => [
+        row.department,
+        ...row.values.map((value, index) => {
+          if (value === null) return "-";
+          const delta = withTrend ? trendDelta(row.values, index) : null;
+          return delta === null ? `${value}%` : `${value}% (${delta > 0 ? "+" : ""}${delta})`;
+        })
+      ]);
 
       await downloadInsightsPdf({
         title: "Operations Dashboard",
-        subtitle: `${COMPANY_NAME} — 6S Audit Control Centre`,
+        subtitle: `${COMPANY_NAME} - 6S Audit Control Centre`,
         fileName: `6S_Dashboard_Report_${new Date().toISOString().split("T")[0]}.pdf`,
         kpis: [
           { label: "Open Findings", value: stats.open },
@@ -374,7 +394,7 @@ export function DashboardClient() {
           },
           {
             title: "Department Summary",
-            head: ["Department", "Total", "Open", "Closed", "Delayed", "Score", "Status"],
+            head: ["Department", "Total", "Open", "Closed", "Delayed", "Latest Score", "Status"],
             rows: departmentSummary.map((row) => [
               row.department,
               row.total,
@@ -387,22 +407,22 @@ export function DashboardClient() {
           },
           {
             title: `Monthly Audit Score - ${DASHBOARD_YEAR}`,
-            note: "Monthly average score by department",
+            note: "Monthly average of completed audit scores by audited department",
             head: ["Department", ...monthHeads],
-            rows: monthlyRowsWithTrend(monthlyAuditScore, false)
+            rows: monthlyRows(monthlyAuditScore, false)
           },
           {
             title: `Monthly Closure Rate Trend - ${DASHBOARD_YEAR}`,
             note: "Closed till month-end / findings raised till month-end",
             head: ["Department", ...monthHeads],
-            rows: monthlyRowsWithTrend(monthlyClosureTrend, true)
+            rows: monthlyRows(monthlyClosureTrend, true)
           },
           {
             title: `Monthly Findings Raised vs Closed - ${DASHBOARD_YEAR}`,
             head: ["Metric", ...monthHeads],
             rows: [
-              ["Raised", ...monthlyRaisedVsClosed.map((month) => (month.raised === null ? "-" : month.raised))],
-              ["Closed", ...monthlyRaisedVsClosed.map((month) => (month.closed === null ? "-" : month.closed))]
+              ["Raised", ...monthlyRaisedVsClosed.map((month) => month.raised === null ? "-" : month.raised)],
+              ["Closed", ...monthlyRaisedVsClosed.map((month) => month.closed === null ? "-" : month.closed)]
             ]
           }
         ]
@@ -429,10 +449,7 @@ export function DashboardClient() {
           >
             <FileDown size={16} /> {exportingPdf ? "Creating PDF..." : "Export Dashboard PDF"}
           </button>
-          <Link
-            href="/audits"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(239,43,45,.22)] hover:bg-brand-d"
-          >
+          <Link href="/audits" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(239,43,45,.22)] hover:bg-brand-d">
             <Plus size={16} /> New 6S Audit
           </Link>
         </div>
@@ -455,23 +472,18 @@ export function DashboardClient() {
               <span className={`rounded-full border px-3 py-1 text-xs font-extrabold ${overallAuditRating.compliant ? "border-green-200 bg-green-50 text-green" : "border-orange-200 bg-orange-50 text-orange"}`}>
                 {overallAuditRating.rating.label} - {overallAuditRating.rating.desc}
               </span>
-              <span className={`text-2xl font-extrabold ${overallAuditRating.compliant ? "text-green" : "text-brand-d"}`}>
-                {overallAuditRating.score}%
-              </span>
+              <span className={`text-2xl font-extrabold ${overallAuditRating.compliant ? "text-green" : "text-brand-d"}`}>{overallAuditRating.score}%</span>
             </div>
             <div className="mt-2 text-xs text-t2">
               Based on {overallAuditRating.auditCount} completed {overallAuditRating.auditCount === 1 ? "audit" : "audits"} | Target: &gt;={COMPLIANCE_TARGET}% for 6S compliance
             </div>
           </div>
-
           <div className="flex w-full items-end justify-start sm:w-auto sm:justify-end">
             <div className="relative h-20 w-32">
               <div
                 aria-hidden="true"
                 className="absolute inset-x-0 bottom-0 h-16 rounded-t-full"
-                style={{
-                  background: `conic-gradient(from 270deg at 50% 100%, ${overallAuditRating.compliant ? "#22863a" : "#b91c1c"} 0deg ${clampPercent(overallAuditRating.score) * 1.8}deg, #e5e7eb ${clampPercent(overallAuditRating.score) * 1.8}deg 180deg, transparent 180deg 360deg)`
-                }}
+                style={{ background: `conic-gradient(from 270deg at 50% 100%, ${overallAuditRating.compliant ? "#22863a" : "#b91c1c"} 0deg ${clampPercent(overallAuditRating.score) * 1.8}deg, #e5e7eb ${clampPercent(overallAuditRating.score) * 1.8}deg 180deg, transparent 180deg 360deg)` }}
               />
               <div className="absolute inset-x-3 bottom-0 h-12 rounded-t-full bg-bg1" />
               <div className="absolute inset-x-0 bottom-1 text-center">
@@ -491,34 +503,16 @@ export function DashboardClient() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
-                <thead>
-                  <tr>
-                    <th className={TH_CLASS}>Severity</th>
-                    <th className={TH_RIGHT_CLASS}>Count</th>
-                    <th className={TH_RIGHT_CLASS}>Share</th>
-                  </tr>
-                </thead>
+                <thead><tr><th className={TH_CLASS}>Severity</th><th className={TH_RIGHT_CLASS}>Count</th><th className={TH_RIGHT_CLASS}>Share</th></tr></thead>
                 <tbody>
                   {severityBreakdown.map((entry) => (
                     <tr key={entry.name}>
-                      <td className={`${TD_CLASS} font-semibold text-t1`}>
-                        <span
-                          className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle"
-                          style={{ background: SEVERITY_COLORS[entry.name] || "#8896a5" }}
-                        />
-                        {entry.name}
-                      </td>
+                      <td className={`${TD_CLASS} font-semibold text-t1`}><span className="mr-2 inline-block h-2.5 w-2.5 rounded-full align-middle" style={{ background: SEVERITY_COLORS[entry.name] || "#8896a5" }} />{entry.name}</td>
                       <td className={`${TD_CLASS} text-right font-semibold`}>{entry.value}</td>
-                      <td className={`${TD_CLASS} text-right text-t2`}>
-                        {findings.length ? Math.round((entry.value / findings.length) * 100) : 0}%
-                      </td>
+                      <td className={`${TD_CLASS} text-right text-t2`}>{findings.length ? Math.round((entry.value / findings.length) * 100) : 0}%</td>
                     </tr>
                   ))}
-                  <tr>
-                    <td className={`${TD_CLASS} font-extrabold text-t1`}>Total</td>
-                    <td className={`${TD_CLASS} text-right font-extrabold text-t1`}>{findings.length}</td>
-                    <td className={`${TD_CLASS} text-right font-extrabold text-t1`}>100%</td>
-                  </tr>
+                  <tr><td className={`${TD_CLASS} font-extrabold text-t1`}>Total</td><td className={`${TD_CLASS} text-right font-extrabold text-t1`}>{findings.length}</td><td className={`${TD_CLASS} text-right font-extrabold text-t1`}>100%</td></tr>
                 </tbody>
               </table>
             </div>
@@ -526,7 +520,10 @@ export function DashboardClient() {
         </div>
 
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
-          <h3 className="mb-3 font-bold text-t1">Department Summary</h3>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h3 className="font-bold text-t1">Department Summary</h3>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Latest completed audit score</span>
+          </div>
           {departmentSummary.length === 0 ? (
             <div className="flex h-[220px] items-center justify-center text-sm text-t2">No department activity yet.</div>
           ) : (
@@ -539,7 +536,7 @@ export function DashboardClient() {
                     <th className="sticky top-0 bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2">Open</th>
                     <th className="sticky top-0 bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2">Closed</th>
                     <th className="sticky top-0 bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2">Delayed</th>
-                    <th className="sticky top-0 bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2">Score</th>
+                    <th className="sticky top-0 bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2">Latest Score</th>
                     <th className="sticky top-0 bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                   </tr>
                 </thead>
@@ -548,20 +545,12 @@ export function DashboardClient() {
                     <tr key={row.department}>
                       <td className="border-b border-[#edf0f4] px-2 py-2 font-semibold text-t1">{row.department}</td>
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right">{row.total}</td>
-                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right text-red font-semibold">{row.open}</td>
-                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right text-green font-semibold">{row.closed}</td>
-                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right text-orange font-semibold">{row.delayed}</td>
+                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right font-semibold text-red">{row.open}</td>
+                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right font-semibold text-green">{row.closed}</td>
+                      <td className="border-b border-[#edf0f4] px-2 py-2 text-right font-semibold text-orange">{row.delayed}</td>
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right font-semibold">{row.auditScore === null ? "-" : `${row.auditScore}%`}</td>
                       <td className="border-b border-[#edf0f4] px-2 py-2 text-right">
-                        <span
-                          className={
-                            row.auditScore === null
-                              ? "inline-flex items-center rounded-full border border-bd bg-bg3 px-2 py-0.5 text-[10px] font-extrabold text-t2"
-                              : row.compliant
-                              ? "inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-extrabold text-green"
-                              : "inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[10px] font-extrabold text-brand-d"
-                          }
-                        >
+                        <span className={row.auditScore === null ? "inline-flex items-center rounded-full border border-bd bg-bg3 px-2 py-0.5 text-[10px] font-extrabold text-t2" : row.compliant ? "inline-flex items-center rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-extrabold text-green" : "inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[10px] font-extrabold text-brand-d"}>
                           {row.auditScore === null ? "No Audit" : row.compliant ? "Compliant" : "Non-Compliant"}
                         </span>
                       </td>
@@ -578,9 +567,9 @@ export function DashboardClient() {
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold text-t1">Monthly Audit Score - {DASHBOARD_YEAR}</h3>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Monthly average score by department</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Monthly average score by audited department</span>
           </div>
-          <MonthlyDepartmentTable rows={monthlyAuditScore} valueSuffix="%" emptyMessage="No completed audits yet." />
+          <MonthlyDepartmentTable rows={monthlyAuditScore} emptyMessage="No completed audits yet." />
         </div>
 
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
@@ -588,36 +577,17 @@ export function DashboardClient() {
             <h3 className="font-bold text-t1">Monthly Closure Rate Trend - {DASHBOARD_YEAR}</h3>
             <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Closed till month-end / findings raised till month-end</span>
           </div>
-          <MonthlyDepartmentTable rows={monthlyClosureTrend} valueSuffix="%" emptyMessage="No findings recorded yet." showTrend />
+          <MonthlyDepartmentTable rows={monthlyClosureTrend} emptyMessage="No findings recorded yet." showTrend />
         </div>
 
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
           <h3 className="mb-3 font-bold text-t1">Monthly Findings Raised vs Closed - {DASHBOARD_YEAR}</h3>
           <div className="overflow-x-auto rounded-lg border border-bd">
             <table className="w-full min-w-[720px] border-collapse text-xs">
-              <thead>
-                <tr>
-                  <th className={TH_CLASS}>Metric</th>
-                  {YEAR_MONTHS.map((month) => <th key={month.key} className={TH_RIGHT_CLASS}>{month.label}</th>)}
-                </tr>
-              </thead>
+              <thead><tr><th className={TH_CLASS}>Metric</th>{YEAR_MONTHS.map((month) => <th key={month.key} className={TH_RIGHT_CLASS}>{month.label}</th>)}</tr></thead>
               <tbody>
-                <tr>
-                  <td className={`${TD_CLASS} font-bold text-t1`}>Raised</td>
-                  {monthlyRaisedVsClosed.map((month) => (
-                    <td key={month.month} className={`${TD_CLASS} text-right font-semibold ${month.raised === null ? "text-t3" : "text-red"}`}>
-                      {month.raised === null ? "-" : month.raised}
-                    </td>
-                  ))}
-                </tr>
-                <tr>
-                  <td className={`${TD_CLASS} font-bold text-t1`}>Closed</td>
-                  {monthlyRaisedVsClosed.map((month) => (
-                    <td key={month.month} className={`${TD_CLASS} text-right font-semibold ${month.closed === null ? "text-t3" : "text-green"}`}>
-                      {month.closed === null ? "-" : month.closed}
-                    </td>
-                  ))}
-                </tr>
+                <tr><td className={`${TD_CLASS} font-bold text-t1`}>Raised</td>{monthlyRaisedVsClosed.map((month) => <td key={month.month} className={`${TD_CLASS} text-right font-semibold ${month.raised === null ? "text-t3" : "text-red"}`}>{month.raised === null ? "-" : month.raised}</td>)}</tr>
+                <tr><td className={`${TD_CLASS} font-bold text-t1`}>Closed</td>{monthlyRaisedVsClosed.map((month) => <td key={month.month} className={`${TD_CLASS} text-right font-semibold ${month.closed === null ? "text-t3" : "text-green"}`}>{month.closed === null ? "-" : month.closed}</td>)}</tr>
               </tbody>
             </table>
           </div>
