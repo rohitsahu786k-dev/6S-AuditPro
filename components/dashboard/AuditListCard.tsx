@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Building, Calendar, ClipboardCheck } from "lucide-react";
 import { scoreBadgeStyle } from "@/lib/status-styles";
-import { scoreChecklist } from "@/lib/audit-scoring";
 
 type Audit = {
   _id: string;
@@ -12,11 +11,6 @@ type Audit = {
   startDate?: string | null;
   endDate?: string | null;
   totalScore: number;
-  checklist?: Array<{
-    category: string;
-    response: "Adequate" | "Not Adequate" | "N/A";
-    actionOwnerDepartment?: string;
-  }>;
 };
 
 function formatAuditDate(value?: string | null) {
@@ -27,20 +21,6 @@ function formatAuditDate(value?: string | null) {
 
 function auditStartDate(audit: Audit) {
   return audit.startDate || audit.date || null;
-}
-
-function currentAuditScore(audit: Audit) {
-  const checklist = audit.checklist || [];
-  if (checklist.length === 0) return audit.totalScore || 0;
-
-  const currentDepartmentChecklist = checklist.filter((item) => {
-    if (item.response !== "Not Adequate") return true;
-    return !item.actionOwnerDepartment || item.actionOwnerDepartment === audit.department;
-  });
-
-  const counted = currentDepartmentChecklist.filter((item) => item.response !== "N/A");
-  if (counted.length === 0) return 0;
-  return scoreChecklist(currentDepartmentChecklist).totalScore;
 }
 
 export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: boolean }) {
@@ -62,7 +42,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
         ) : (
           <div className="grid gap-2.5">
             {audits.map((audit) => {
-              const score = currentAuditScore(audit);
+              const score = audit.totalScore || 0;
               const badge = scoreBadgeStyle(score);
               return (
                 <div key={audit._id} className="flex items-center justify-between border-b border-[#f1f5f9] py-2.5 last:border-b-0">
@@ -81,7 +61,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
                   <span
                     className="rounded-full border px-2.5 py-0.5 text-xs font-bold"
                     style={{ background: badge.bg, color: badge.text, borderColor: badge.border }}
-                    title="Current score after action-owner assignments"
+                    title="Completed audit score"
                   >
                     {score}%
                   </span>
