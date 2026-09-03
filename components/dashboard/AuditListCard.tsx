@@ -8,8 +8,16 @@ type Audit = {
   department: string;
   zone: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   totalScore: number;
 };
+
+function formatAuditDate(value?: string | null) {
+  if (!value) return "\u2014";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "\u2014" : date.toLocaleDateString();
+}
 
 export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: boolean }) {
   return (
@@ -41,7 +49,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
                       </span>
                       <span>•</span>
                       <span className="flex items-center gap-1">
-                        <Calendar size={10} /> {new Date(audit.date).toLocaleDateString()}
+                        <Calendar size={10} /> {formatAuditDate(audit.startDate || audit.date)}
                       </span>
                     </div>
                   </div>

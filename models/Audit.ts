@@ -26,6 +26,8 @@ const AuditSchema = new Schema({
   auditor: { type: Schema.Types.ObjectId, ref: "User" },
   auditorName: { type: String, required: true },
   date: { type: Date, default: Date.now, index: true },
+  startDate: { type: Date, index: true },
+  endDate: { type: Date, default: null, index: true },
   status: { type: String, enum: ["DRAFT", "COMPLETED", "CANCELLED"], default: "COMPLETED", index: true },
   checklist: [ChecklistItemSchema],
   categoryScores: { type: Schema.Types.Mixed, default: {} },
@@ -35,6 +37,7 @@ const AuditSchema = new Schema({
 }, { timestamps: true });
 
 AuditSchema.index({ department: 1, date: -1 });
+AuditSchema.index({ department: 1, startDate: -1 });
 
 export type AuditDocument = InferSchemaType<typeof AuditSchema> & { _id: mongoose.Types.ObjectId };
 const Audit = (mongoose.models.Audit as Model<AuditDocument>) || mongoose.model<AuditDocument>("Audit", AuditSchema);
