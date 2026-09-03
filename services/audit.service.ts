@@ -13,10 +13,11 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  // Dashboard must use the exact stored score shown in Audit History. Checklist
-  // action-owner metadata is intentionally excluded so reassignment cannot alter
-  // or split a department's historical audit score.
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores",
+  // Dashboard department scoring is ownership-aware: adequate responses remain
+  // with the audited department while each non-conformity follows its current
+  // action-owner department. Keep these checklist fields in analytics output so
+  // Department Summary and Monthly Audit Score use the same live ownership data.
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerDepartment",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
