@@ -54,8 +54,9 @@ type Finding = {
   department: string;
   category: string;
   status: string;
-  beforePhotos: Array<{ secureUrl: string; publicId: string }>;
-  afterPhotos: Array<{ secureUrl: string; publicId: string }>;
+  // Absent on the picker list, which omits photos; present when one finding is fetched.
+  beforePhotos?: Array<{ secureUrl: string; publicId: string }>;
+  afterPhotos?: Array<{ secureUrl: string; publicId: string }>;
 };
 
 type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
@@ -282,9 +283,11 @@ export function MediaWorkspace() {
 
     setIsSavingAssociation(true);
     try {
-      // 1. Fetch current finding
-      const targetFinding = findingsApi.data?.find(f => f._id === selectedFindingId);
-      if (!targetFinding) throw new Error("Target finding not found");
+      // 1. Fetch current finding. The picker list omits photos, so read them here.
+      const findingResponse = await fetch(`/api/findings/${selectedFindingId}`, { cache: "no-store" });
+      const findingJson = await findingResponse.json();
+      if (!findingResponse.ok || !findingJson.ok) throw new Error(findingJson.error || "Target finding not found");
+      const targetFinding = findingJson.data as Finding;
 
       // 2. Append new photos to matching array
       const payload: any = {};

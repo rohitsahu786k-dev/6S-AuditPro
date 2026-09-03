@@ -43,7 +43,8 @@ type Audit = {
   date: string;
   startDate?: string | null;
   endDate?: string | null;
-  checklist: Array<{
+  // Absent on the history list, which omits the checklist to keep the response small.
+  checklist?: Array<{
     questionId: string;
     category: string;
     question: string;
@@ -56,9 +57,11 @@ type Audit = {
     beforePhotos?: Array<UploadedPhoto>;
   }>;
   // Stored either as a plain number or as the { adequate, total, score } shape from scoreChecklist()
-  categoryScores: Record<string, number | { adequate: number; total: number; score: number }>;
+  categoryScores?: Record<string, number | { adequate: number; total: number; score: number }>;
   findingIds?: string[];
 };
+
+type FullAudit = Audit & { checklist: NonNullable<Audit["checklist"]> };
 
 type CreateAuditResponse = {
   audit: Audit;
@@ -107,7 +110,7 @@ function auditStartDate(audit: Audit) {
 export function AuditWorkspace({ historyOnly = false, newOnly = false }: { historyOnly?: boolean; newOnly?: boolean }) {
   const router = useRouter();
   const masters = useApi<Masters>("/api/masters");
-  const audits = useApi<Audit[]>("/api/audits");
+  const audits = useApi<Audit[]>("/api/audits?view=summary");
   const meApi = useApi<{ user: any | null }>("/api/auth/me");
 
   const currentUser = meApi.data?.user;
@@ -151,6 +154,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   // Detail Modal State
   const [selectedAuditDetail, setSelectedAuditDetail] = useState<Audit | null>(null);
   const [downloadingAuditId, setDownloadingAuditId] = useState<string | null>(null);
+  const [isLoadingAuditDetail, setIsLoadingAuditDetail] = useState(false);
   const [isEditingAuditDates, setIsEditingAuditDates] = useState(false);
   const [editStartDate, setEditStartDate] = useState("");
   const [editEndDate, setEditEndDate] = useState("");
@@ -181,10 +185,19 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     }
   };
 
+  // The history list omits the checklist, so anything that needs it loads the audit in full.
+  async function fetchFullAudit(audit: Audit): Promise<FullAudit> {
+    if (audit.checklist) return audit as FullAudit;
+    const response = await fetch(`/api/audits/${audit._id}`, { cache: "no-store" });
+    const json = await response.json();
+    if (!response.ok || !json.ok) throw new Error(json.error || "Failed to load audit details");
+    return json.data as FullAudit;
+  }
+
   const handleDownloadPdf = async (audit: Audit) => {
     setDownloadingAuditId(audit._id);
     try {
-      await downloadAuditPdf(audit);
+      await downloadAuditPdf(await fetchFullAudit(audit));
     } catch (error) {
       alert(error instanceof Error ? `Unable to create PDF: ${error.message}` : "Unable to create PDF report.");
     } finally {
@@ -192,11 +205,21 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     }
   };
 
-  function openAuditDetail(audit: Audit) {
+  async function openAuditDetail(audit: Audit) {
     setSelectedAuditDetail(audit);
     setEditStartDate(dateInputValue(auditStartDate(audit)));
     setEditEndDate(dateInputValue(audit.endDate));
     setIsEditingAuditDates(false);
+    if (audit.checklist) return;
+
+    setIsLoadingAuditDetail(true);
+    try {
+      setSelectedAuditDetail(await fetchFullAudit(audit));
+    } catch (error) {
+      alert(error instanceof Error ? `Unable to load audit details: ${error.message}` : "Unable to load audit details.");
+    } finally {
+      setIsLoadingAuditDetail(false);
+    }
   }
 
   async function saveAuditDates() {
@@ -1260,7 +1283,12 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 Full Response checklist
               </h4>
               <div className="grid gap-2">
-                {selectedAuditDetail.checklist.map((item, idx) => (
+                {!selectedAuditDetail.checklist && (
+                  <div className="rounded-md border border-bd bg-bg3 p-3 text-sm text-t2">
+                    {isLoadingAuditDetail ? "Loading checklist..." : "Checklist unavailable."}
+                  </div>
+                )}
+                {(selectedAuditDetail.checklist || []).map((item, idx) => (
                   <div
                     key={item.questionId}
                     className={`rounded-md border p-3 ${

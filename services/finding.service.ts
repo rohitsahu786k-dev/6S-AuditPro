@@ -14,9 +14,13 @@ const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   full: null,
   // Timeline dates are included so reporting can use the actual CAPA closure date.
   // updatedAt changes when an owner/department is edited and must not rewrite closure history.
-  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos assignedTo createdAt updatedAt timeline.action timeline.at",
+  // Photos are deliberately excluded: legacy rows store images as base64 data URIs,
+  // which made this list ~25 MB. The detail view fetches the full finding instead.
+  summary: "findingNumber auditNumber zone department category question severity status dueDate observation assignedTo createdAt updatedAt timeline.action timeline.at",
   register: "auditId questionId status dueDate updatedAt",
-  "media-selector": "findingNumber question zone department category status assignedTo beforePhotos afterPhotos"
+  // Only identifies findings for the "attach media" picker. The photos themselves are
+  // fetched for the one selected finding, so this list stays small.
+  "media-selector": "findingNumber question zone department category status assignedTo"
 };
 
 type FindingDateRange = {
@@ -96,19 +100,62 @@ async function reconcileMissingAuditFindings() {
   if (now - lastFindingReconcileAt < FINDING_RECONCILE_INTERVAL_MS) return;
   lastFindingReconcileAt = now;
 
+  // checklist.beforePhotos is excluded here on purpose. Legacy photos are stored as
+  // base64 data URIs, so selecting them pulls ~16 MB across every audit. Restoring a
+  // finding is rare, so the photos for one audit are fetched only when it is needed.
   const audits = await Audit.find({ status: "COMPLETED" })
-    .select("_id auditNumber zone department auditorName date startDate checklist findingIds createdBy")
+    .select([
+      "_id auditNumber zone department auditorName date startDate findingIds createdBy",
+      "checklist.questionId checklist.category checklist.question checklist.response",
+      "checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
+    ].join(" "))
     .lean();
   if (audits.length === 0) return;
+
+  const allExisting = await Finding.find({
+    $or: [
+      { auditId: { $in: audits.map((audit) => audit._id) } },
+      { auditNumber: { $in: audits.map((audit) => audit.auditNumber) } }
+    ]
+  }).select("_id findingNumber auditId auditNumber questionId category question").lean();
+
+  const existingByAudit = new Map<string, any[]>();
+  for (const finding of allExisting) {
+    for (const key of [String(finding.auditId || ""), String(finding.auditNumber || "")]) {
+      if (!key) continue;
+      const bucket = existingByAudit.get(key);
+      if (bucket) bucket.push(finding);
+      else existingByAudit.set(key, [finding]);
+    }
+  }
 
   for (const audit of audits) {
     const checklist = (audit.checklist || []) as AuditChecklistItem[];
     const nonConformities = checklist.filter((item) => item.response === "Not Adequate");
     if (nonConformities.length === 0) continue;
 
-    const existing = await Finding.find({
-      $or: [{ auditId: audit._id }, { auditNumber: audit.auditNumber }]
-    }).select("_id findingNumber questionId category question").lean();
+    const existing = [
+      ...new Map(
+        [
+          ...(existingByAudit.get(String(audit._id)) || []),
+          ...(existingByAudit.get(String(audit.auditNumber)) || [])
+        ].map((finding) => [String(finding._id), finding])
+      ).values()
+    ];
+
+    const missing = nonConformities.filter(
+      (item) => !existing.some((finding) => isSameChecklistFinding(item, finding))
+    );
+    if (missing.length > 0) {
+      const withPhotos = await Audit.findById(audit._id).select("checklist.questionId checklist.beforePhotos").lean();
+      const photosByQuestion = new Map(
+        ((withPhotos?.checklist || []) as AuditChecklistItem[])
+          .map((item) => [String(item.questionId), item.beforePhotos || []])
+      );
+      for (const item of missing) {
+        item.beforePhotos = photosByQuestion.get(String(item.questionId)) || [];
+      }
+    }
 
     const usedNumbers = new Set(existing.map((finding) => finding.findingNumber).filter(Boolean));
     const linkedIds = new Set(existing.map((finding) => String(finding._id)));

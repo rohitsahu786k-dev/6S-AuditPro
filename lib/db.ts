@@ -18,10 +18,18 @@ export async function connectDB() {
   if (!cache.promise) {
     cache.promise = mongoose.connect(uri, {
       bufferCommands: false,
-      maxPoolSize: 10
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10_000
     });
   }
 
-  cache.conn = await cache.promise;
+  try {
+    cache.conn = await cache.promise;
+  } catch (error) {
+    // A rejected promise must not stay cached, otherwise every later request awaits
+    // the same failure and the app stays down until the process restarts.
+    cache.promise = null;
+    throw error;
+  }
   return cache.conn;
 }
