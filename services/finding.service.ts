@@ -10,7 +10,9 @@ export type FindingListView = "full" | "summary" | "register" | "media-selector"
 
 const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   full: null,
-  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos assignedTo createdAt updatedAt",
+  // Timeline dates are included so reporting can use the actual CAPA closure date.
+  // updatedAt changes when an owner/department is edited and must not rewrite closure history.
+  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos assignedTo createdAt updatedAt timeline.action timeline.at",
   register: "auditId questionId status dueDate updatedAt",
   "media-selector": "findingNumber question zone department category status assignedTo beforePhotos afterPhotos"
 };
@@ -37,6 +39,15 @@ function scopedQuery(user: SessionUser, dateRange?: FindingDateRange) {
   return query;
 }
 
+function closureDateOf(finding: any) {
+  if (finding.status !== "CLOSED" || !Array.isArray(finding.timeline)) return undefined;
+  const closure = [...finding.timeline].reverse().find((entry: any) => {
+    const action = String(entry?.action || "").toLowerCase();
+    return action.includes("approve") || action.includes("closed");
+  });
+  return closure?.at;
+}
+
 async function refreshOverdueStatuses() {
   const now = Date.now();
   if (now - lastOverdueRefreshAt < OVERDUE_REFRESH_INTERVAL_MS) return;
@@ -58,10 +69,16 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
     Department.find().select("name").lean()
   ]);
   const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
-  return findings.map((finding) => ({
-    ...finding,
-    department: canonicalDepartmentName(finding.department, configuredDepartments)
-  }));
+  return findings.map((finding) => {
+    const closureDate = view === "summary" ? closureDateOf(finding) : undefined;
+    return {
+      ...finding,
+      department: canonicalDepartmentName(finding.department, configuredDepartments),
+      // Dashboard uses updatedAt as the closed timestamp. Preserve the true closure
+      // timestamp even if action owner/department is edited after closure.
+      ...(closureDate ? { updatedAt: closureDate } : {})
+    };
+  });
 }
 
 /**
@@ -89,8 +106,8 @@ export async function notifyOverdueFindings() {
           recipientName: "Manager / HOD",
           findingNumber: finding.findingNumber,
           auditNumber: finding.auditNumber || "",
-          zoneName: finding.zone,
           departmentName: finding.department,
+          zoneName: finding.zone,
           severity: finding.severity,
           dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : ""
         },
