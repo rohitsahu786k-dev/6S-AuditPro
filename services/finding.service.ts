@@ -15,11 +15,26 @@ const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   "media-selector": "findingNumber question zone department category status assignedTo beforePhotos afterPhotos"
 };
 
+type FindingDateRange = {
+  fromDate?: Date;
+  toDate?: Date;
+};
+
 let lastOverdueRefreshAt = 0;
 const OVERDUE_REFRESH_INTERVAL_MS = 60_000;
 
-function scopedQuery(user: SessionUser) {
-  return user.role === "SPOC" && user.department ? { department: user.department } : {};
+function scopedQuery(user: SessionUser, dateRange?: FindingDateRange) {
+  const query: Record<string, unknown> = {};
+  if (user.role === "SPOC" && user.department) query.department = user.department;
+
+  if (dateRange?.fromDate || dateRange?.toDate) {
+    const createdAt: Record<string, Date> = {};
+    if (dateRange.fromDate) createdAt.$gte = dateRange.fromDate;
+    if (dateRange.toDate) createdAt.$lte = dateRange.toDate;
+    query.createdAt = createdAt;
+  }
+
+  return query;
 }
 
 async function refreshOverdueStatuses() {
@@ -32,11 +47,11 @@ async function refreshOverdueStatuses() {
   );
 }
 
-export async function listFindings(user: SessionUser, view: FindingListView = "full") {
+export async function listFindings(user: SessionUser, view: FindingListView = "full", dateRange?: FindingDateRange) {
   await connectDB();
   await refreshOverdueStatuses();
   const projection = FINDING_PROJECTIONS[view] ?? FINDING_PROJECTIONS.full;
-  const request = Finding.find(scopedQuery(user)).sort({ createdAt: -1 });
+  const request = Finding.find(scopedQuery(user, dateRange)).sort({ createdAt: -1 });
   if (projection) request.select(projection);
   const [findings, departments] = await Promise.all([
     request.lean(),
@@ -106,8 +121,6 @@ export async function submitCapa(id: string, input: { capaAction: string; closur
   
   const saved = await finding.save();
 
-  // Send CAPA Submitted Email. Awaited so the send completes before the
-  // serverless function returns and freezes.
   try {
     const recipients = await resolveRecipients({ roles: ["MASTER_ADMIN", "ADMIN", "AUDITOR"] });
     await sendTemplatedEmail({
@@ -161,8 +174,6 @@ export async function reviewCapa(id: string, input: { decision: "approve" | "rej
   finding.timeline.push({ action: `CAPA ${input.decision}`, note: input.remarks || input.rejectionReason, by: user.id, byName: user.name, at: new Date() });
   const saved = await finding.save();
 
-  // Send review outcome email. Awaited so the send completes before the
-  // serverless function returns and freezes.
   const rolesToNotify = input.decision === "approve"
     ? ["SPOC", "ADMIN", "MASTER_ADMIN", "AUDITOR", "MANAGEMENT"]
     : ["SPOC", "ADMIN", "MASTER_ADMIN"];
