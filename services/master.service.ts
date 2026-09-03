@@ -28,13 +28,6 @@ function normalizeQuestionCategory<T extends { category?: string }>(question: T)
   };
 }
 
-function withStatus<T extends { isActive?: boolean }>(item: T) {
-  return {
-    ...item,
-    status: item.isActive === false ? "inactive" : "active"
-  };
-}
-
 export async function getMasters() {
   await connectDB();
   const [departments, zones, questions, people] = await Promise.all([
