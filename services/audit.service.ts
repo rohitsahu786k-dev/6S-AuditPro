@@ -13,8 +13,6 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  // Audit scores belong to the department that was audited. CAPA/action-owner
-  // reassignment must not redistribute or recalculate a completed audit score.
   analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
@@ -29,7 +27,23 @@ export async function nextAuditNumber() {
 
 export async function listAudits(user: SessionUser, view: AuditListView = "full") {
   await connectDB();
-  const query = user.role === "SPOC" && user.department ? { department: user.department } : {};
+  const query: Record<string, unknown> = user.role === "SPOC" && user.department ? { department: user.department } : {};
+
+  // Dashboard analytics is year-specific (Monthly Audit Score - YYYY), so keep
+  // Department Summary, Overall Rating, Monthly Audit Score and Recent Audits on
+  // the same current-year audit dataset. This prevents historical audits from
+  // changing the current dashboard score while the monthly table shows only this year.
+  if (view === "analytics") {
+    const year = new Date().getFullYear();
+    const from = new Date(year, 0, 1, 0, 0, 0, 0);
+    const to = new Date(year + 1, 0, 1, 0, 0, 0, 0);
+    query.$or = [
+      { startDate: { $gte: from, $lt: to } },
+      { startDate: { $exists: false }, date: { $gte: from, $lt: to } },
+      { startDate: null, date: { $gte: from, $lt: to } }
+    ];
+  }
+
   const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;
   const request = Audit.find(query).sort({ startDate: -1, date: -1 });
   if (projection) request.select(projection);
