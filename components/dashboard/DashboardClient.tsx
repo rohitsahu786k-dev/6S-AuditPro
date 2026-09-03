@@ -17,6 +17,8 @@ type Audit = {
   department: string;
   zone: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   totalScore: number;
   status: string;
   auditorName: string;
@@ -69,6 +71,10 @@ const YEAR_MONTHS = Array.from({ length: 12 }, (_, index) => ({
 
 function monthKeyOf(isoDate?: string) {
   return isoDate ? isoDate.slice(0, 7) : "";
+}
+
+function auditStartDate(audit: Audit) {
+  return audit.startDate || audit.date || undefined;
 }
 
 function trendDelta(values: Array<number | null>, index: number): number | null {
@@ -264,7 +270,7 @@ export function DashboardClient() {
       values: YEAR_MONTHS.map((month) => {
         if (month.isFuture) return null;
         const monthScores = completed
-          .filter((audit) => monthKeyOf(audit.date) === month.key)
+          .filter((audit) => monthKeyOf(auditStartDate(audit)) === month.key)
           .map((audit) => auditScoreForDepartment(audit, department))
           .filter((score): score is number => score !== null);
         return monthScores.length
@@ -302,7 +308,7 @@ export function DashboardClient() {
   }, [findings]);
 
   const recentAudits = useMemo(() => {
-    return [...audits].sort((a, b) => new Date(b.date || "").getTime() - new Date(a.date || "").getTime()).slice(0, 5);
+    return [...audits].sort((a, b) => new Date(auditStartDate(b) || "").getTime() - new Date(auditStartDate(a) || "").getTime()).slice(0, 5);
   }, [audits]);
 
   const urgentFindings = useMemo(() => {

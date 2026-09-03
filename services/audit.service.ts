@@ -10,9 +10,9 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
-  summary: "auditNumber department zone date totalScore status auditorName",
-  analytics: "auditNumber zone department auditorName date status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerName checklist.actionOwnerDepartment",
-  register: "auditNumber department zone date status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
+  summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerName checklist.actionOwnerDepartment",
+  register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
 export async function nextAuditNumber() {
@@ -27,7 +27,7 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
   await connectDB();
   const query = user.role === "SPOC" && user.department ? { department: user.department } : {};
   const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;
-  const request = Audit.find(query).sort({ date: -1 });
+  const request = Audit.find(query).sort({ startDate: -1, date: -1 });
   if (projection) request.select(projection);
   return request.lean();
 }
@@ -37,6 +37,8 @@ export async function createAudit(input: {
   department: string;
   auditorName: string;
   date?: Date;
+  startDate?: Date;
+  endDate?: Date;
   checklist: Array<{
     questionId: string;
     category: string;
@@ -52,13 +54,16 @@ export async function createAudit(input: {
 }, user: SessionUser) {
   await connectDB();
   const { categoryScores, totalScore } = scoreChecklist(input.checklist);
+  const startDate = input.startDate || input.date || new Date();
   const audit = await Audit.create({
     auditNumber: await nextAuditNumber(),
     zone: input.zone,
     department: input.department,
     auditorName: input.auditorName,
     auditor: user.id,
-    date: input.date || new Date(),
+    date: startDate,
+    startDate,
+    endDate: input.endDate,
     status: "COMPLETED",
     checklist: input.checklist,
     categoryScores,

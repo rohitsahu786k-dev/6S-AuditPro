@@ -52,11 +52,18 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8).max(200)
 });
 
+const optionalDateSchema = z.preprocess(
+  (value) => value === "" || value === null ? undefined : value,
+  z.coerce.date().optional()
+);
+
 export const auditSchema = z.object({
   zone: z.string().trim().min(1),
   department: z.string().trim().min(1),
   auditorName: z.string().trim().min(1),
-  date: z.coerce.date().optional(),
+  date: optionalDateSchema,
+  startDate: optionalDateSchema,
+  endDate: optionalDateSchema,
   checklist: z.array(z.object({
     questionId: z.string(),
     category: z.string(),
@@ -69,6 +76,27 @@ export const auditSchema = z.object({
     actionOwnerDepartment: z.string().trim().optional(),
     beforePhotos: z.array(photoSchema).optional().default([])
   })).default([])
+}).refine((input) => input.startDate || input.date, {
+  message: "Starting Date is required.",
+  path: ["startDate"]
+}).refine((input) => {
+  const startDate = input.startDate || input.date;
+  return !startDate || !input.endDate || input.endDate >= startDate;
+}, {
+  message: "Ending Date cannot be earlier than Starting Date.",
+  path: ["endDate"]
+});
+
+export const auditUpdateSchema = z.object({
+  date: optionalDateSchema,
+  startDate: optionalDateSchema,
+  endDate: optionalDateSchema
+}).refine((input) => {
+  const startDate = input.startDate || input.date;
+  return !startDate || !input.endDate || input.endDate >= startDate;
+}, {
+  message: "Ending Date cannot be earlier than Starting Date.",
+  path: ["endDate"]
 });
 
 export const findingUpdateSchema = z.object({

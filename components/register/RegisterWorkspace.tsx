@@ -20,6 +20,8 @@ type Audit = {
   department: string;
   zone: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   status: string;
   checklist: ChecklistItem[];
 };
@@ -37,6 +39,8 @@ type RegisterRow = {
   key: string;
   auditNumber: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   department: string;
   zone: string;
   category: string;
@@ -76,6 +80,12 @@ function statusClass(status: string) {
   return "border-red-200 bg-accent text-brand-d";
 }
 
+function formatRegisterDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
+}
+
 export function RegisterWorkspace() {
   const auditsApi = useApi<Audit[]>("/api/audits?view=register");
   const findingsApi = useApi<Finding[]>("/api/findings?view=register");
@@ -102,6 +112,8 @@ export function RegisterWorkspace() {
           key: `${audit._id}-${item.questionId}`,
           auditNumber: audit.auditNumber,
           date: audit.date,
+          startDate: audit.startDate || audit.date,
+          endDate: audit.endDate,
           department: audit.department,
           zone: audit.zone,
           category: item.category,
@@ -114,7 +126,7 @@ export function RegisterWorkspace() {
         });
       }
     }
-    return out.sort((a, b) => new Date(b.date || "").getTime() - new Date(a.date || "").getTime());
+    return out.sort((a, b) => new Date(b.startDate || "").getTime() - new Date(a.startDate || "").getTime());
   }, [auditsApi.data, findingsApi.data]);
 
   const uniqueDepts = useMemo(() => Array.from(new Set(rows.map((r) => r.department))), [rows]);
@@ -131,8 +143,8 @@ export function RegisterWorkspace() {
       const matchSeverity = severityFilter === "ALL" || r.severity === severityFilter;
       const matchDept = deptFilter === "ALL" || r.department === deptFilter;
       const matchCategory = categoryFilter === "ALL" || r.category === categoryFilter;
-      const matchStart = !startDate || new Date(r.date) >= new Date(startDate);
-      const matchEnd = !endDate || new Date(r.date) <= new Date(endDate);
+      const matchStart = !startDate || Boolean(r.startDate && new Date(r.startDate) >= new Date(startDate));
+      const matchEnd = !endDate || Boolean(r.startDate && new Date(r.startDate) <= new Date(endDate));
       return matchSearch && matchStatus && matchSeverity && matchDept && matchCategory && matchStart && matchEnd;
     });
   }, [rows, search, statusFilter, severityFilter, deptFilter, categoryFilter, startDate, endDate]);
@@ -141,10 +153,11 @@ export function RegisterWorkspace() {
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function downloadCSV() {
-    const headers = ["Audit No", "Date", "Department", "Zone", "Category", "Question", "Response", "Severity", "Observation", "Status", "Due/Closed"];
+    const headers = ["Audit No", "Starting Date", "Ending Date", "Department", "Zone", "Category", "Question", "Response", "Severity", "Observation", "Status", "Due/Closed"];
     const csvRows = filtered.map((r) => [
       r.auditNumber,
-      r.date ? new Date(r.date).toLocaleDateString() : "",
+      formatRegisterDate(r.startDate),
+      formatRegisterDate(r.endDate),
       r.department,
       r.zone,
       r.category,
@@ -153,7 +166,7 @@ export function RegisterWorkspace() {
       r.severity || "",
       `"${(r.observation || "").replace(/"/g, '""')}"`,
       statusLabel(r.status),
-      r.dueOrClosed ? new Date(r.dueOrClosed).toLocaleDateString() : ""
+      formatRegisterDate(r.dueOrClosed)
     ]);
     const csvContent = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
@@ -251,7 +264,8 @@ export function RegisterWorkspace() {
             <tr>
               <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">#</th>
               <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit No</th>
-              <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Date</th>
+              <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Starting Date</th>
+              <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Ending Date</th>
               <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Dept</th>
               <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Zone</th>
               <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Category</th>
@@ -265,15 +279,16 @@ export function RegisterWorkspace() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-t2">Loading register...</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-t2">Loading register...</td></tr>
             ) : pageRows.length === 0 ? (
-              <tr><td colSpan={12} className="px-3 py-8 text-center text-t2">No records match the current filters.</td></tr>
+              <tr><td colSpan={13} className="px-3 py-8 text-center text-t2">No records match the current filters.</td></tr>
             ) : (
               pageRows.map((r, index) => (
                 <tr key={r.key}>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-t2">{(page - 1) * PAGE_SIZE + index + 1}</td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top font-semibold text-brand">{r.auditNumber}</td>
-                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{r.date ? new Date(r.date).toLocaleDateString() : ""}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{formatRegisterDate(r.startDate)}</td>
+                  <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{formatRegisterDate(r.endDate)}</td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{r.department}</td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{r.zone}</td>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">

@@ -25,6 +25,8 @@ type Audit = {
   department: string;
   auditorName: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
   totalScore: number;
   categoryScores?: Record<string, number>;
@@ -36,6 +38,16 @@ type Audit = {
     severity?: string;
   }>;
 };
+
+function formatReportDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
+}
+
+function auditStartDate(audit: Audit) {
+  return audit.startDate || audit.date || null;
+}
 
 type Finding = {
   _id: string;
@@ -125,8 +137,9 @@ export function AnalyticsClient() {
       rows: Array.from({ length: 12 }, (_, monthIndex) => ({
         month: new Date(year, monthIndex, 1).toLocaleString("en", { month: "short" }),
         audits: audits.filter((audit) => {
-          if (audit.status !== "COMPLETED" || !audit.date) return false;
-          const auditDate = new Date(audit.date);
+          const sourceDate = auditStartDate(audit);
+          if (audit.status !== "COMPLETED" || !sourceDate) return false;
+          const auditDate = new Date(sourceDate);
           return auditDate.getFullYear() === year && auditDate.getMonth() === monthIndex;
         }).length
       }))
@@ -227,13 +240,14 @@ export function AnalyticsClient() {
   }, [audits]);
 
   // Filtered dataset for exports
-  const filteredData = useMemo<any[]>(() => {
+  const filteredData = useMemo<Array<Audit | Finding>>(() => {
     if (exportType === "audits") {
       return audits.filter(a => {
         const matchDept = filterDept === "ALL" || a.department === filterDept;
         const matchStatus = filterStatus === "ALL" || a.status === filterStatus;
-        const matchStart = !startDate || new Date(a.date) >= new Date(startDate);
-        const matchEnd = !endDate || new Date(a.date) <= new Date(endDate);
+        const sourceDate = auditStartDate(a);
+        const matchStart = !startDate || Boolean(sourceDate && new Date(sourceDate) >= new Date(startDate));
+        const matchEnd = !endDate || Boolean(sourceDate && new Date(sourceDate) <= new Date(endDate));
         return matchDept && matchStatus && matchStart && matchEnd;
       });
     } else {
@@ -241,8 +255,8 @@ export function AnalyticsClient() {
         const matchDept = filterDept === "ALL" || f.department === filterDept;
         const matchSeverity = filterSeverity === "ALL" || f.severity === filterSeverity;
         const matchStatus = filterStatus === "ALL" || f.status === filterStatus;
-        const matchStart = !startDate || (f.dueDate && new Date(f.dueDate) >= new Date(startDate));
-        const matchEnd = !endDate || (f.dueDate && new Date(f.dueDate) <= new Date(endDate));
+        const matchStart = !startDate || Boolean(f.dueDate && new Date(f.dueDate) >= new Date(startDate));
+        const matchEnd = !endDate || Boolean(f.dueDate && new Date(f.dueDate) <= new Date(endDate));
         return matchDept && matchSeverity && matchStatus && matchStart && matchEnd;
       });
     }
@@ -255,28 +269,31 @@ export function AnalyticsClient() {
     let filename = "";
 
     if (exportType === "audits") {
+      const auditRows = filteredData as Audit[];
       filename = `6S_Audit_Summary_Report_${new Date().toISOString().split("T")[0]}.csv`;
-      headers = ["Audit Number", "Department", "Zone", "Auditor Name", "Date Completed", "Score (%)", "Status"];
-      rows = filteredData.map((item: any) => [
+      headers = ["Audit Number", "Starting Date", "Ending Date", "Department", "Zone", "Auditor Name", "Score (%)", "Status"];
+      rows = auditRows.map((item) => [
         item.auditNumber,
+        formatReportDate(auditStartDate(item)),
+        formatReportDate(item.endDate),
         item.department,
         item.zone,
         item.auditorName,
-        item.date ? new Date(item.date).toLocaleDateString() : "",
         item.totalScore.toString(),
         item.status
       ]);
     } else {
+      const findingRows = filteredData as Finding[];
       filename = `6S_Findings_CAPA_Report_${new Date().toISOString().split("T")[0]}.csv`;
       headers = ["Finding ID", "Audit Ref", "Category", "Department", "Zone", "Severity", "Target Due Date", "Status", "Observation / Question"];
-      rows = filteredData.map((item: any) => [
+      rows = findingRows.map((item) => [
         item.findingNumber,
         item.auditNumber || "Manual",
         item.category,
         item.department,
         item.zone,
         item.severity,
-        item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "N/A",
+        formatReportDate(item.dueDate),
         item.status,
         `"${item.question.replace(/"/g, '""')}"`
       ]);
@@ -579,7 +596,7 @@ export function AnalyticsClient() {
                 <select
                   className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                   value={exportType}
-                  onChange={(e) => setExportType(e.target.value as any)}
+                  onChange={(e) => setExportType(e.target.value as "audits" | "findings")}
                 >
                   <option value="findings">Findings Log & CAPA Records</option>
                   <option value="audits">Audit Runs Summary</option>
@@ -713,8 +730,9 @@ export function AnalyticsClient() {
                   <thead>
                     <tr>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit Number</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Starting Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Ending Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Auditor</th>
-                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Zone</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Score</th>
@@ -722,11 +740,12 @@ export function AnalyticsClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((a) => (
+                    {(filteredData as Audit[]).map((a) => (
                       <tr key={a._id}>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.auditNumber}</strong></td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(auditStartDate(a))}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(a.endDate)}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.auditorName}</td>
-                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.date ? new Date(a.date).toLocaleDateString() : ""}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.department}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.zone}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.totalScore}%</strong></td>
@@ -744,20 +763,20 @@ export function AnalyticsClient() {
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Category</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department / Zone</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Severity</th>
-                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Due Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Target Due Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Observation Details</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((f) => (
+                    {(filteredData as Finding[]).map((f) => (
                       <tr key={f._id}>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{f.findingNumber}</strong></td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><span className="text-[11px] text-t2">{f.auditNumber || "Manual"}</span></td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.category}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.department} / {f.zone}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.severity}</td>
-                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.dueDate ? new Date(f.dueDate).toLocaleDateString() : "N/A"}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(f.dueDate)}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.status}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-xs">{f.question}</td>
                       </tr>

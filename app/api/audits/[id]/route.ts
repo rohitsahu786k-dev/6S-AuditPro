@@ -1,8 +1,9 @@
 import { requireUser } from "@/lib/auth";
+import { auditUpdateSchema } from "@/lib/validators";
 import Audit from "@/models/Audit";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
-import { fail, ok } from "@/utils/api";
+import { fail, ok, parseJson } from "@/utils/api";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -11,6 +12,37 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     await connectDB();
     const audit = await Audit.findById(id).lean();
     if (!audit) throw Object.assign(new Error("Audit not found"), { status: 404 });
+    return ok(audit);
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  try {
+    await requireUser("audits:update");
+    const { id } = await context.params;
+    const input = await parseJson(request, auditUpdateSchema);
+    await connectDB();
+
+    const audit = await Audit.findById(id);
+    if (!audit) throw Object.assign(new Error("Audit not found"), { status: 404 });
+
+    const startDate = input.startDate || input.date;
+    if (startDate) {
+      audit.startDate = startDate;
+      audit.date = startDate;
+    }
+    if (Object.prototype.hasOwnProperty.call(input, "endDate")) {
+      audit.endDate = input.endDate ?? null;
+    }
+
+    const effectiveStartDate = audit.startDate || audit.date;
+    if (effectiveStartDate && audit.endDate && audit.endDate < effectiveStartDate) {
+      throw Object.assign(new Error("Ending Date cannot be earlier than Starting Date."), { status: 400 });
+    }
+
+    await audit.save();
     return ok(audit);
   } catch (error) {
     return fail(error);
