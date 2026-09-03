@@ -8,6 +8,7 @@ const questionCreateSchema = z.object({
   category: z.string().trim().min(1),
   text: z.string().trim().min(1),
   subSection: z.string().trim().optional(),
+  serialNumber: z.number().optional(),
   sortOrder: z.number().default(0),
   isActive: z.boolean().default(true),
   status: z.enum(["active", "inactive"]).optional()
@@ -32,11 +33,14 @@ export async function POST(request: Request) {
     await requireUser("masters:create");
     const input = await parseJson(request, questionCreateSchema);
     await connectDB();
-    const { status, ...questionInput } = input;
+    const serialNumber = input.serialNumber ?? input.sortOrder;
     const question = await Question.create({
-      ...questionInput,
-      category: normalizeCategory(questionInput.category),
-      isActive: status ? status === "active" : questionInput.isActive
+      category: normalizeCategory(input.category),
+      text: input.text,
+      subSection: input.subSection,
+      serialNumber,
+      sortOrder: serialNumber,
+      isActive: input.status ? input.status === "active" : input.isActive
     });
     return ok(question, { status: 201 });
   } catch (error) {

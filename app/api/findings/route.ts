@@ -9,12 +9,31 @@ import { findingCreateSchema } from "@/lib/validators";
 
 const FINDING_VIEWS = new Set<FindingListView>(["full", "summary", "register", "media-selector"]);
 
+function parseDateRange(request: Request) {
+  const requestUrl = new URL(request.url);
+  const referrer = request.headers.get("referer");
+  let pageUrl: URL | null = null;
+  try {
+    pageUrl = referrer ? new URL(referrer) : null;
+  } catch {
+    pageUrl = null;
+  }
+
+  const from = requestUrl.searchParams.get("from") || pageUrl?.searchParams.get("from") || "";
+  const to = requestUrl.searchParams.get("to") || pageUrl?.searchParams.get("to") || "";
+
+  const fromDate = /^\d{4}-\d{2}-\d{2}$/.test(from) ? new Date(`${from}T00:00:00.000`) : undefined;
+  const toDate = /^\d{4}-\d{2}-\d{2}$/.test(to) ? new Date(`${to}T23:59:59.999`) : undefined;
+
+  return { fromDate, toDate };
+}
+
 export async function GET(request: Request) {
   try {
     const user = await requireUser("findings:read");
     const viewParam = new URL(request.url).searchParams.get("view") || "full";
     const view = FINDING_VIEWS.has(viewParam as FindingListView) ? viewParam as FindingListView : "full";
-    return ok(await listFindings(user, view));
+    return ok(await listFindings(user, view, parseDateRange(request)));
   } catch (error) {
     return fail(error);
   }
@@ -53,8 +72,6 @@ export async function POST(request: Request) {
 
     const saved = await newFinding.save();
 
-    // Notify SPOC and Admin. Awaited so the send completes before the
-    // serverless function returns and freezes.
     try {
       const recipients = await resolveRecipients({ department: saved.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
       await sendTemplatedEmail({

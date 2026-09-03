@@ -1,23 +1,173 @@
 import Finding from "@/models/Finding";
+import Audit from "@/models/Audit";
+import Department from "@/models/Department";
 import { connectDB } from "@/lib/db";
+import { addWorkingDays, defaultSeverity } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
+import { canonicalDepartmentName } from "@/lib/org-utils";
 
 export type FindingListView = "full" | "summary" | "register" | "media-selector";
 
 const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   full: null,
-  summary: "findingNumber auditNumber zone department category question severity status dueDate assignedTo createdAt updatedAt",
+  // Timeline dates are included so reporting can use the actual CAPA closure date.
+  // updatedAt changes when an owner/department is edited and must not rewrite closure history.
+  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos assignedTo createdAt updatedAt timeline.action timeline.at",
   register: "auditId questionId status dueDate updatedAt",
   "media-selector": "findingNumber question zone department category status assignedTo beforePhotos afterPhotos"
 };
 
-let lastOverdueRefreshAt = 0;
-const OVERDUE_REFRESH_INTERVAL_MS = 60_000;
+type FindingDateRange = {
+  fromDate?: Date;
+  toDate?: Date;
+};
 
-function scopedQuery(user: SessionUser) {
-  return user.role === "SPOC" && user.department ? { department: user.department } : {};
+type AuditChecklistItem = {
+  questionId?: unknown;
+  category?: string;
+  question?: string;
+  response?: string;
+  observation?: string;
+  severity?: "Critical" | "High" | "Medium" | "Low";
+  actionOwnerName?: string;
+  actionOwnerDepartment?: string;
+  beforePhotos?: unknown[];
+};
+
+let lastOverdueRefreshAt = 0;
+let lastFindingReconcileAt = 0;
+const OVERDUE_REFRESH_INTERVAL_MS = 60_000;
+const FINDING_RECONCILE_INTERVAL_MS = 5 * 60_000;
+
+function scopedQuery(user: SessionUser, dateRange?: FindingDateRange) {
+  const query: Record<string, unknown> = {};
+  if (user.role === "SPOC" && user.department) query.department = user.department;
+
+  if (dateRange?.fromDate || dateRange?.toDate) {
+    const createdAt: Record<string, Date> = {};
+    if (dateRange.fromDate) createdAt.$gte = dateRange.fromDate;
+    if (dateRange.toDate) createdAt.$lte = dateRange.toDate;
+    query.createdAt = createdAt;
+  }
+
+  return query;
+}
+
+function closureDateOf(finding: any) {
+  if (finding.status !== "CLOSED" || !Array.isArray(finding.timeline)) return undefined;
+  const closure = [...finding.timeline].reverse().find((entry: any) => {
+    const action = String(entry?.action || "").toLowerCase();
+    return action.includes("approve") || action.includes("closed");
+  });
+  return closure?.at;
+}
+
+function sameText(left: unknown, right: unknown) {
+  return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+}
+
+function isSameChecklistFinding(item: AuditChecklistItem, finding: any) {
+  if (item.questionId && finding.questionId) {
+    return String(item.questionId) === String(finding.questionId);
+  }
+  return sameText(item.category, finding.category) && sameText(item.question, finding.question);
+}
+
+function nextFindingNumber(auditNumber: string, usedNumbers: Set<string>) {
+  let sequence = 1;
+  while (usedNumbers.has(`${auditNumber}-F${String(sequence).padStart(2, "0")}`)) sequence += 1;
+  const findingNumber = `${auditNumber}-F${String(sequence).padStart(2, "0")}`;
+  usedNumbers.add(findingNumber);
+  return findingNumber;
+}
+
+/**
+ * Historical/imported audits can contain valid "Not Adequate" checklist rows
+ * without a matching Finding document. Reconcile those rows so Audit History,
+ * Findings and dashboard reports all use the same source data.
+ *
+ * This is intentionally throttled and idempotent. It does not send assignment
+ * emails for restored historical rows, avoiding duplicate notifications.
+ */
+async function reconcileMissingAuditFindings() {
+  const now = Date.now();
+  if (now - lastFindingReconcileAt < FINDING_RECONCILE_INTERVAL_MS) return;
+  lastFindingReconcileAt = now;
+
+  const audits = await Audit.find({ status: "COMPLETED" })
+    .select("_id auditNumber zone department auditorName date startDate checklist findingIds createdBy")
+    .lean();
+  if (audits.length === 0) return;
+
+  for (const audit of audits) {
+    const checklist = (audit.checklist || []) as AuditChecklistItem[];
+    const nonConformities = checklist.filter((item) => item.response === "Not Adequate");
+    if (nonConformities.length === 0) continue;
+
+    const existing = await Finding.find({
+      $or: [{ auditId: audit._id }, { auditNumber: audit.auditNumber }]
+    }).select("_id findingNumber questionId category question").lean();
+
+    const usedNumbers = new Set(existing.map((finding) => finding.findingNumber).filter(Boolean));
+    const linkedIds = new Set(existing.map((finding) => String(finding._id)));
+    let restored = 0;
+
+    for (const item of nonConformities) {
+      if (existing.some((finding) => isSameChecklistFinding(item, finding))) continue;
+
+      const ownerDepartment = item.actionOwnerDepartment || audit.department;
+      const ownerName = item.actionOwnerName || ownerDepartment;
+      const auditDate = new Date((audit.startDate || audit.date || new Date()) as Date);
+
+      try {
+        const finding = await Finding.create({
+          findingNumber: nextFindingNumber(audit.auditNumber, usedNumbers),
+          auditId: audit._id,
+          auditNumber: audit.auditNumber,
+          zone: audit.zone,
+          department: ownerDepartment,
+          questionId: item.questionId,
+          category: item.category || "",
+          question: item.question || "Audit finding",
+          severity: item.severity || defaultSeverity("Not Adequate", item.category || ""),
+          observation: item.observation || "",
+          beforePhotos: item.beforePhotos || [],
+          assignedTo: ownerName,
+          dueDate: addWorkingDays(auditDate, 7),
+          status: "OPEN",
+          createdBy: audit.createdBy,
+          timeline: [{
+            action: "Finding restored from audit checklist",
+            note: "Restored automatically because the historical audit finding record was missing.",
+            by: audit.createdBy,
+            byName: audit.auditorName || "System",
+            at: auditDate
+          }]
+        });
+        linkedIds.add(String(finding._id));
+        existing.push(finding.toObject() as any);
+        restored += 1;
+      } catch (error: any) {
+        // Concurrent requests can race on the unique finding number. Another
+        // request may have already restored it, which is safe to ignore.
+        if (error?.code !== 11000) {
+          console.error(`Unable to restore finding for audit ${audit.auditNumber}:`, error);
+        }
+      }
+    }
+
+    if (restored > 0 || linkedIds.size !== (audit.findingIds || []).length) {
+      const allLinked = await Finding.find({
+        $or: [{ auditId: audit._id }, { auditNumber: audit.auditNumber }]
+      }).select("_id").lean();
+      await Audit.updateOne(
+        { _id: audit._id },
+        { $set: { findingIds: allLinked.map((finding) => finding._id) } }
+      );
+    }
+  }
 }
 
 async function refreshOverdueStatuses() {
@@ -30,13 +180,28 @@ async function refreshOverdueStatuses() {
   );
 }
 
-export async function listFindings(user: SessionUser, view: FindingListView = "full") {
+export async function listFindings(user: SessionUser, view: FindingListView = "full", dateRange?: FindingDateRange) {
   await connectDB();
+  if (user.role !== "SPOC") await reconcileMissingAuditFindings();
   await refreshOverdueStatuses();
   const projection = FINDING_PROJECTIONS[view] ?? FINDING_PROJECTIONS.full;
-  const request = Finding.find(scopedQuery(user)).sort({ createdAt: -1 });
+  const request = Finding.find(scopedQuery(user, dateRange)).sort({ createdAt: -1 });
   if (projection) request.select(projection);
-  return request.lean();
+  const [findings, departments] = await Promise.all([
+    request.lean(),
+    Department.find().select("name").lean()
+  ]);
+  const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+  return findings.map((finding) => {
+    const closureDate = view === "summary" ? closureDateOf(finding) : undefined;
+    return {
+      ...finding,
+      department: canonicalDepartmentName(finding.department, configuredDepartments),
+      // Dashboard uses updatedAt as the closed timestamp. Preserve the true closure
+      // timestamp even if action owner/department is edited after closure.
+      ...(closureDate ? { updatedAt: closureDate } : {})
+    };
+  });
 }
 
 /**
@@ -64,8 +229,8 @@ export async function notifyOverdueFindings() {
           recipientName: "Manager / HOD",
           findingNumber: finding.findingNumber,
           auditNumber: finding.auditNumber || "",
-          zoneName: finding.zone,
           departmentName: finding.department,
+          zoneName: finding.zone,
           severity: finding.severity,
           dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : ""
         },
@@ -96,8 +261,6 @@ export async function submitCapa(id: string, input: { capaAction: string; closur
   
   const saved = await finding.save();
 
-  // Send CAPA Submitted Email. Awaited so the send completes before the
-  // serverless function returns and freezes.
   try {
     const recipients = await resolveRecipients({ roles: ["MASTER_ADMIN", "ADMIN", "AUDITOR"] });
     await sendTemplatedEmail({
@@ -151,8 +314,6 @@ export async function reviewCapa(id: string, input: { decision: "approve" | "rej
   finding.timeline.push({ action: `CAPA ${input.decision}`, note: input.remarks || input.rejectionReason, by: user.id, byName: user.name, at: new Date() });
   const saved = await finding.save();
 
-  // Send review outcome email. Awaited so the send completes before the
-  // serverless function returns and freezes.
   const rolesToNotify = input.decision === "approve"
     ? ["SPOC", "ADMIN", "MASTER_ADMIN", "AUDITOR", "MANAGEMENT"]
     : ["SPOC", "ADMIN", "MASTER_ADMIN"];

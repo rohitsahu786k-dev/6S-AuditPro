@@ -14,9 +14,13 @@ type Audit = {
 };
 
 function formatAuditDate(value?: string | null) {
-  if (!value) return "\u2014";
+  if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "\u2014" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
+}
+
+function auditStartDate(audit: Audit) {
+  return audit.startDate || audit.date || null;
 }
 
 export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: boolean }) {
@@ -38,7 +42,8 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
         ) : (
           <div className="grid gap-2.5">
             {audits.map((audit) => {
-              const badge = scoreBadgeStyle(audit.totalScore);
+              const score = audit.totalScore || 0;
+              const badge = scoreBadgeStyle(score);
               return (
                 <div key={audit._id} className="flex items-center justify-between border-b border-[#f1f5f9] py-2.5 last:border-b-0">
                   <div>
@@ -49,15 +54,16 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
                       </span>
                       <span>•</span>
                       <span className="flex items-center gap-1">
-                        <Calendar size={10} /> {formatAuditDate(audit.startDate || audit.date)}
+                        <Calendar size={10} /> {formatAuditDate(auditStartDate(audit))}
                       </span>
                     </div>
                   </div>
                   <span
                     className="rounded-full border px-2.5 py-0.5 text-xs font-bold"
                     style={{ background: badge.bg, color: badge.text, borderColor: badge.border }}
+                    title="Completed audit score"
                   >
-                    {audit.totalScore}%
+                    {score}%
                   </span>
                 </div>
               );

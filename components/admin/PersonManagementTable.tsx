@@ -4,14 +4,14 @@ import { useState } from "react";
 import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 
-type PersonRow = { _id: string; name: string; type: "AUDITOR" | "RESPONSIBLE"; department?: string; status: string };
+type PersonRow = { _id: string; name: string; type: "AUDITOR" | "RESPONSIBLE"; roleTitle?: string; department?: string; email?: string; status: string };
 type Masters = { people: PersonRow[]; departments: Array<{ _id: string; name: string }> };
 
 export function PersonManagementTable() {
   const masters = useApi<Masters>("/api/masters");
-  const [form, setForm] = useState({ name: "", type: "AUDITOR" as "AUDITOR" | "RESPONSIBLE", department: "" });
+  const [form, setForm] = useState({ name: "", type: "AUDITOR" as "AUDITOR" | "RESPONSIBLE", roleTitle: "", department: "", email: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", type: "AUDITOR" as "AUDITOR" | "RESPONSIBLE", department: "", status: "active" });
+  const [editForm, setEditForm] = useState({ name: "", type: "AUDITOR" as "AUDITOR" | "RESPONSIBLE", roleTitle: "", department: "", email: "", status: "active" });
   const [message, setMessage] = useState("");
 
   const people = masters.data?.people || [];
@@ -26,7 +26,7 @@ export function PersonManagementTable() {
     try {
       await apiPost("/api/masters/people", form);
       setMessage("Person created successfully.");
-      setForm({ name: "", type: "AUDITOR", department: "" });
+      setForm({ name: "", type: "AUDITOR", roleTitle: "", department: "", email: "" });
       await masters.reload();
     } catch (err: any) {
       alert(`Error creating person: ${err.message}`);
@@ -51,7 +51,9 @@ export function PersonManagementTable() {
     setEditForm({
       name: p.name,
       type: p.type,
+      roleTitle: p.roleTitle || "",
       department: p.department || "",
+      email: p.email || "",
       status: p.status
     });
   }
@@ -81,6 +83,27 @@ export function PersonManagementTable() {
             placeholder="e.g. John Doe"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </label>
+
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Email ID</span>
+          <input
+            type="email"
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            placeholder="person@company.com"
+            value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })}
+          />
+        </label>
+
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Role Title</span>
+          <input
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            placeholder="Manager / HOD / Management"
+            value={form.roleTitle}
+            onChange={(e) => setForm({ ...form, roleTitle: e.target.value })}
           />
         </label>
 
@@ -124,6 +147,7 @@ export function PersonManagementTable() {
               <tr>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Full Name</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Role Type</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Email / Title</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                 <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Actions</th>
@@ -140,6 +164,23 @@ export function PersonManagementTable() {
                           value={editForm.name}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         />
+                      </td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <div className="grid gap-1">
+                          <input
+                            type="email"
+                            className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                            placeholder="Email ID"
+                            value={editForm.email}
+                            onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                          />
+                          <input
+                            className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                            placeholder="Role title"
+                            value={editForm.roleTitle}
+                            onChange={(e) => setEditForm({ ...editForm, roleTitle: e.target.value })}
+                          />
+                        </div>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <select
@@ -189,6 +230,10 @@ export function PersonManagementTable() {
                         <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
                           {p.type}
                         </span>
+                      </td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-xs text-t2">
+                        <div>{p.email || "-"}</div>
+                        <div>{p.roleTitle || "-"}</div>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{p.department || <span className="text-t2">All Departments</span>}</td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">

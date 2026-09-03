@@ -76,6 +76,9 @@ export const auditSchema = z.object({
     actionOwnerDepartment: z.string().trim().optional(),
     beforePhotos: z.array(photoSchema).optional().default([])
   })).default([])
+}).refine((input) => input.startDate || input.date, {
+  message: "Starting Date is required.",
+  path: ["startDate"]
 }).refine((input) => {
   const startDate = input.startDate || input.date;
   return !startDate || !input.endDate || input.endDate >= startDate;

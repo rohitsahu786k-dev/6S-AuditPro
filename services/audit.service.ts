@@ -1,10 +1,12 @@
 import Audit from "@/models/Audit";
+import Department from "@/models/Department";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
 import { addWorkingDays, defaultSeverity, scoreChecklist } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
+import { canonicalDepartmentName } from "@/lib/org-utils";
 
 export type AuditListView = "full" | "summary" | "analytics" | "register";
 
@@ -25,11 +27,44 @@ export async function nextAuditNumber() {
 
 export async function listAudits(user: SessionUser, view: AuditListView = "full") {
   await connectDB();
-  const query = user.role === "SPOC" && user.department ? { department: user.department } : {};
+  const query: Record<string, unknown> = user.role === "SPOC" && user.department ? { department: user.department } : {};
+
+  // Dashboard analytics is year-specific (Monthly Audit Score - YYYY), so keep
+  // Department Summary, Overall Rating, Monthly Audit Score and Recent Audits on
+  // the same current-year audit dataset. This prevents historical audits from
+  // changing the current dashboard score while the monthly table shows only this year.
+  if (view === "analytics") {
+    const year = new Date().getFullYear();
+    const from = new Date(year, 0, 1, 0, 0, 0, 0);
+    const to = new Date(year + 1, 0, 1, 0, 0, 0, 0);
+    query.$or = [
+      { startDate: { $gte: from, $lt: to } },
+      { startDate: { $exists: false }, date: { $gte: from, $lt: to } },
+      { startDate: null, date: { $gte: from, $lt: to } }
+    ];
+  }
+
   const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;
-  const request = Audit.find(query).sort({ startDate: -1, date: -1, createdAt: -1 });
+  const request = Audit.find(query).sort({ startDate: -1, date: -1 });
   if (projection) request.select(projection);
-  return request.lean();
+  const [audits, departments] = await Promise.all([
+    request.lean(),
+    Department.find().select("name").lean()
+  ]);
+  const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+
+  return audits.map((audit) => ({
+    ...audit,
+    department: canonicalDepartmentName(audit.department, configuredDepartments),
+    checklist: Array.isArray(audit.checklist)
+      ? audit.checklist.map((item: any) => ({
+          ...item,
+          ...(item.actionOwnerDepartment
+            ? { actionOwnerDepartment: canonicalDepartmentName(item.actionOwnerDepartment, configuredDepartments) }
+            : {})
+        }))
+      : audit.checklist
+  }));
 }
 
 export async function createAudit(input: {
@@ -99,13 +134,9 @@ export async function createAudit(input: {
   audit.findingIds = findings.map((finding) => finding._id);
   await audit.save();
 
-  // Send Audit Completed + Finding Assigned emails. Awaited (not fire-and-forget) so
-  // sends complete before the serverless function returns and freezes.
   try {
     const recipients = await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
-    if (user.email && !recipients.includes(user.email)) {
-      recipients.push(user.email);
-    }
+    if (user.email && !recipients.includes(user.email)) recipients.push(user.email);
     await sendTemplatedEmail({
       triggerEvent: "AUDIT_COMPLETED",
       recipients,
@@ -124,33 +155,31 @@ export async function createAudit(input: {
     console.error("Error sending audit completion email:", err);
   }
 
-  await Promise.all(
-    findings.map(async (finding) => {
-      try {
-        const spocRecipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
-        await sendTemplatedEmail({
-          triggerEvent: "FINDING_ASSIGNED",
-          recipients: spocRecipients,
-          data: {
-            recipientName: "Department SPOC",
-            findingNumber: finding.findingNumber,
-            auditNumber: audit.auditNumber,
-            departmentName: finding.department,
-            zoneName: finding.zone,
-            severity: finding.severity,
-            dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : "",
-            question: finding.question,
-            assignedTo: finding.assignedTo || finding.department,
-            auditorName: audit.auditorName
-          },
-          relatedAuditId: audit._id.toString(),
-          relatedFindingId: finding._id.toString()
-        });
-      } catch (err) {
-        console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err);
-      }
-    })
-  );
+  await Promise.all(findings.map(async (finding) => {
+    try {
+      const spocRecipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+      await sendTemplatedEmail({
+        triggerEvent: "FINDING_ASSIGNED",
+        recipients: spocRecipients,
+        data: {
+          recipientName: "Department SPOC",
+          findingNumber: finding.findingNumber,
+          auditNumber: audit.auditNumber,
+          departmentName: finding.department,
+          zoneName: finding.zone,
+          severity: finding.severity,
+          dueDate: finding.dueDate ? new Date(finding.dueDate).toLocaleDateString() : "",
+          question: finding.question,
+          assignedTo: finding.assignedTo || finding.department,
+          auditorName: audit.auditorName
+        },
+        relatedAuditId: audit._id.toString(),
+        relatedFindingId: finding._id.toString()
+      });
+    } catch (err) {
+      console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err);
+    }
+  }));
 
   return { audit, findings };
 }

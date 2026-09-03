@@ -45,7 +45,8 @@ export function addWorkingDays(start: Date, days: number) {
 
 export function defaultSeverity(response: string, category: string) {
   if (response !== "Not Adequate") return undefined;
-  if (category === "SAFETY") return "Critical";
-  if (category === "ENVIRONMENT") return "High";
+  const normalizedCategory = category.toUpperCase();
+  if (normalizedCategory.includes("SAFETY")) return "Critical";
+  if (normalizedCategory.includes("ENVIRONMENT")) return "High";
   return "Medium";
 }

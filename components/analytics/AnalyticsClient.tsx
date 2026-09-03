@@ -30,7 +30,7 @@ type Audit = {
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
   totalScore: number;
   categoryScores?: Record<string, number>;
-  checklist?: Array<{
+  checklist: Array<{
     questionId: string;
     category: string;
     question: string;
@@ -40,13 +40,30 @@ type Audit = {
 };
 
 function formatReportDate(value?: string | null) {
-  if (!value) return "\u2014";
+  if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "\u2014" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
 }
 
 function auditStartDate(audit: Audit) {
   return audit.startDate || audit.date || null;
+}
+
+function findingReportDate(finding: Finding) {
+  return finding.createdAt || finding.dueDate || null;
+}
+
+function dateAtEndOfDay(value: string) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function pillarCode(category: string) {
+  const direct = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+  if (direct) return direct;
+  const match = category.match(/\b([1-7]S)\b/i);
+  return match ? match[1].toUpperCase() : undefined;
 }
 
 type Finding = {
@@ -60,9 +77,8 @@ type Finding = {
   severity: "Critical" | "High" | "Medium" | "Low";
   status: "OPEN" | "IN_PROGRESS" | "SUBMITTED" | "CLOSED" | "REJECTED" | "REOPENED" | "OVERDUE";
   dueDate?: string;
-  createdAt?: string;
-  updatedAt?: string;
   observation?: string;
+  createdAt?: string;
 };
 
 export function AnalyticsClient() {
@@ -139,9 +155,9 @@ export function AnalyticsClient() {
       rows: Array.from({ length: 12 }, (_, monthIndex) => ({
         month: new Date(year, monthIndex, 1).toLocaleString("en", { month: "short" }),
         audits: audits.filter((audit) => {
-          const start = auditStartDate(audit);
-          if (audit.status !== "COMPLETED" || !start) return false;
-          const auditDate = new Date(start);
+          const sourceDate = auditStartDate(audit);
+          if (audit.status !== "COMPLETED" || !sourceDate) return false;
+          const auditDate = new Date(sourceDate);
           return auditDate.getFullYear() === year && auditDate.getMonth() === monthIndex;
         }).length
       }))
@@ -172,7 +188,7 @@ export function AnalyticsClient() {
       // { adequate, total, score } shape produced by scoreChecklist().
       if (a.categoryScores) {
         for (const [category, val] of Object.entries(a.categoryScores)) {
-          const pil = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+          const pil = pillarCode(category);
           if (!pil) continue;
           const score = typeof val === "object" && val !== null && "score" in val ? Number((val as { score: number }).score) : Number(val);
           if (Number.isNaN(score)) continue;
@@ -182,7 +198,7 @@ export function AnalyticsClient() {
       } else {
         // Fallback: calculate from checklist items
         const catGroup: Record<string, { yes: number; total: number }> = {};
-        for (const item of a.checklist || []) {
+        for (const item of a.checklist) {
           if (!catGroup[item.category]) catGroup[item.category] = { yes: 0, total: 0 };
           if (item.response === "Adequate") {
             catGroup[item.category].yes += 1;
@@ -192,7 +208,7 @@ export function AnalyticsClient() {
           }
         }
         for (const [category, data] of Object.entries(catGroup)) {
-          const pil = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+          const pil = pillarCode(category);
           if (!pil) continue;
           const score = data.total > 0 ? (data.yes / data.total) * 100 : 0;
           sums[pil] = (sums[pil] || 0) + score;
@@ -237,20 +253,19 @@ export function AnalyticsClient() {
 
   // Unique lists for export filters
   const uniqueDepts = useMemo(() => {
-    const list = new Set(audits.map(a => a.department));
-    findings.forEach((finding) => list.add(finding.department));
+    const list = new Set([...audits.map(a => a.department), ...findings.map(f => f.department)]);
     return Array.from(list);
   }, [audits, findings]);
 
   // Filtered dataset for exports
-  const filteredData = useMemo<any[]>(() => {
+  const filteredData = useMemo<Array<Audit | Finding>>(() => {
     if (exportType === "audits") {
       return audits.filter(a => {
         const matchDept = filterDept === "ALL" || a.department === filterDept;
         const matchStatus = filterStatus === "ALL" || a.status === filterStatus;
-        const auditStart = auditStartDate(a);
-        const matchStart = !startDate || (auditStart && new Date(auditStart) >= new Date(startDate));
-        const matchEnd = !endDate || (auditStart && new Date(auditStart) <= new Date(endDate));
+        const sourceDate = auditStartDate(a);
+        const matchStart = !startDate || Boolean(sourceDate && new Date(sourceDate) >= new Date(startDate));
+        const matchEnd = !endDate || Boolean(sourceDate && new Date(sourceDate) <= dateAtEndOfDay(endDate));
         return matchDept && matchStatus && matchStart && matchEnd;
       });
     } else {
@@ -258,9 +273,9 @@ export function AnalyticsClient() {
         const matchDept = filterDept === "ALL" || f.department === filterDept;
         const matchSeverity = filterSeverity === "ALL" || f.severity === filterSeverity;
         const matchStatus = filterStatus === "ALL" || f.status === filterStatus;
-        const findingDate = f.createdAt || f.dueDate;
-        const matchStart = !startDate || (findingDate && new Date(findingDate) >= new Date(startDate));
-        const matchEnd = !endDate || (findingDate && new Date(findingDate) <= new Date(endDate));
+        const sourceDate = findingReportDate(f);
+        const matchStart = !startDate || Boolean(sourceDate && new Date(sourceDate) >= new Date(startDate));
+        const matchEnd = !endDate || Boolean(sourceDate && new Date(sourceDate) <= dateAtEndOfDay(endDate));
         return matchDept && matchSeverity && matchStatus && matchStart && matchEnd;
       });
     }
@@ -273,9 +288,10 @@ export function AnalyticsClient() {
     let filename = "";
 
     if (exportType === "audits") {
+      const auditRows = filteredData as Audit[];
       filename = `6S_Audit_Summary_Report_${new Date().toISOString().split("T")[0]}.csv`;
       headers = ["Audit Number", "Starting Date", "Ending Date", "Department", "Zone", "Auditor Name", "Score (%)", "Status"];
-      rows = filteredData.map((item: any) => [
+      rows = auditRows.map((item) => [
         item.auditNumber,
         formatReportDate(auditStartDate(item)),
         formatReportDate(item.endDate),
@@ -286,16 +302,17 @@ export function AnalyticsClient() {
         item.status
       ]);
     } else {
+      const findingRows = filteredData as Finding[];
       filename = `6S_Findings_CAPA_Report_${new Date().toISOString().split("T")[0]}.csv`;
       headers = ["Finding ID", "Audit Ref", "Category", "Department", "Zone", "Severity", "Target Due Date", "Status", "Observation / Question"];
-      rows = filteredData.map((item: any) => [
+      rows = findingRows.map((item) => [
         item.findingNumber,
         item.auditNumber || "Manual",
         item.category,
         item.department,
         item.zone,
         item.severity,
-        item.dueDate ? new Date(item.dueDate).toLocaleDateString() : "N/A",
+        formatReportDate(item.dueDate),
         item.status,
         `"${item.question.replace(/"/g, '""')}"`
       ]);
@@ -598,7 +615,7 @@ export function AnalyticsClient() {
                 <select
                   className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                   value={exportType}
-                  onChange={(e) => setExportType(e.target.value as any)}
+                  onChange={(e) => setExportType(e.target.value as "audits" | "findings")}
                 >
                   <option value="findings">Findings Log & CAPA Records</option>
                   <option value="audits">Audit Runs Summary</option>
@@ -742,7 +759,7 @@ export function AnalyticsClient() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((a) => (
+                    {(filteredData as Audit[]).map((a) => (
                       <tr key={a._id}>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.auditNumber}</strong></td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(auditStartDate(a))}</td>
@@ -765,20 +782,20 @@ export function AnalyticsClient() {
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Category</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department / Zone</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Severity</th>
-                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Due Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Target Due Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Observation Details</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((f) => (
+                    {(filteredData as Finding[]).map((f) => (
                       <tr key={f._id}>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{f.findingNumber}</strong></td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><span className="text-[11px] text-t2">{f.auditNumber || "Manual"}</span></td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.category}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.department} / {f.zone}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.severity}</td>
-                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.dueDate ? new Date(f.dueDate).toLocaleDateString() : "N/A"}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(f.dueDate)}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{f.status}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-xs">{f.question}</td>
                       </tr>

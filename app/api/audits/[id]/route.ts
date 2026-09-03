@@ -33,9 +33,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       audit.startDate = startDate;
       audit.date = startDate;
     }
-    audit.endDate = input.endDate ?? null;
+    if (Object.prototype.hasOwnProperty.call(input, "endDate")) {
+      audit.endDate = input.endDate ?? null;
+    }
 
-    if (audit.startDate && audit.endDate && audit.endDate < audit.startDate) {
+    const effectiveStartDate = audit.startDate || audit.date;
+    if (effectiveStartDate && audit.endDate && audit.endDate < effectiveStartDate) {
       throw Object.assign(new Error("Ending Date cannot be earlier than Starting Date."), { status: 400 });
     }
 

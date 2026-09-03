@@ -81,9 +81,9 @@ function statusClass(status: string) {
 }
 
 function formatRegisterDate(value?: string | null) {
-  if (!value) return "\u2014";
+  if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "\u2014" : date.toLocaleDateString();
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleDateString();
 }
 
 export function RegisterWorkspace() {
@@ -143,8 +143,8 @@ export function RegisterWorkspace() {
       const matchSeverity = severityFilter === "ALL" || r.severity === severityFilter;
       const matchDept = deptFilter === "ALL" || r.department === deptFilter;
       const matchCategory = categoryFilter === "ALL" || r.category === categoryFilter;
-      const matchStart = !startDate || (r.startDate && new Date(r.startDate) >= new Date(startDate));
-      const matchEnd = !endDate || (r.startDate && new Date(r.startDate) <= new Date(endDate));
+      const matchStart = !startDate || Boolean(r.startDate && new Date(r.startDate) >= new Date(startDate));
+      const matchEnd = !endDate || Boolean(r.startDate && new Date(r.startDate) <= new Date(endDate));
       return matchSearch && matchStatus && matchSeverity && matchDept && matchCategory && matchStart && matchEnd;
     });
   }, [rows, search, statusFilter, severityFilter, deptFilter, categoryFilter, startDate, endDate]);
@@ -166,7 +166,7 @@ export function RegisterWorkspace() {
       r.severity || "",
       `"${(r.observation || "").replace(/"/g, '""')}"`,
       statusLabel(r.status),
-      r.dueOrClosed ? new Date(r.dueOrClosed).toLocaleDateString() : ""
+      formatRegisterDate(r.dueOrClosed)
     ]);
     const csvContent = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });

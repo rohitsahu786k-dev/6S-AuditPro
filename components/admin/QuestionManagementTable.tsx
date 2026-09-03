@@ -5,7 +5,16 @@ import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 import { CATEGORIES, CATEGORY_META } from "@/lib/constants";
 
-type QuestionRow = { _id: string; category: string; text: string; subSection?: string; sortOrder: number; isActive?: boolean; status?: string };
+type QuestionRow = {
+  _id: string;
+  category: string;
+  text: string;
+  subSection?: string;
+  serialNumber?: number;
+  sortOrder: number;
+  isActive?: boolean;
+  status?: string;
+};
 type Masters = { questions: QuestionRow[] };
 
 function categoryLabel(category: string) {
@@ -13,15 +22,19 @@ function categoryLabel(category: string) {
   return meta ? `${meta.short} - ${category}` : category;
 }
 
+function questionStatus(question: Pick<QuestionRow, "isActive" | "status">) {
+  return question.isActive === false || question.status === "inactive" ? "inactive" : "active";
+}
+
 export function QuestionManagementTable() {
   const masters = useApi<Masters>("/api/masters");
-  const [form, setForm] = useState({ category: "SORT", text: "", subSection: "", sortOrder: 0 });
+  const [form, setForm] = useState({ category: "SORT", text: "", subSection: "", serialNumber: 0 });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ category: "SORT", text: "", subSection: "", sortOrder: 0, isActive: true });
+  const [editForm, setEditForm] = useState({ category: "SORT", text: "", subSection: "", serialNumber: 0, status: "active" });
   const [message, setMessage] = useState("");
 
   const questions = masters.data?.questions || [];
-  const categories = CATEGORIES;
+  const categories = Array.from(new Set([...CATEGORIES, ...questions.map((question) => question.category)].filter(Boolean)));
 
   async function createQuestion(event: React.FormEvent) {
     event.preventDefault();
@@ -30,9 +43,9 @@ export function QuestionManagementTable() {
       return;
     }
     try {
-      await apiPost("/api/masters/questions", form);
+      await apiPost("/api/masters/questions", { ...form, sortOrder: form.serialNumber });
       setMessage("Question created successfully.");
-      setForm({ category: "SORT", text: "", subSection: "", sortOrder: 0 });
+      setForm({ category: "SORT", text: "", subSection: "", serialNumber: 0 });
       await masters.reload();
     } catch (err: any) {
       alert(`Error creating question: ${err.message}`);
@@ -58,14 +71,14 @@ export function QuestionManagementTable() {
       category: q.category,
       text: q.text,
       subSection: q.subSection || "",
-      sortOrder: q.sortOrder || 0,
-      isActive: q.isActive !== false && q.status !== "inactive"
+      serialNumber: q.serialNumber ?? q.sortOrder ?? 0,
+      status: questionStatus(q)
     });
   }
 
   async function saveEdit(id: string) {
     try {
-      await apiPatch(`/api/masters/questions/${id}`, editForm);
+      await apiPatch(`/api/masters/questions/${id}`, { ...editForm, sortOrder: editForm.serialNumber });
       setEditingId(null);
       setMessage("Question updated.");
       await masters.reload();
@@ -76,22 +89,23 @@ export function QuestionManagementTable() {
 
   return (
     <div className="grid grid-cols-1 gap-5 md:grid-cols-[1fr_2fr]">
-      {/* Create form */}
       <form className="h-fit rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]" onSubmit={createQuestion}>
         <h2 className="mb-2.5 font-extrabold text-t1">Add 6S/7S Question</h2>
         {message && <div className="mb-3 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 py-2.5 text-[13px] text-[#166534]">{message}</div>}
 
         <label className="mb-3 grid gap-1.5">
           <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Category / Pillar</span>
-          <select
+          <input
+            list="question-category-options"
             className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
             value={form.category}
             onChange={(e) => setForm({ ...form, category: e.target.value })}
-          >
+          />
+          <datalist id="question-category-options">
             {categories.map((cat) => (
               <option key={cat} value={cat}>{categoryLabel(cat)}</option>
             ))}
-          </select>
+          </datalist>
         </label>
 
         <label className="mb-3 grid gap-1.5">
@@ -120,8 +134,8 @@ export function QuestionManagementTable() {
           <input
             type="number"
             className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
-            value={form.sortOrder}
-            onChange={(e) => setForm({ ...form, sortOrder: parseInt(e.target.value) || 0 })}
+            value={form.serialNumber}
+            onChange={(e) => setForm({ ...form, serialNumber: parseInt(e.target.value) || 0 })}
           />
         </label>
 
@@ -130,7 +144,6 @@ export function QuestionManagementTable() {
         </button>
       </form>
 
-      {/* List */}
       <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
         <h2 className="mb-2.5 font-extrabold text-t1">Configured Checklist Items</h2>
         <div className="overflow-x-auto rounded-lg border border-bd bg-white">
@@ -151,15 +164,12 @@ export function QuestionManagementTable() {
                   {editingId === q._id ? (
                     <>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
-                        <select
+                        <input
+                          list="question-category-options"
                           className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                           value={editForm.category}
                           onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                        >
-                          {categories.map((cat) => (
-                            <option key={cat} value={cat}>{categoryLabel(cat)}</option>
-                          ))}
-                        </select>
+                        />
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <textarea
@@ -180,15 +190,15 @@ export function QuestionManagementTable() {
                         <input
                           type="number"
                           className="w-[60px] rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
-                          value={editForm.sortOrder}
-                          onChange={(e) => setEditForm({ ...editForm, sortOrder: parseInt(e.target.value) || 0 })}
+                          value={editForm.serialNumber}
+                          onChange={(e) => setEditForm({ ...editForm, serialNumber: parseInt(e.target.value) || 0 })}
                         />
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <select
                           className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
-                          value={editForm.isActive ? "active" : "inactive"}
-                          onChange={(e) => setEditForm({ ...editForm, isActive: e.target.value === "active" })}
+                          value={editForm.status}
+                          onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                         >
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
@@ -207,11 +217,11 @@ export function QuestionManagementTable() {
                     <>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top"><strong>{categoryLabel(q.category)}</strong></td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.text}</td>
-                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.subSection || <span className="text-t2">—</span>}</td>
-                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.sortOrder}</td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.subSection || <span className="text-t2">-</span>}</td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{q.serialNumber ?? q.sortOrder}</td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
-                          {q.isActive === false || q.status === "inactive" ? "inactive" : "active"}
+                          {questionStatus(q)}
                         </span>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 text-right align-top">

@@ -29,7 +29,7 @@ import type { Severity } from "@/types/domain";
 type Masters = { 
   departments: Array<{ _id: string; name: string; isActive?: boolean }>;
   zones: Array<{ name: string; department: string }>; 
-  questions: Array<{ _id: string; category: string; text: string; subSection: string }>;
+  questions: Array<{ _id: string; category: string; text: string; subSection: string; serialNumber?: number; sortOrder?: number }>;
   people: Array<{ _id: string; name: string; type: string; department?: string; isActive?: boolean }>;
 };
 
@@ -307,11 +307,20 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     });
   }, [audits.data, historySearch, historyDepartment, historyZone]);
 
-  const activeCategory = CATEGORIES[currentCategoryIndex];
+  const auditCategories = useMemo(() => {
+    const categories = masters.data?.questions
+      ? [...new Set(masters.data.questions.map((question) => question.category).filter(Boolean))]
+      : [];
+    return categories.length ? categories : [...CATEGORIES];
+  }, [masters.data]);
+
+  const activeCategory = auditCategories[currentCategoryIndex] || "";
 
   const categoryQuestions = useMemo(() => {
     if (!masters.data?.questions) return [];
-    return masters.data.questions.filter((q) => q.category === activeCategory);
+    return masters.data.questions
+      .filter((q) => q.category === activeCategory)
+      .sort((a, b) => (a.serialNumber ?? a.sortOrder ?? 0) - (b.serialNumber ?? b.sortOrder ?? 0));
   }, [masters.data, activeCategory]);
 
   // Calculate stats
@@ -436,13 +445,14 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       return;
     }
     if (!startDate) {
-      setSetupError("Please provide a valid Starting Date.");
+      setSetupError("Starting Date is required.");
       return;
     }
     if (endDate && new Date(endDate) < new Date(startDate)) {
       setSetupError("Ending Date cannot be earlier than Starting Date.");
       return;
     }
+    setSetupError("");
     setStep("checklist");
   }
 
@@ -487,9 +497,8 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
         zone: selectedZone?.name,
         department: selectedZone?.department,
         auditorName,
-        date: startDate,
-        startDate,
-        endDate: endDate || null,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
         checklist: checklistPayload
       });
 
@@ -584,8 +593,8 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                           <strong>{audit.auditNumber}</strong>
                         </td>
-                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm whitespace-nowrap">{formatAuditDate(auditStartDate(audit))}</td>
-                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm whitespace-nowrap">{formatAuditDate(audit.endDate)}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatAuditDate(auditStartDate(audit))}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatAuditDate(audit.endDate)}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                           <div>{audit.zone}</div>
                           <span className="text-[11px] text-t2">{audit.department}</span>
@@ -753,7 +762,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
 
           {/* Category Navigation Pills */}
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {CATEGORIES.map((cat, idx) => {
+            {auditCategories.map((cat, idx) => {
               const stats = getCategoryStat(cat);
               const isSelected = currentCategoryIndex === idx;
               const isDone = stats.answered === stats.total;
@@ -988,7 +997,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               <ChevronLeft size={16} /> Back
             </button>
 
-            {currentCategoryIndex < CATEGORIES.length - 1 ? (
+            {currentCategoryIndex < auditCategories.length - 1 ? (
               <button
                 className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
                 onClick={() => setCurrentCategoryIndex(prev => prev + 1)}
@@ -1023,9 +1032,9 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
             <div className="grid grid-cols-1 gap-2.5 text-sm md:grid-cols-2">
               <div>Zone: <strong>{createdAudit.zone}</strong></div>
               <div>Department: <strong>{createdAudit.department}</strong></div>
+              <div>Auditor: <strong>{createdAudit.auditorName}</strong></div>
               <div>Starting Date: <strong>{formatAuditDate(auditStartDate(createdAudit))}</strong></div>
               <div>Ending Date: <strong>{formatAuditDate(createdAudit.endDate)}</strong></div>
-              <div>Auditor: <strong>{createdAudit.auditorName}</strong></div>
               <div>Total 6S Score: <strong className={createdAudit.totalScore >= 90 ? "text-green" : "text-brand"}>{createdAudit.totalScore}%</strong></div>
             </div>
 
@@ -1097,7 +1106,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <span className="mb-1.5 inline-flex items-center rounded-full border border-red-200 bg-accent px-2.5 py-0.5 text-xs font-extrabold text-brand-d">COMPLETED REPORT</span>
                 <h3 className="m-0 text-xl">Audit Details: {selectedAuditDetail.auditNumber}</h3>
                 <span className="text-[13px] text-t2">
-                  Starting Date: {formatAuditDate(auditStartDate(selectedAuditDetail))}
+                  Starting Date: {formatAuditDate(auditStartDate(selectedAuditDetail))} | Ending Date: {formatAuditDate(selectedAuditDetail.endDate)}
                 </span>
               </div>
               <div className="text-right">
@@ -1166,55 +1175,66 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
             </div>
 
             {isUserAdmin && (
-              <div className="mb-[18px] rounded-lg border border-bd bg-bg3 p-3">
+              <div className="mb-[18px] rounded-lg border border-bd bg-white p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h4 className="m-0 text-xs uppercase tracking-wide text-t2">Audit Dates</h4>
+                  {!isEditingAuditDates && (
+                    <button
+                      className="inline-flex items-center gap-1 rounded-lg border border-bd bg-white px-2.5 py-[5px] text-xs font-bold text-t1 hover:bg-bg3"
+                      onClick={() => {
+                        setEditStartDate(dateInputValue(auditStartDate(selectedAuditDetail)));
+                        setEditEndDate(dateInputValue(selectedAuditDetail.endDate));
+                        setIsEditingAuditDates(true);
+                      }}
+                    >
+                      Edit Dates
+                    </button>
+                  )}
+                </div>
                 {isEditingAuditDates ? (
-                  <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                  <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
                     <label className="grid gap-1.5">
                       <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Starting Date</span>
                       <input
                         type="date"
-                        className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                        className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                         value={editStartDate}
-                        onChange={(e) => setEditStartDate(e.target.value)}
+                        onChange={(event) => setEditStartDate(event.target.value)}
+                        required
                       />
                     </label>
                     <label className="grid gap-1.5">
                       <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Ending Date</span>
                       <input
                         type="date"
-                        className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                        className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                         value={editEndDate}
                         min={editStartDate || undefined}
-                        onChange={(e) => setEditEndDate(e.target.value)}
+                        onChange={(event) => setEditEndDate(event.target.value)}
                       />
                     </label>
                     <div className="flex gap-2">
                       <button
-                        className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-wait disabled:opacity-60"
+                        className="inline-flex items-center gap-1 rounded-lg border border-brand bg-brand px-2.5 py-2 text-xs font-bold text-white hover:bg-brand-d disabled:cursor-wait disabled:opacity-60"
                         onClick={saveAuditDates}
                         disabled={isSavingAuditDates}
                       >
-                        {isSavingAuditDates ? "Saving..." : "Save Dates"}
+                        {isSavingAuditDates ? "Saving..." : "Save"}
                       </button>
                       <button
-                        className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
-                        onClick={() => {
-                          setEditStartDate(dateInputValue(auditStartDate(selectedAuditDetail)));
-                          setEditEndDate(dateInputValue(selectedAuditDetail.endDate));
-                          setIsEditingAuditDates(false);
-                        }}
+                        className="inline-flex items-center gap-1 rounded-lg border border-bd bg-white px-2.5 py-2 text-xs font-bold text-t1 hover:bg-bg3"
+                        onClick={() => setIsEditingAuditDates(false)}
+                        disabled={isSavingAuditDates}
                       >
                         Cancel
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <button
-                    className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
-                    onClick={() => setIsEditingAuditDates(true)}
-                  >
-                    Edit Dates
-                  </button>
+                  <div className="grid gap-2 text-sm sm:grid-cols-2">
+                    <div>Starting Date: <strong>{formatAuditDate(auditStartDate(selectedAuditDetail))}</strong></div>
+                    <div>Ending Date: <strong>{formatAuditDate(selectedAuditDetail.endDate)}</strong></div>
+                  </div>
                 )}
               </div>
             )}

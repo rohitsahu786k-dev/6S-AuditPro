@@ -835,10 +835,10 @@ export function FindingsWorkspace() {
                     ) : (
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>Zone: <strong>{selectedFinding.zone}</strong></div>
-                        <div>Dept: <strong>{selectedFinding.department}</strong></div>
+                        <div>Action Owner Department: <strong>{selectedFinding.department}</strong></div>
                         <div>Severity: <strong>{selectedFinding.severity}</strong></div>
                         <div>Due Date: <strong>{selectedFinding.dueDate ? new Date(selectedFinding.dueDate).toLocaleDateString() : "No Date"}</strong></div>
-                        <div className="col-span-2">Assigned To: <strong>{selectedFinding.assignedTo || selectedFinding.department}</strong></div>
+                        <div className="col-span-2">Action Owner: <strong>{selectedFinding.assignedTo || selectedFinding.department}</strong></div>
                       </div>
                     )}
                   </div>

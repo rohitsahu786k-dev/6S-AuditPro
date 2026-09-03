@@ -33,7 +33,7 @@ export async function getMasters() {
   const [departments, zones, questions, people] = await Promise.all([
     Department.find().sort({ name: 1 }).lean(),
     Zone.find().sort({ department: 1, name: 1 }).lean(),
-    Question.find().sort({ sortOrder: 1, category: 1 }).lean(),
+    Question.find().sort({ category: 1, serialNumber: 1, sortOrder: 1 }).lean(),
     Person.find().sort({ type: 1, name: 1 }).lean()
   ]);
   return {
