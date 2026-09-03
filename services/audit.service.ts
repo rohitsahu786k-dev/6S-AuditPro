@@ -13,7 +13,9 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerDepartment",
+  // Audit scores belong to the department that was audited. CAPA/action-owner
+  // reassignment must not redistribute or recalculate a completed audit score.
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
