@@ -4,6 +4,13 @@ import Question from "@/models/Question";
 import Person from "@/models/Person";
 import { connectDB } from "@/lib/db";
 
+function withStatus<T extends { isActive?: boolean }>(item: T) {
+  return {
+    ...item,
+    status: item.isActive === false ? "inactive" : "active"
+  };
+}
+
 const CATEGORY_ALIASES: Record<string, string> = {
   "1S": "SORT",
   "2S": "SET IN ORDER",

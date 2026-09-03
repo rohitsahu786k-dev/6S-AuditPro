@@ -4,8 +4,12 @@ import { useState } from "react";
 import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 
-type ZoneRow = { _id: string; name: string; department: string; location?: string; status: string };
+type ZoneRow = { _id: string; name: string; department: string; location?: string; isActive?: boolean; status?: string };
 type Masters = { zones: ZoneRow[]; departments: Array<{ _id: string; name: string }> };
+
+function zoneStatus(zone: ZoneRow) {
+  return zone.status || (zone.isActive === false ? "inactive" : "active");
+}
 
 export function ZoneManagementTable() {
   const masters = useApi<Masters>("/api/masters");
@@ -53,7 +57,7 @@ export function ZoneManagementTable() {
       name: zone.name,
       department: zone.department,
       location: zone.location || "",
-      status: zone.status
+      status: zoneStatus(zone)
     });
   }
 
@@ -184,7 +188,7 @@ export function ZoneManagementTable() {
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">{z.location || <span className="text-t2">—</span>}</td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
-                          {z.status}
+                          {zoneStatus(z)}
                         </span>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 text-right align-top">
