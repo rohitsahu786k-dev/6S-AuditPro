@@ -9,7 +9,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
 import { FindingListCard } from "@/components/dashboard/FindingListCard";
 import { COMPANY_NAME } from "@/lib/constants";
-import { scoreChecklist, scoreLabel } from "@/lib/audit-scoring";
+import { scoreLabel } from "@/lib/audit-scoring";
 
 type Audit = {
   _id: string;
@@ -17,14 +17,11 @@ type Audit = {
   department: string;
   zone: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   totalScore: number;
   status: string;
   auditorName: string;
-  checklist?: Array<{
-    category: string;
-    response: "Adequate" | "Not Adequate" | "N/A";
-    actionOwnerDepartment?: string;
-  }>;
 };
 
 type Finding = {
@@ -68,7 +65,19 @@ const YEAR_MONTHS = Array.from({ length: 12 }, (_, index) => ({
 }));
 
 function monthKeyOf(isoDate?: string) {
-  return isoDate ? isoDate.slice(0, 7) : "";
+  if (!isoDate) return "";
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function auditStartDate(audit: Audit) {
+  return audit.startDate || audit.date || undefined;
+}
+
+function auditTimestamp(audit: Audit) {
+  const timestamp = new Date(auditStartDate(audit) || audit.endDate || "").getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 function trendDelta(values: Array<number | null>, index: number): number | null {
@@ -86,23 +95,6 @@ function clampPercent(value: number) {
 
 function uniqueSorted(values: string[]) {
   return [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b));
-}
-
-function auditScoreForDepartment(audit: Audit, department: string): number | null {
-  const checklist = audit.checklist || [];
-  if (checklist.length === 0) return audit.department === department ? audit.totalScore || 0 : null;
-
-  const departmentChecklist = checklist.filter((item) => {
-    if (audit.department === department) {
-      if (item.response !== "Not Adequate") return true;
-      return !item.actionOwnerDepartment || item.actionOwnerDepartment === department;
-    }
-    return item.response === "Not Adequate" && item.actionOwnerDepartment === department;
-  });
-
-  const counted = departmentChecklist.filter((item) => item.response !== "N/A");
-  if (counted.length === 0) return null;
-  return scoreChecklist(departmentChecklist).totalScore;
 }
 
 function MonthlyDepartmentTable({
@@ -173,8 +165,7 @@ export function DashboardClient() {
       .filter((department) => department.isActive !== false)
       .map((department) => department.name);
     const auditDepartments = audits.flatMap((audit) => [
-      audit.department,
-      ...(audit.checklist || []).map((item) => item.actionOwnerDepartment || "")
+      audit.department
     ]);
     const findingDepartments = findings.map((finding) => finding.department);
     return uniqueSorted([...masterDepartments, ...auditDepartments, ...findingDepartments]);
@@ -212,12 +203,12 @@ export function DashboardClient() {
   }, [audits]);
 
   const departmentSummary = useMemo(() => {
-    const map = new Map<string, { total: number; open: number; inProcess: number; closed: number; delayed: number; scoreSum: number; scoreCount: number }>();
+    const map = new Map<string, { total: number; open: number; inProcess: number; closed: number; delayed: number; latestAuditScore: number | null; latestAuditAt: number }>();
     for (const department of departments) {
-      map.set(department, { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 });
+      map.set(department, { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, latestAuditScore: null, latestAuditAt: 0 });
     }
     for (const f of findings) {
-      const row = map.get(f.department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
+      const row = map.get(f.department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, latestAuditScore: null, latestAuditAt: 0 };
       row.total += 1;
       if (f.status === "OPEN" || f.status === "REOPENED" || f.status === "OVERDUE" || f.status === "SUBMITTED") row.open += 1;
       if (f.status === "IN_PROGRESS") row.inProcess += 1;
@@ -227,18 +218,16 @@ export function DashboardClient() {
     }
     for (const a of audits) {
       if (a.status !== "COMPLETED") continue;
-      for (const department of departments) {
-        const score = auditScoreForDepartment(a, department);
-        if (score === null) continue;
-        const row = map.get(department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, scoreSum: 0, scoreCount: 0 };
-        row.scoreSum += score;
-        row.scoreCount += 1;
-        map.set(department, row);
+      const row = map.get(a.department) || { total: 0, open: 0, inProcess: 0, closed: 0, delayed: 0, latestAuditScore: null, latestAuditAt: 0 };
+      const timestamp = auditTimestamp(a);
+      if (timestamp >= row.latestAuditAt) {
+        row.latestAuditScore = a.totalScore || 0;
+        row.latestAuditAt = timestamp;
       }
+      map.set(a.department, row);
     }
     return [...map.entries()]
       .map(([department, row]) => {
-        const auditScore = row.scoreCount ? Math.round(row.scoreSum / row.scoreCount) : null;
         const closurePct = row.total ? Math.round((row.closed / row.total) * 100) : 0;
         return {
           department,
@@ -247,10 +236,10 @@ export function DashboardClient() {
           inProcess: row.inProcess,
           closed: row.closed,
           delayed: row.delayed,
-          auditScore,
+          auditScore: row.latestAuditScore,
           closurePct,
-          hasAuditScore: auditScore !== null,
-          compliant: auditScore !== null && auditScore >= COMPLIANCE_TARGET
+          hasAuditScore: row.latestAuditScore !== null,
+          compliant: row.latestAuditScore !== null && row.latestAuditScore >= COMPLIANCE_TARGET
         };
       })
       .sort((a, b) => b.total - a.total || a.department.localeCompare(b.department));
@@ -264,9 +253,8 @@ export function DashboardClient() {
       values: YEAR_MONTHS.map((month) => {
         if (month.isFuture) return null;
         const monthScores = completed
-          .filter((audit) => monthKeyOf(audit.date) === month.key)
-          .map((audit) => auditScoreForDepartment(audit, department))
-          .filter((score): score is number => score !== null);
+          .filter((audit) => audit.department === department && monthKeyOf(auditStartDate(audit)) === month.key)
+          .map((audit) => audit.totalScore || 0);
         return monthScores.length
           ? Math.round(monthScores.reduce((sum, score) => sum + score, 0) / monthScores.length)
           : null;
@@ -302,7 +290,10 @@ export function DashboardClient() {
   }, [findings]);
 
   const recentAudits = useMemo(() => {
-    return [...audits].sort((a, b) => new Date(b.date || "").getTime() - new Date(a.date || "").getTime()).slice(0, 5);
+    return [...audits]
+      .filter((audit) => audit.status === "COMPLETED")
+      .sort((a, b) => auditTimestamp(b) - auditTimestamp(a))
+      .slice(0, 5);
   }, [audits]);
 
   const urgentFindings = useMemo(() => {

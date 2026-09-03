@@ -8,7 +8,7 @@ export type FindingListView = "full" | "summary" | "register" | "media-selector"
 
 const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   full: null,
-  summary: "findingNumber auditNumber zone department category question severity status dueDate observation beforePhotos assignedTo createdAt updatedAt",
+  summary: "findingNumber auditNumber zone department category question severity status dueDate assignedTo createdAt updatedAt",
   register: "auditId questionId status dueDate updatedAt",
   "media-selector": "findingNumber question zone department category status assignedTo beforePhotos afterPhotos"
 };

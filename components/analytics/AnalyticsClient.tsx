@@ -25,10 +25,12 @@ type Audit = {
   department: string;
   auditorName: string;
   date: string;
+  startDate?: string | null;
+  endDate?: string | null;
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
   totalScore: number;
   categoryScores?: Record<string, number>;
-  checklist: Array<{
+  checklist?: Array<{
     questionId: string;
     category: string;
     question: string;
@@ -36,6 +38,16 @@ type Audit = {
     severity?: string;
   }>;
 };
+
+function formatReportDate(value?: string | null) {
+  if (!value) return "\u2014";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "\u2014" : date.toLocaleDateString();
+}
+
+function auditStartDate(audit: Audit) {
+  return audit.startDate || audit.date || null;
+}
 
 type Finding = {
   _id: string;
@@ -48,6 +60,8 @@ type Finding = {
   severity: "Critical" | "High" | "Medium" | "Low";
   status: "OPEN" | "IN_PROGRESS" | "SUBMITTED" | "CLOSED" | "REJECTED" | "REOPENED" | "OVERDUE";
   dueDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
   observation?: string;
 };
 
@@ -125,8 +139,9 @@ export function AnalyticsClient() {
       rows: Array.from({ length: 12 }, (_, monthIndex) => ({
         month: new Date(year, monthIndex, 1).toLocaleString("en", { month: "short" }),
         audits: audits.filter((audit) => {
-          if (audit.status !== "COMPLETED" || !audit.date) return false;
-          const auditDate = new Date(audit.date);
+          const start = auditStartDate(audit);
+          if (audit.status !== "COMPLETED" || !start) return false;
+          const auditDate = new Date(start);
           return auditDate.getFullYear() === year && auditDate.getMonth() === monthIndex;
         }).length
       }))
@@ -167,7 +182,7 @@ export function AnalyticsClient() {
       } else {
         // Fallback: calculate from checklist items
         const catGroup: Record<string, { yes: number; total: number }> = {};
-        for (const item of a.checklist) {
+        for (const item of a.checklist || []) {
           if (!catGroup[item.category]) catGroup[item.category] = { yes: 0, total: 0 };
           if (item.response === "Adequate") {
             catGroup[item.category].yes += 1;
@@ -223,8 +238,9 @@ export function AnalyticsClient() {
   // Unique lists for export filters
   const uniqueDepts = useMemo(() => {
     const list = new Set(audits.map(a => a.department));
+    findings.forEach((finding) => list.add(finding.department));
     return Array.from(list);
-  }, [audits]);
+  }, [audits, findings]);
 
   // Filtered dataset for exports
   const filteredData = useMemo<any[]>(() => {
@@ -232,8 +248,9 @@ export function AnalyticsClient() {
       return audits.filter(a => {
         const matchDept = filterDept === "ALL" || a.department === filterDept;
         const matchStatus = filterStatus === "ALL" || a.status === filterStatus;
-        const matchStart = !startDate || new Date(a.date) >= new Date(startDate);
-        const matchEnd = !endDate || new Date(a.date) <= new Date(endDate);
+        const auditStart = auditStartDate(a);
+        const matchStart = !startDate || (auditStart && new Date(auditStart) >= new Date(startDate));
+        const matchEnd = !endDate || (auditStart && new Date(auditStart) <= new Date(endDate));
         return matchDept && matchStatus && matchStart && matchEnd;
       });
     } else {
@@ -241,8 +258,9 @@ export function AnalyticsClient() {
         const matchDept = filterDept === "ALL" || f.department === filterDept;
         const matchSeverity = filterSeverity === "ALL" || f.severity === filterSeverity;
         const matchStatus = filterStatus === "ALL" || f.status === filterStatus;
-        const matchStart = !startDate || (f.dueDate && new Date(f.dueDate) >= new Date(startDate));
-        const matchEnd = !endDate || (f.dueDate && new Date(f.dueDate) <= new Date(endDate));
+        const findingDate = f.createdAt || f.dueDate;
+        const matchStart = !startDate || (findingDate && new Date(findingDate) >= new Date(startDate));
+        const matchEnd = !endDate || (findingDate && new Date(findingDate) <= new Date(endDate));
         return matchDept && matchSeverity && matchStatus && matchStart && matchEnd;
       });
     }
@@ -256,13 +274,14 @@ export function AnalyticsClient() {
 
     if (exportType === "audits") {
       filename = `6S_Audit_Summary_Report_${new Date().toISOString().split("T")[0]}.csv`;
-      headers = ["Audit Number", "Department", "Zone", "Auditor Name", "Date Completed", "Score (%)", "Status"];
+      headers = ["Audit Number", "Starting Date", "Ending Date", "Department", "Zone", "Auditor Name", "Score (%)", "Status"];
       rows = filteredData.map((item: any) => [
         item.auditNumber,
+        formatReportDate(auditStartDate(item)),
+        formatReportDate(item.endDate),
         item.department,
         item.zone,
         item.auditorName,
-        item.date ? new Date(item.date).toLocaleDateString() : "",
         item.totalScore.toString(),
         item.status
       ]);
@@ -713,8 +732,9 @@ export function AnalyticsClient() {
                   <thead>
                     <tr>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit Number</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Starting Date</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Ending Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Auditor</th>
-                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Zone</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Score</th>
@@ -725,8 +745,9 @@ export function AnalyticsClient() {
                     {filteredData.map((a) => (
                       <tr key={a._id}>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.auditNumber}</strong></td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(auditStartDate(a))}</td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatReportDate(a.endDate)}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.auditorName}</td>
-                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.date ? new Date(a.date).toLocaleDateString() : ""}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.department}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{a.zone}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{a.totalScore}%</strong></td>

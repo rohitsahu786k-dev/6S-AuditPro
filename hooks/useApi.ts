@@ -15,10 +15,14 @@ export function useApi<T>(url: string) {
   const [state, setState] = useState<ApiState<T>>({ loading: true });
   const load = useCallback(async () => {
     setState((current) => ({ ...current, loading: true, error: undefined }));
-    const res = await fetch(url, { cache: "no-store" });
-    const json = await res.json();
-    if (!res.ok || !json.ok) setState({ loading: false, error: json.error || "Request failed" });
-    else setState({ loading: false, data: json.data });
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) setState({ loading: false, error: json.error || "Request failed" });
+      else setState({ loading: false, data: json.data });
+    } catch (error) {
+      setState({ loading: false, error: error instanceof Error ? error.message : "Request failed" });
+    }
   }, [url]);
 
   useEffect(() => { void load(); }, [load]);
