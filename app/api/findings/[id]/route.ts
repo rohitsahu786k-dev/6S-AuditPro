@@ -52,11 +52,9 @@ async function syncLinkedAuditForFinding(finding: any) {
     audit.markModified("checklist");
   }
 
-  const scoredChecklist = (audit.checklist as ChecklistItem[]).filter((entry) => {
-    if (entry.response !== "Not Adequate") return true;
-    return !entry.actionOwnerDepartment || entry.actionOwnerDepartment === audit.department;
-  });
-  const { categoryScores, totalScore } = scoreChecklist(scoredChecklist as any);
+  // Audit score represents the audited department's checklist result and must not
+  // change just because CAPA ownership is reassigned to another department/person.
+  const { categoryScores, totalScore } = scoreChecklist(audit.checklist as any);
   audit.categoryScores = categoryScores;
   audit.totalScore = totalScore;
   await audit.save();
