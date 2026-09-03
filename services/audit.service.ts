@@ -13,9 +13,10 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  // Dashboard audit scores belong to the department that was actually audited.
-  // Action-owner department is finding/CAPA metadata and must not split/reassign an audit score.
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response",
+  // Dashboard must use the exact stored score shown in Audit History. Checklist
+  // action-owner metadata is intentionally excluded so reassignment cannot alter
+  // or split a department's historical audit score.
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
