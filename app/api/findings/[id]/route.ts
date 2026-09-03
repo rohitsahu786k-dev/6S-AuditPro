@@ -84,10 +84,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const finding = await Finding.findById(id);
     if (!finding) throw Object.assign(new Error("Finding not found"), { status: 404 });
     
+    const previousOwner = finding.assignedTo || "";
+    const previousDepartment = finding.department;
+
     if (input.severity) finding.severity = input.severity;
-    if (input.observation) finding.observation = input.observation;
+    if (input.observation !== undefined) finding.observation = input.observation;
     if (input.department) finding.department = input.department;
-    if (input.assignedTo) finding.assignedTo = input.assignedTo;
+    if (input.assignedTo !== undefined) finding.assignedTo = input.assignedTo;
     if (input.dueDate) finding.dueDate = input.dueDate;
     if (input.status) finding.status = input.status;
     if (input.beforePhotos) finding.beforePhotos = input.beforePhotos as any;
@@ -95,7 +98,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     
     finding.timeline.push({ 
       action: "Finding updated", 
-      note: `Updated attributes by ${user.name}`, 
+      note: input.department || input.assignedTo !== undefined
+        ? `Owner changed from ${previousOwner || previousDepartment} / ${previousDepartment} to ${finding.assignedTo || finding.department} / ${finding.department}`
+        : `Updated attributes by ${user.name}`,
       by: user.id, 
       byName: user.name, 
       at: new Date() 

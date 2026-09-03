@@ -5,6 +5,7 @@ const QuestionSchema = new Schema({
   text: { type: String, required: true },
   subSection: { type: String },
   isActive: { type: Boolean, default: true, index: true },
+  serialNumber: { type: Number },
   sortOrder: { type: Number, default: 0 }
 }, { timestamps: true });
 

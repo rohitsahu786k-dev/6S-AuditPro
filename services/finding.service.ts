@@ -1,8 +1,10 @@
 import Finding from "@/models/Finding";
+import Department from "@/models/Department";
 import { connectDB } from "@/lib/db";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
+import { canonicalDepartmentName } from "@/lib/org-utils";
 
 export type FindingListView = "full" | "summary" | "register" | "media-selector";
 
@@ -36,7 +38,15 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
   const projection = FINDING_PROJECTIONS[view] ?? FINDING_PROJECTIONS.full;
   const request = Finding.find(scopedQuery(user)).sort({ createdAt: -1 });
   if (projection) request.select(projection);
-  return request.lean();
+  const [findings, departments] = await Promise.all([
+    request.lean(),
+    Department.find().select("name").lean()
+  ]);
+  const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+  return findings.map((finding) => ({
+    ...finding,
+    department: canonicalDepartmentName(finding.department, configuredDepartments)
+  }));
 }
 
 /**

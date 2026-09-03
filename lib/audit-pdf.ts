@@ -150,6 +150,12 @@ function formatList(items: string[]) {
   return `${items.slice(0, -1).join(", ")} & ${items[items.length - 1]}`;
 }
 
+function categoryShortLabel(category: string) {
+  const direct = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+  if (direct) return direct;
+  return category.match(/\b([1-7]S)\b/i)?.[1].toUpperCase() || "";
+}
+
 async function fetchApi<T>(url: string): Promise<T | null> {
   try {
     const res = await fetch(url, { cache: "no-store" });
@@ -466,7 +472,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   const catRowH = (cardH - 8) / Math.max(categoryStats.length, 1);
   categoryStats.forEach((stat, index) => {
     const rowY = topY + 7 + index * catRowH;
-    const short = CATEGORY_META[stat.category as keyof typeof CATEGORY_META]?.short || "";
+    const short = categoryShortLabel(stat.category);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(5.8);
     doc.setTextColor(...DARK);

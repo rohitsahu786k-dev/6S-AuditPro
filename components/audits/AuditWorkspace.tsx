@@ -29,7 +29,7 @@ import type { Severity } from "@/types/domain";
 type Masters = { 
   departments: Array<{ _id: string; name: string; isActive?: boolean }>;
   zones: Array<{ name: string; department: string }>; 
-  questions: Array<{ _id: string; category: string; text: string; subSection: string }>;
+  questions: Array<{ _id: string; category: string; text: string; subSection: string; serialNumber?: number; sortOrder?: number }>;
   people: Array<{ _id: string; name: string; type: string; department?: string; isActive?: boolean }>;
 };
 
@@ -307,11 +307,20 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     });
   }, [audits.data, historySearch, historyDepartment, historyZone]);
 
-  const activeCategory = CATEGORIES[currentCategoryIndex];
+  const auditCategories = useMemo(() => {
+    const categories = masters.data?.questions
+      ? [...new Set(masters.data.questions.map((question) => question.category).filter(Boolean))]
+      : [];
+    return categories.length ? categories : [...CATEGORIES];
+  }, [masters.data]);
+
+  const activeCategory = auditCategories[currentCategoryIndex] || "";
 
   const categoryQuestions = useMemo(() => {
     if (!masters.data?.questions) return [];
-    return masters.data.questions.filter((q) => q.category === activeCategory);
+    return masters.data.questions
+      .filter((q) => q.category === activeCategory)
+      .sort((a, b) => (a.serialNumber ?? a.sortOrder ?? 0) - (b.serialNumber ?? b.sortOrder ?? 0));
   }, [masters.data, activeCategory]);
 
   // Calculate stats
@@ -753,7 +762,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
 
           {/* Category Navigation Pills */}
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {CATEGORIES.map((cat, idx) => {
+            {auditCategories.map((cat, idx) => {
               const stats = getCategoryStat(cat);
               const isSelected = currentCategoryIndex === idx;
               const isDone = stats.answered === stats.total;
@@ -988,7 +997,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               <ChevronLeft size={16} /> Back
             </button>
 
-            {currentCategoryIndex < CATEGORIES.length - 1 ? (
+            {currentCategoryIndex < auditCategories.length - 1 ? (
               <button
                 className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
                 onClick={() => setCurrentCategoryIndex(prev => prev + 1)}

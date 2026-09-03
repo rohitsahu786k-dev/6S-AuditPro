@@ -1,10 +1,12 @@
 import Audit from "@/models/Audit";
+import Department from "@/models/Department";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
 import { addWorkingDays, defaultSeverity, scoreChecklist } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
+import { canonicalDepartmentName } from "@/lib/org-utils";
 
 export type AuditListView = "full" | "summary" | "analytics" | "register";
 
@@ -29,7 +31,15 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
   const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;
   const request = Audit.find(query).sort({ startDate: -1, date: -1 });
   if (projection) request.select(projection);
-  return request.lean();
+  const [audits, departments] = await Promise.all([
+    request.lean(),
+    Department.find().select("name").lean()
+  ]);
+  const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+  return audits.map((audit) => ({
+    ...audit,
+    department: canonicalDepartmentName(audit.department, configuredDepartments)
+  }));
 }
 
 export async function createAudit(input: {

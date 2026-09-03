@@ -70,7 +70,10 @@ const YEAR_MONTHS = Array.from({ length: 12 }, (_, index) => ({
 }));
 
 function monthKeyOf(isoDate?: string) {
-  return isoDate ? isoDate.slice(0, 7) : "";
+  if (!isoDate) return "";
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function auditStartDate(audit: Audit) {

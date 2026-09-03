@@ -4,14 +4,21 @@ import { useState } from "react";
 import { apiPost, apiPatch, useApi } from "@/hooks/useApi";
 import { Plus, Trash2, Edit2, Check, X } from "lucide-react";
 
-type DeptRow = { _id: string; name: string; status: string };
+type DeptRow = {
+  _id: string;
+  name: string;
+  managerEmails?: string[];
+  hodEmails?: string[];
+  managementEmails?: string[];
+  status: string;
+};
 type Masters = { departments: DeptRow[] };
 
 export function DepartmentManagementTable() {
   const masters = useApi<Masters>("/api/masters");
-  const [form, setForm] = useState({ name: "" });
+  const [form, setForm] = useState({ name: "", managerEmails: "", hodEmails: "", managementEmails: "" });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", status: "active" });
+  const [editForm, setEditForm] = useState({ name: "", managerEmails: "", hodEmails: "", managementEmails: "", status: "active" });
   const [message, setMessage] = useState("");
 
   const departments = masters.data?.departments || [];
@@ -25,7 +32,7 @@ export function DepartmentManagementTable() {
     try {
       await apiPost("/api/masters/departments", form);
       setMessage("Department created successfully.");
-      setForm({ name: "" });
+      setForm({ name: "", managerEmails: "", hodEmails: "", managementEmails: "" });
       await masters.reload();
     } catch (err: any) {
       alert(`Error creating department: ${err.message}`);
@@ -49,6 +56,9 @@ export function DepartmentManagementTable() {
     setEditingId(dept._id);
     setEditForm({
       name: dept.name,
+      managerEmails: (dept.managerEmails || []).join(", "),
+      hodEmails: (dept.hodEmails || []).join(", "),
+      managementEmails: (dept.managementEmails || []).join(", "),
       status: dept.status
     });
   }
@@ -77,7 +87,37 @@ export function DepartmentManagementTable() {
             className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
             placeholder="e.g. Quality Assurance"
             value={form.name}
-            onChange={(e) => setForm({ name: e.target.value })}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </label>
+
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Manager Email IDs</span>
+          <input
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            placeholder="manager@company.com, manager2@company.com"
+            value={form.managerEmails}
+            onChange={(e) => setForm({ ...form, managerEmails: e.target.value })}
+          />
+        </label>
+
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">HOD Email IDs</span>
+          <input
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            placeholder="hod@company.com"
+            value={form.hodEmails}
+            onChange={(e) => setForm({ ...form, hodEmails: e.target.value })}
+          />
+        </label>
+
+        <label className="mb-3 grid gap-1.5">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Management Email IDs</span>
+          <input
+            className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+            placeholder="management@company.com"
+            value={form.managementEmails}
+            onChange={(e) => setForm({ ...form, managementEmails: e.target.value })}
           />
         </label>
 
@@ -94,6 +134,7 @@ export function DepartmentManagementTable() {
             <thead>
               <tr>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department Name</th>
+                <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Escalation Emails</th>
                 <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Status</th>
                 <th className="bg-bg3 px-3 py-2.5 text-right text-xs font-bold uppercase tracking-wide text-t2">Actions</th>
               </tr>
@@ -109,6 +150,28 @@ export function DepartmentManagementTable() {
                           value={editForm.name}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         />
+                      </td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
+                        <div className="grid gap-1">
+                          <input
+                            className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                            placeholder="Manager emails"
+                            value={editForm.managerEmails}
+                            onChange={(e) => setEditForm({ ...editForm, managerEmails: e.target.value })}
+                          />
+                          <input
+                            className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                            placeholder="HOD emails"
+                            value={editForm.hodEmails}
+                            onChange={(e) => setEditForm({ ...editForm, hodEmails: e.target.value })}
+                          />
+                          <input
+                            className="w-full rounded-lg border border-bd px-2 py-1 text-[13px] focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                            placeholder="Management emails"
+                            value={editForm.managementEmails}
+                            onChange={(e) => setEditForm({ ...editForm, managementEmails: e.target.value })}
+                          />
+                        </div>
                       </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <select
@@ -132,6 +195,11 @@ export function DepartmentManagementTable() {
                   ) : (
                     <>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top"><strong>{d.name}</strong></td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-xs text-t2">
+                        <div>Manager: {(d.managerEmails || []).join(", ") || "-"}</div>
+                        <div>HOD: {(d.hodEmails || []).join(", ") || "-"}</div>
+                        <div>Management: {(d.managementEmails || []).join(", ") || "-"}</div>
+                      </td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                         <span className="inline-flex items-center rounded-full border border-red-200 bg-accent px-2 py-0.5 text-[11px] font-extrabold text-brand-d">
                           {d.status}

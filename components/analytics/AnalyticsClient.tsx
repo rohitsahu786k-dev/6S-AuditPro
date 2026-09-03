@@ -49,6 +49,23 @@ function auditStartDate(audit: Audit) {
   return audit.startDate || audit.date || null;
 }
 
+function findingReportDate(finding: Finding) {
+  return finding.createdAt || finding.dueDate || null;
+}
+
+function dateAtEndOfDay(value: string) {
+  const date = new Date(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function pillarCode(category: string) {
+  const direct = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+  if (direct) return direct;
+  const match = category.match(/\b([1-7]S)\b/i);
+  return match ? match[1].toUpperCase() : undefined;
+}
+
 type Finding = {
   _id: string;
   findingNumber: string;
@@ -61,6 +78,7 @@ type Finding = {
   status: "OPEN" | "IN_PROGRESS" | "SUBMITTED" | "CLOSED" | "REJECTED" | "REOPENED" | "OVERDUE";
   dueDate?: string;
   observation?: string;
+  createdAt?: string;
 };
 
 export function AnalyticsClient() {
@@ -170,7 +188,7 @@ export function AnalyticsClient() {
       // { adequate, total, score } shape produced by scoreChecklist().
       if (a.categoryScores) {
         for (const [category, val] of Object.entries(a.categoryScores)) {
-          const pil = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+          const pil = pillarCode(category);
           if (!pil) continue;
           const score = typeof val === "object" && val !== null && "score" in val ? Number((val as { score: number }).score) : Number(val);
           if (Number.isNaN(score)) continue;
@@ -190,7 +208,7 @@ export function AnalyticsClient() {
           }
         }
         for (const [category, data] of Object.entries(catGroup)) {
-          const pil = CATEGORY_META[category as keyof typeof CATEGORY_META]?.short;
+          const pil = pillarCode(category);
           if (!pil) continue;
           const score = data.total > 0 ? (data.yes / data.total) * 100 : 0;
           sums[pil] = (sums[pil] || 0) + score;
@@ -235,9 +253,9 @@ export function AnalyticsClient() {
 
   // Unique lists for export filters
   const uniqueDepts = useMemo(() => {
-    const list = new Set(audits.map(a => a.department));
+    const list = new Set([...audits.map(a => a.department), ...findings.map(f => f.department)]);
     return Array.from(list);
-  }, [audits]);
+  }, [audits, findings]);
 
   // Filtered dataset for exports
   const filteredData = useMemo<Array<Audit | Finding>>(() => {
@@ -247,7 +265,7 @@ export function AnalyticsClient() {
         const matchStatus = filterStatus === "ALL" || a.status === filterStatus;
         const sourceDate = auditStartDate(a);
         const matchStart = !startDate || Boolean(sourceDate && new Date(sourceDate) >= new Date(startDate));
-        const matchEnd = !endDate || Boolean(sourceDate && new Date(sourceDate) <= new Date(endDate));
+        const matchEnd = !endDate || Boolean(sourceDate && new Date(sourceDate) <= dateAtEndOfDay(endDate));
         return matchDept && matchStatus && matchStart && matchEnd;
       });
     } else {
@@ -255,8 +273,9 @@ export function AnalyticsClient() {
         const matchDept = filterDept === "ALL" || f.department === filterDept;
         const matchSeverity = filterSeverity === "ALL" || f.severity === filterSeverity;
         const matchStatus = filterStatus === "ALL" || f.status === filterStatus;
-        const matchStart = !startDate || Boolean(f.dueDate && new Date(f.dueDate) >= new Date(startDate));
-        const matchEnd = !endDate || Boolean(f.dueDate && new Date(f.dueDate) <= new Date(endDate));
+        const sourceDate = findingReportDate(f);
+        const matchStart = !startDate || Boolean(sourceDate && new Date(sourceDate) >= new Date(startDate));
+        const matchEnd = !endDate || Boolean(sourceDate && new Date(sourceDate) <= dateAtEndOfDay(endDate));
         return matchDept && matchSeverity && matchStatus && matchStart && matchEnd;
       });
     }

@@ -8,6 +8,7 @@ const questionUpdateSchema = z.object({
   category: z.string().trim().min(1).optional(),
   text: z.string().trim().min(1).optional(),
   subSection: z.string().trim().optional(),
+  serialNumber: z.number().optional(),
   sortOrder: z.number().optional(),
   isActive: z.boolean().optional(),
   status: z.enum(["active", "inactive"]).optional()
@@ -33,11 +34,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = await parseJson(request, questionUpdateSchema);
     await connectDB();
-    const { status, ...questionInput } = input;
+    const serialNumber = input.serialNumber ?? input.sortOrder;
     const update = {
-      ...questionInput,
-      ...(questionInput.category ? { category: normalizeCategory(questionInput.category) } : {}),
-      ...(status ? { isActive: status === "active" } : {})
+      ...(input.category !== undefined ? { category: normalizeCategory(input.category) } : {}),
+      ...(input.text !== undefined ? { text: input.text } : {}),
+      ...(input.subSection !== undefined ? { subSection: input.subSection } : {}),
+      ...(serialNumber === undefined ? {} : { serialNumber, sortOrder: serialNumber }),
+      ...(input.status !== undefined ? { isActive: input.status === "active" } : {}),
+      ...(input.status === undefined && input.isActive !== undefined ? { isActive: input.isActive } : {})
     };
     const question = await Question.findByIdAndUpdate(id, { $set: update }, { new: true });
     if (!question) throw Object.assign(new Error("Question not found"), { status: 404 });
