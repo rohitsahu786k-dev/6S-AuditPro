@@ -42,7 +42,8 @@ type Finding = {
   afterPhotos: Array<UploadedPhoto>;
   capaStatus?: string;
   auditorReviewStatus?: string;
-  timeline: Array<{
+  // Omitted by the list, which never renders it; the detail fetch supplies it.
+  timeline?: Array<{
     action: string;
     note?: string;
     by: string;
@@ -847,7 +848,7 @@ export function FindingsWorkspace() {
                   <div>
                     <h4 className="mb-2 text-[11px] uppercase tracking-wide text-t2">Audit Trail History</h4>
                     <div className="ml-1.5 grid gap-2.5 border-l-2 border-bd pl-3">
-                      {selectedFinding.timeline.map((step, idx) => (
+                      {(selectedFinding.timeline || []).map((step, idx) => (
                         <div key={idx} className="relative text-xs">
                           <div className="absolute -left-[21px] top-[1px] grid h-4 w-4 place-items-center rounded-full border-2 border-white bg-brand text-white">
                             {cleanTimelineAction(step.action).toLowerCase().includes("closed") || cleanTimelineAction(step.action).toLowerCase().includes("approved") ? (

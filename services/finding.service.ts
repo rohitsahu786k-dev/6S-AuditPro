@@ -16,7 +16,9 @@ const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   // updatedAt changes when an owner/department is edited and must not rewrite closure history.
   // Photos are deliberately excluded: legacy rows store images as base64 data URIs,
   // which made this list ~25 MB. The detail view fetches the full finding instead.
-  summary: "findingNumber auditNumber zone department category question severity status dueDate observation assignedTo createdAt updatedAt timeline.action timeline.at",
+  // The timeline is not read here either; closure dates are looked up separately for
+  // the few closed findings that need one.
+  summary: "findingNumber auditNumber zone department category question severity status dueDate observation assignedTo createdAt updatedAt",
   register: "auditId questionId status dueDate updatedAt",
   // Only identifies findings for the "attach media" picker. The photos themselves are
   // fetched for the one selected finding, so this list stays small.
@@ -239,15 +241,25 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
     Department.find().select("name").lean()
   ]);
   const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+
+  // Closure dates come from the timeline, but only closed findings have one. Reading
+  // timelines for just those keeps them out of the much larger list query.
+  const closureDates = new Map<string, Date | undefined>();
+  if (view === "summary") {
+    const closedIds = findings.filter((finding) => finding.status === "CLOSED").map((finding) => finding._id);
+    if (closedIds.length > 0) {
+      const closed = await Finding.find({ _id: { $in: closedIds } }).select("timeline.action timeline.at").lean();
+      for (const finding of closed) closureDates.set(String(finding._id), closureDateOf({ ...finding, status: "CLOSED" }));
+    }
+  }
+
   return findings.map((finding) => {
-    const closureDate = view === "summary" ? closureDateOf(finding) : undefined;
-    return {
-      ...finding,
-      department: canonicalDepartmentName(finding.department, configuredDepartments),
-      // Dashboard uses updatedAt as the closed timestamp. Preserve the true closure
-      // timestamp even if action owner/department is edited after closure.
-      ...(closureDate ? { updatedAt: closureDate } : {})
-    };
+    const department = canonicalDepartmentName(finding.department, configuredDepartments);
+    if (view !== "summary") return { ...finding, department };
+    // Dashboard uses updatedAt as the closed timestamp. Preserve the true closure
+    // timestamp even if action owner/department is edited after closure.
+    const closureDate = closureDates.get(String(finding._id));
+    return { ...finding, department, ...(closureDate ? { updatedAt: closureDate } : {}) };
   });
 }
 
