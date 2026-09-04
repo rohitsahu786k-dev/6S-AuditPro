@@ -20,9 +20,15 @@ type Audit = {
   startDate?: string | null;
   endDate?: string | null;
   totalScore: number;
+  // Score for the audited department, with other departments' non-conformities excluded.
+  departmentScore?: number;
   status: string;
   auditorName: string;
 };
+
+function auditScore(audit: Audit) {
+  return audit.departmentScore ?? audit.totalScore ?? 0;
+}
 
 type Finding = {
   _id: string;
@@ -238,7 +244,7 @@ export function DashboardClient() {
 
   const overallAuditRating = useMemo(() => {
     const score = completedAudits.length
-      ? Math.round(completedAudits.reduce((sum, audit) => sum + (audit.totalScore || 0), 0) / completedAudits.length)
+      ? Math.round(completedAudits.reduce((sum, audit) => sum + auditScore(audit), 0) / completedAudits.length)
       : 0;
     return {
       auditCount: completedAudits.length,
@@ -266,7 +272,7 @@ export function DashboardClient() {
       const row = map.get(audit.department) || newDepartmentState();
       const auditAt = timestampOf(auditStartDate(audit));
       if (row.latestAuditScore === null || auditAt > row.latestAuditAt) {
-        row.latestAuditScore = audit.totalScore || 0;
+        row.latestAuditScore = auditScore(audit);
         row.latestAuditAt = auditAt;
       }
       map.set(audit.department, row);
@@ -294,7 +300,7 @@ export function DashboardClient() {
         if (month.isFuture) return null;
         const scores = completedAudits
           .filter((audit) => audit.department === department && monthKeyOf(auditStartDate(audit)) === month.key)
-          .map((audit) => audit.totalScore || 0);
+          .map((audit) => auditScore(audit));
         return scores.length
           ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
           : null;

@@ -11,6 +11,8 @@ type Audit = {
   startDate?: string | null;
   endDate?: string | null;
   totalScore: number;
+  // Score for the audited department, with other departments' non-conformities excluded.
+  departmentScore?: number;
 };
 
 function formatAuditDate(value?: string | null) {
@@ -42,7 +44,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
         ) : (
           <div className="grid gap-2.5">
             {audits.map((audit) => {
-              const score = audit.totalScore || 0;
+              const score = audit.departmentScore ?? audit.totalScore ?? 0;
               const badge = scoreBadgeStyle(score);
               return (
                 <div key={audit._id} className="flex items-center justify-between border-b border-[#f1f5f9] py-2.5 last:border-b-0">
@@ -61,7 +63,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
                   <span
                     className="rounded-full border px-2.5 py-0.5 text-xs font-bold"
                     style={{ background: badge.bg, color: badge.text, borderColor: badge.border }}
-                    title="Completed audit score"
+                    title="Department score after action-owner assignments"
                   >
                     {score}%
                   </span>

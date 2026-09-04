@@ -29,8 +29,11 @@ type Audit = {
   endDate?: string | null;
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
   totalScore: number;
+  // Score for the audited department, with other departments' non-conformities excluded.
+  departmentScore?: number;
   categoryScores?: Record<string, number>;
-  checklist: Array<{
+  // Omitted by the analytics view, which sends categoryScores instead.
+  checklist?: Array<{
     questionId: string;
     category: string;
     question: string;
@@ -126,7 +129,7 @@ export function AnalyticsClient() {
       if (a.status !== "COMPLETED") continue;
       const dept = a.department;
       const stats = map.get(dept) || { totalScore: 0, count: 0, openFindings: 0 };
-      stats.totalScore += a.totalScore || 0;
+      stats.totalScore += a.departmentScore ?? a.totalScore ?? 0;
       stats.count += 1;
       map.set(dept, stats);
     }
@@ -198,7 +201,7 @@ export function AnalyticsClient() {
       } else {
         // Fallback: calculate from checklist items
         const catGroup: Record<string, { yes: number; total: number }> = {};
-        for (const item of a.checklist) {
+        for (const item of a.checklist || []) {
           if (!catGroup[item.category]) catGroup[item.category] = { yes: 0, total: 0 };
           if (item.response === "Adequate") {
             catGroup[item.category].yes += 1;

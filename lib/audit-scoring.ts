@@ -23,6 +23,24 @@ export function scoreChecklist(items: ChecklistResponse[]) {
   return { categoryScores, totalScore };
 }
 
+/**
+ * A department's score for an audit. Non-conformities that another department owns
+ * are left out, so a department is not marked down for issues it was not asked to
+ * fix. Computed from the checklist rather than the stored totalScore, which holds
+ * the raw all-items score on some audits and this filtered score on others.
+ */
+export function departmentAuditScore(
+  items: Array<ChecklistResponse & { actionOwnerDepartment?: string }>,
+  department: string
+) {
+  const owned = items.filter((item) => {
+    if (item.response !== "Not Adequate") return true;
+    return !item.actionOwnerDepartment || item.actionOwnerDepartment === department;
+  });
+  if (owned.every((item) => item.response === "N/A")) return 0;
+  return scoreChecklist(owned).totalScore;
+}
+
 export function scoreLabel(score: number) {
   if (score <= 30) return { label: "1S", desc: "Sort Only" };
   if (score <= 50) return { label: "2S", desc: "Set in Order" };
