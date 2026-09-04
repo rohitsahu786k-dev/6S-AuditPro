@@ -19,7 +19,10 @@ const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   // The timeline is not read here either; closure dates are looked up separately for
   // the few closed findings that need one.
   summary: "findingNumber auditNumber zone department category question severity status dueDate observation assignedTo createdAt updatedAt",
-  register: "auditId questionId status dueDate updatedAt",
+  // category and question are included so the register can fall back to matching a
+  // checklist row by text: legacy findings carry a question id that no longer lines
+  // up with the audit checklist, and an id-only match leaves every row reading OPEN.
+  register: "auditId auditNumber questionId category question status dueDate updatedAt",
   // Only identifies findings for the "attach media" picker. The photos themselves are
   // fetched for the one selected finding, so this list stays small.
   "media-selector": "findingNumber question zone department category status assignedTo"

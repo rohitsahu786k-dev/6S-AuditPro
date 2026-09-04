@@ -29,7 +29,10 @@ type Audit = {
 type Finding = {
   _id: string;
   auditId?: string;
+  auditNumber?: string;
   questionId: string;
+  category?: string;
+  question?: string;
   status: string;
   dueDate?: string;
   updatedAt?: string;
@@ -80,6 +83,26 @@ function statusClass(status: string) {
   return "border-red-200 bg-accent text-brand-d";
 }
 
+function normalizedText(value?: string) {
+  return String(value || "").trim().toLowerCase().replace(/s+/g, " ");
+}
+
+function belongsToAudit(finding: Finding, audit: Audit) {
+  return finding.auditId === audit._id || (Boolean(finding.auditNumber) && finding.auditNumber === audit.auditNumber);
+}
+
+/**
+ * Findings raised by older builds carry a generated question id (or none at all)
+ * while the checklist keeps the master question id, so an id-only match left every
+ * row of those audits reading OPEN with no closure date. Fall back to the question
+ * text when the ids do not line up.
+ */
+function matchesChecklistItem(finding: Finding, item: ChecklistItem) {
+  if (finding.questionId && item.questionId && String(finding.questionId) === String(item.questionId)) return true;
+  return normalizedText(finding.question) === normalizedText(item.question) &&
+    normalizedText(finding.category) === normalizedText(item.category);
+}
+
 function formatRegisterDate(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -105,7 +128,7 @@ export function RegisterWorkspace() {
     const out: RegisterRow[] = [];
     for (const audit of audits) {
       for (const item of audit.checklist || []) {
-        const match = findings.find((f) => f.auditId === audit._id && f.questionId === item.questionId);
+        const match = findings.find((f) => belongsToAudit(f, audit) && matchesChecklistItem(f, item));
         const status = item.response === "Not Adequate" ? normalizedFindingStatus(match?.status || "OPEN") : "";
         const dueOrClosed = match ? (match.status === "CLOSED" ? match.updatedAt : match.dueDate) : undefined;
         out.push({
