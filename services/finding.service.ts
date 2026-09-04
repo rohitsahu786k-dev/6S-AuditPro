@@ -25,7 +25,7 @@ const FINDING_PROJECTIONS: Record<FindingListView, string | null> = {
   register: "auditId auditNumber questionId category question status dueDate updatedAt",
   // Only identifies findings for the "attach media" picker. The photos themselves are
   // fetched for the one selected finding, so this list stays small.
-  "media-selector": "findingNumber question zone department category status assignedTo"
+  "media-selector": "findingNumber auditNumber question zone department category status assignedTo createdAt"
 };
 
 type FindingDateRange = {
@@ -62,6 +62,12 @@ function scopedQuery(user: SessionUser, dateRange?: FindingDateRange) {
   }
 
   return query;
+}
+
+function timeOf(value: unknown) {
+  if (!value) return 0;
+  const time = new Date(value as string).getTime();
+  return Number.isNaN(time) ? 0 : time;
 }
 
 function closureDateOf(finding: any) {
@@ -290,7 +296,7 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
     }
   }
 
-  return findings.map((finding) => {
+  const rows = findings.map((finding) => {
     const department = canonicalDepartmentName(finding.department, configuredDepartments);
     const auditDate = auditDateOf(finding);
     if (view !== "summary") return { ...finding, department, auditDate };
@@ -298,6 +304,21 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
     // timestamp even if action owner/department is edited after closure.
     const closureDate = closureDates.get(String(finding._id));
     return { ...finding, department, auditDate, ...(closureDate ? { updatedAt: closureDate } : {}) };
+  });
+
+  // Newest audit first. createdAt alone is the wrong key to order by: a finding
+  // reconstructed from an older audit is created long after the audit happened, so
+  // ordering by it buries the latest audit under historical rows. The audit date is
+  // only known after the join above, so the ordering is applied here rather than in
+  // the query. Ad-hoc findings have no audit and fall back to their own date.
+  return rows.sort((left, right) => {
+    const byDate = timeOf(right.auditDate ?? right.createdAt) - timeOf(left.auditDate ?? left.createdAt);
+    if (byDate !== 0) return byDate;
+    // Within one audit, keep the newest activity on top and break exact ties on the
+    // finding number so the order does not shuffle between requests.
+    const byCreated = timeOf(right.createdAt) - timeOf(left.createdAt);
+    if (byCreated !== 0) return byCreated;
+    return String(right.findingNumber || "").localeCompare(String(left.findingNumber || ""));
   });
 }
 
