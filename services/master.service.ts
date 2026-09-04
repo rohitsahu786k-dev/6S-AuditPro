@@ -28,13 +28,17 @@ function normalizeQuestionCategory<T extends { category?: string }>(question: T)
   };
 }
 
-export async function getMasters() {
+export async function getMasters(lookupOnly = false) {
   await connectDB();
+  const departmentFields = lookupOnly ? "name isActive" : undefined;
+  const zoneFields = lookupOnly ? "name department location isActive" : undefined;
+  const questionFields = lookupOnly ? "category text subSection serialNumber sortOrder isActive" : undefined;
+  const personFields = lookupOnly ? "name type roleTitle department zone isActive" : undefined;
   const [departments, zones, questions, people] = await Promise.all([
-    Department.find().sort({ name: 1 }).lean(),
-    Zone.find().sort({ department: 1, name: 1 }).lean(),
-    Question.find().sort({ category: 1, serialNumber: 1, sortOrder: 1 }).lean(),
-    Person.find().sort({ type: 1, name: 1 }).lean()
+    Department.find().select(departmentFields || "").sort({ name: 1 }).lean(),
+    Zone.find().select(zoneFields || "").sort({ department: 1, name: 1 }).lean(),
+    Question.find().select(questionFields || "").sort({ category: 1, serialNumber: 1, sortOrder: 1 }).lean(),
+    Person.find().select(personFields || "").sort({ type: 1, name: 1 }).lean()
   ]);
   return {
     departments: departments.map(withStatus),

@@ -1,5 +1,4 @@
 import { requireUser } from "@/lib/auth";
-import { scoreChecklist } from "@/lib/audit-scoring";
 import { findingUpdateSchema } from "@/lib/validators";
 import Audit from "@/models/Audit";
 import Finding from "@/models/Finding";
@@ -19,16 +18,35 @@ type ChecklistItem = {
 };
 
 function sameValue(left?: unknown, right?: unknown) {
-  return String(left || "").trim() === String(right || "").trim();
+  return String(left || "").trim().toLowerCase().replace(/\s+/g, " ") ===
+    String(right || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/**
+ * Question ids drifted between builds: older findings kept a generated id while
+ * the audit checklist kept the master question id. Falling back to the question
+ * text keeps an edit in Findings flowing through to the audit checklist instead
+ * of silently doing nothing when the two ids disagree.
+ */
 function matchesFinding(item: ChecklistItem, finding: {
   questionId?: unknown;
   category?: unknown;
   question?: unknown;
 }) {
-  if (item.questionId && finding.questionId) return sameValue(item.questionId, finding.questionId);
+  if (item.questionId && finding.questionId && sameValue(item.questionId, finding.questionId)) return true;
   return sameValue(item.category, finding.category) && sameValue(item.question, finding.question);
+}
+
+/** The audit date lives on the audit, so the detail view joins it in. */
+async function auditDateFor(finding: { auditId?: unknown; auditNumber?: string | null }) {
+  if (!finding.auditId && !finding.auditNumber) return undefined;
+  const audit = await Audit.findOne({
+    $or: [
+      ...(finding.auditId ? [{ _id: finding.auditId }] : []),
+      ...(finding.auditNumber ? [{ auditNumber: finding.auditNumber }] : [])
+    ]
+  }).select("date startDate").lean();
+  return (audit?.startDate || audit?.date) ?? undefined;
 }
 
 async function syncLinkedAuditForFinding(finding: any) {
@@ -52,22 +70,20 @@ async function syncLinkedAuditForFinding(finding: any) {
     audit.markModified("checklist");
   }
 
-  // Audit score represents the audited department's checklist result and must not
-  // change just because CAPA ownership is reassigned to another department/person.
-  const { categoryScores, totalScore } = scoreChecklist(audit.checklist as any);
-  audit.categoryScores = categoryScores;
-  audit.totalScore = totalScore;
   await audit.save();
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireUser("findings:read");
+    const user = await requireUser("findings:read");
     const { id } = await context.params;
     await connectDB();
-    const finding = await Finding.findById(id).lean();
+    const finding = await Finding.findOne({
+      _id: id,
+      ...(user.role === "SPOC" && user.department ? { department: user.department } : {})
+    }).lean();
     if (!finding) throw Object.assign(new Error("Finding not found"), { status: 404 });
-    return ok(finding);
+    return ok({ ...finding, auditDate: await auditDateFor(finding) });
   } catch (error) {
     return fail(error);
   }
@@ -79,7 +95,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { id } = await context.params;
     const input = await parseJson(request, findingUpdateSchema);
     await connectDB();
-    const finding = await Finding.findById(id);
+    const finding = await Finding.findOne({
+      _id: id,
+      ...(user.role === "SPOC" && user.department ? { department: user.department } : {})
+    });
     if (!finding) throw Object.assign(new Error("Finding not found"), { status: 404 });
     
     const previousOwner = finding.assignedTo || "";
@@ -114,13 +133,27 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireUser("findings:update");
+    const user = await requireUser("findings:update");
+    if (user.role !== "MASTER_ADMIN" && user.role !== "ADMIN") {
+      throw Object.assign(new Error("Only admins can delete findings."), { status: 403 });
+    }
     const { id } = await context.params;
     await connectDB();
     const finding = await Finding.findById(id);
     if (!finding) throw Object.assign(new Error("Finding not found"), { status: 404 });
     
     await Finding.deleteOne({ _id: id });
+    if (finding.auditId || finding.auditNumber) {
+      await Audit.updateOne(
+        {
+          $or: [
+            ...(finding.auditId ? [{ _id: finding.auditId }] : []),
+            ...(finding.auditNumber ? [{ auditNumber: finding.auditNumber }] : [])
+          ]
+        },
+        { $pull: { findingIds: finding._id } }
+      );
+    }
     return ok({ success: true, message: `Finding ${finding.findingNumber} deleted successfully.` });
   } catch (error) {
     return fail(error);

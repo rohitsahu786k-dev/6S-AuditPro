@@ -29,8 +29,6 @@ type Audit = {
   endDate?: string | null;
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
   totalScore: number;
-  // Score for the audited department, with other departments' non-conformities excluded.
-  departmentScore?: number;
   categoryScores?: Record<string, number>;
   // Omitted by the analytics view, which sends categoryScores instead.
   checklist?: Array<{
@@ -90,6 +88,7 @@ export function AnalyticsClient() {
 
   const audits = auditsApi.data || [];
   const findings = findingsApi.data || [];
+  const findingsLoading = findingsApi.loading && !findingsApi.data;
 
   // Active view: Dashboard vs Exports
   const [activeSubView, setActiveSubView] = useState<"dashboard" | "exports">("dashboard");
@@ -129,7 +128,7 @@ export function AnalyticsClient() {
       if (a.status !== "COMPLETED") continue;
       const dept = a.department;
       const stats = map.get(dept) || { totalScore: 0, count: 0, openFindings: 0 };
-      stats.totalScore += a.departmentScore ?? a.totalScore ?? 0;
+      stats.totalScore += a.totalScore ?? 0;
       stats.count += 1;
       map.set(dept, stats);
     }
@@ -439,7 +438,7 @@ export function AnalyticsClient() {
               </div>
               <div>
                 <div className="text-[11px] uppercase text-t2">Total Logged</div>
-                <div className="text-xl font-bold">{counters.total}</div>
+                <div className="text-xl font-bold">{findingsLoading ? "..." : counters.total}</div>
               </div>
             </div>
 
@@ -449,7 +448,7 @@ export function AnalyticsClient() {
               </div>
               <div>
                 <div className="text-[11px] uppercase text-t2">Open & Active</div>
-                <div className="text-xl font-bold text-[#b45309]">{counters.open}</div>
+                <div className="text-xl font-bold text-[#b45309]">{findingsLoading ? "..." : counters.open}</div>
               </div>
             </div>
 
@@ -459,7 +458,7 @@ export function AnalyticsClient() {
               </div>
               <div>
                 <div className="text-[11px] uppercase text-t2">CAPA Review</div>
-                <div className="text-xl font-bold text-[#0369a1]">{counters.submitted}</div>
+                <div className="text-xl font-bold text-[#0369a1]">{findingsLoading ? "..." : counters.submitted}</div>
               </div>
             </div>
 
@@ -469,7 +468,7 @@ export function AnalyticsClient() {
               </div>
               <div>
                 <div className="text-[11px] uppercase text-t2">Overdue Findings</div>
-                <div className="text-xl font-bold text-[#b91c1c]">{counters.overdue}</div>
+                <div className="text-xl font-bold text-[#b91c1c]">{findingsLoading ? "..." : counters.overdue}</div>
               </div>
             </div>
 
@@ -479,7 +478,7 @@ export function AnalyticsClient() {
               </div>
               <div>
                 <div className="text-[11px] uppercase text-t2">Resolved / Closed</div>
-                <div className="text-xl font-bold text-[#15803d]">{counters.closed}</div>
+                <div className="text-xl font-bold text-[#15803d]">{findingsLoading ? "..." : counters.closed}</div>
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "check:data": "node -r dotenv/config scripts/check-portal-data.cjs",
     "seed": "tsx scripts/seed.ts",
     "update:email-templates": "tsx scripts/update-email-templates.ts"
   },

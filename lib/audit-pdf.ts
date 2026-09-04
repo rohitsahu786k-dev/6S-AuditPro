@@ -232,23 +232,11 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
     (audit._id && String(finding.auditId) === String(audit._id)) ||
     findingIdSet.has(String(finding._id)) ||
     (finding.auditNumber && finding.auditNumber === audit.auditNumber);
-  const linkedFindings = (allFindings || []).filter(isLinkedToSelectedAudit);
   const sourceAuditDepartmentById = new Map((allAudits || []).map((item) => [String(item._id), item.department]));
   const sourceAuditDepartmentByNumber = new Map((allAudits || []).map((item) => [item.auditNumber, item.department]));
   const sourceDepartmentForFinding = (finding: PdfFinding) =>
     (finding.auditId ? sourceAuditDepartmentById.get(String(finding.auditId)) : undefined) ||
     (finding.auditNumber ? sourceAuditDepartmentByNumber.get(finding.auditNumber) : undefined);
-  const findingQuestionKey = (auditNumber: string, questionId: string | undefined, question: string) =>
-    questionId ? `${auditNumber}:id:${questionId}` : `${auditNumber}:text:${question}`;
-
-  const linkedFindingByQuestion = new Map(
-    linkedFindings
-      .filter((finding) => finding.question)
-      .map((finding) => [
-        findingQuestionKey(finding.auditNumber || audit.auditNumber, finding.questionId, finding.question),
-        finding
-      ])
-  );
   const auditFindings = (allFindings || []).filter((finding) =>
     (isLinkedToSelectedAudit(finding) && (finding.department || audit.department) === audit.department) ||
     (
@@ -269,12 +257,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
 
   // ----- Derived checklist statistics -----
   const reportChecklist: AuditPdfData["checklist"] = [
-    ...audit.checklist.filter((item) => {
-      if (item.response !== "Not Adequate") return true;
-      const linkedFinding = linkedFindingByQuestion.get(findingQuestionKey(audit.auditNumber, item.questionId, item.question));
-      if (linkedFinding) return (linkedFinding.department || audit.department) === audit.department;
-      return !item.actionOwnerDepartment || item.actionOwnerDepartment === audit.department;
-    }),
+    ...audit.checklist,
     ...auditFindings
       .filter((finding) => !isLinkedToSelectedAudit(finding))
       .map((finding) => ({
@@ -304,9 +287,10 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
     return { category, adequate, notAdequate, na, score: computed };
   });
   const countedCategoryStats = categoryStats.filter((stat) => stat.adequate + stat.notAdequate > 0);
-  const reportTotalScore = countedCategoryStats.length
+  const computedTotalScore = countedCategoryStats.length
     ? Math.round(countedCategoryStats.reduce((sum, stat) => sum + stat.score, 0) / countedCategoryStats.length)
     : 0;
+  const reportTotalScore = Number.isFinite(audit.totalScore) ? audit.totalScore : computedTotalScore;
 
   const flaggedItems = reportChecklist.filter((item) => item.response === "Not Adequate");
   const severityOrder = ["Critical", "High", "Medium", "Low"];

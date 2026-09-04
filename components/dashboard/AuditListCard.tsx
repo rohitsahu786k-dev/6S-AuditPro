@@ -11,8 +11,6 @@ type Audit = {
   startDate?: string | null;
   endDate?: string | null;
   totalScore: number;
-  // Score for the audited department, with other departments' non-conformities excluded.
-  departmentScore?: number;
 };
 
 function formatAuditDate(value?: string | null) {
@@ -32,7 +30,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
         <h3 className="flex items-center gap-2 text-[15px] font-semibold">
           <ClipboardCheck size={16} className="text-t2" /> Recent 6S Audits
         </h3>
-        <Link href="/audits" className="flex items-center gap-1 text-xs text-t2 hover:text-t1">
+        <Link href="/audit-history" className="flex items-center gap-1 text-xs text-t2 hover:text-t1">
           View All <ArrowRight size={12} />
         </Link>
       </div>
@@ -44,7 +42,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
         ) : (
           <div className="grid gap-2.5">
             {audits.map((audit) => {
-              const score = audit.departmentScore ?? audit.totalScore ?? 0;
+              const score = audit.totalScore ?? 0;
               const badge = scoreBadgeStyle(score);
               return (
                 <div key={audit._id} className="flex items-center justify-between border-b border-[#f1f5f9] py-2.5 last:border-b-0">
@@ -63,7 +61,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
                   <span
                     className="rounded-full border px-2.5 py-0.5 text-xs font-bold"
                     style={{ background: badge.bg, color: badge.text, borderColor: badge.border }}
-                    title="Department score after action-owner assignments"
+                    title="Stored audit score"
                   >
                     {score}%
                   </span>

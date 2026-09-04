@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ApiState<T> = { data?: T; error?: string; loading: boolean };
 type ApiEnvelope<T> = { ok?: boolean; data?: T; error?: string };
@@ -13,19 +13,33 @@ async function parseApiResponse<T>(res: Response) {
 
 export function useApi<T>(url: string) {
   const [state, setState] = useState<ApiState<T>>({ loading: true });
+  const requestId = useRef(0);
   const load = useCallback(async () => {
+    const currentRequestId = ++requestId.current;
     setState((current) => ({ ...current, loading: true, error: undefined }));
     try {
       const res = await fetch(url, { cache: "no-store" });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json.ok) setState({ loading: false, error: json.error || "Request failed" });
-      else setState({ loading: false, data: json.data });
+      if (currentRequestId !== requestId.current) return;
+      if (!res.ok || !json.ok) {
+        setState((current) => ({ ...current, loading: false, error: json.error || "Request failed" }));
+      } else {
+        setState({ loading: false, data: json.data });
+      }
     } catch (error) {
-      setState({ loading: false, error: error instanceof Error ? error.message : "Request failed" });
+      if (currentRequestId !== requestId.current) return;
+      setState((current) => ({
+        ...current,
+        loading: false,
+        error: error instanceof Error ? error.message : "Request failed"
+      }));
     }
   }, [url]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+    return () => { requestId.current += 1; };
+  }, [load]);
   return { ...state, reload: load };
 }
 

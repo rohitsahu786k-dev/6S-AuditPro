@@ -20,14 +20,12 @@ type Audit = {
   startDate?: string | null;
   endDate?: string | null;
   totalScore: number;
-  // Score for the audited department, with other departments' non-conformities excluded.
-  departmentScore?: number;
   status: string;
   auditorName: string;
 };
 
 function auditScore(audit: Audit) {
-  return audit.departmentScore ?? audit.totalScore ?? 0;
+  return audit.totalScore ?? 0;
 }
 
 type Finding = {
@@ -46,6 +44,8 @@ type Finding = {
 type Masters = {
   departments: Array<{ name: string; isActive?: boolean }>;
 };
+
+type CurrentUser = { permissions: string[] };
 
 type MonthlyRow = {
   department: string;
@@ -110,6 +110,12 @@ function monthKeyOf(value?: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function isFindingOverdue(finding: Finding) {
+  if (finding.status === "CLOSED") return false;
+  if (finding.status === "OVERDUE") return true;
+  return Boolean(finding.dueDate && new Date(finding.dueDate) < new Date());
 }
 
 function uniqueSorted(values: string[]) {
@@ -184,10 +190,13 @@ function MonthlyDepartmentTable({
 export function DashboardClient() {
   const auditsApi = useApi<Audit[]>("/api/audits?view=analytics");
   const findingsApi = useApi<Finding[]>("/api/findings?view=summary");
-  const mastersApi = useApi<Masters>("/api/masters");
+  const mastersApi = useApi<Masters>("/api/masters?view=lookup");
+  const meApi = useApi<{ user: CurrentUser | null }>("/api/auth/me");
 
   const audits = auditsApi.data || [];
   const findings = findingsApi.data || [];
+  const canCreateAudit = meApi.data?.user?.permissions.includes("audits:create") === true;
+  const findingsLoading = findingsApi.loading && !findingsApi.data;
 
   useEffect(() => {
     const reloadDashboard = () => {
@@ -223,7 +232,7 @@ export function DashboardClient() {
     const open = findings.filter((finding) => finding.status === "OPEN" || finding.status === "REOPENED").length;
     const inProgress = findings.filter((finding) => finding.status === "IN_PROGRESS").length;
     const closed = findings.filter((finding) => finding.status === "CLOSED").length;
-    const overdue = findings.filter((finding) => finding.status === "OVERDUE").length;
+    const overdue = findings.filter(isFindingOverdue).length;
     const criticalActive = findings.filter((finding) => finding.status !== "CLOSED" && finding.severity === "Critical").length;
     const pendingReview = findings.filter((finding) => finding.status === "SUBMITTED").length;
     return { open, inProgress, closed, overdue, criticalActive, pendingReview };
@@ -264,7 +273,7 @@ export function DashboardClient() {
       if (["OPEN", "REOPENED", "OVERDUE", "SUBMITTED"].includes(finding.status)) row.open += 1;
       if (finding.status === "IN_PROGRESS") row.inProcess += 1;
       if (finding.status === "CLOSED") row.closed += 1;
-      if (finding.status === "OVERDUE") row.delayed += 1;
+      if (isFindingOverdue(finding)) row.delayed += 1;
       map.set(finding.department, row);
     }
 
@@ -342,7 +351,7 @@ export function DashboardClient() {
 
   const urgentFindings = useMemo(
     () => findings
-      .filter((finding) => finding.status !== "CLOSED" && (finding.severity === "Critical" || finding.severity === "High" || finding.status === "OVERDUE"))
+      .filter((finding) => finding.status !== "CLOSED" && (finding.severity === "Critical" || finding.severity === "High" || isFindingOverdue(finding)))
       .slice(0, 5),
     [findings]
   );
@@ -455,19 +464,21 @@ export function DashboardClient() {
           >
             <FileDown size={16} /> {exportingPdf ? "Creating PDF..." : "Export Dashboard PDF"}
           </button>
-          <Link href="/audits" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(239,43,45,.22)] hover:bg-brand-d">
-            <Plus size={16} /> New 6S Audit
-          </Link>
+          {canCreateAudit ? (
+            <Link href="/audits" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white shadow-[0_2px_8px_rgba(239,43,45,.22)] hover:bg-brand-d">
+              <Plus size={16} /> New 6S Audit
+            </Link>
+          ) : null}
         </div>
       </div>
 
       <div className="mb-6 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4">
-        <KpiCard label="Open Findings" value={stats.open} caption="Newly raised, not yet actioned" icon={FolderOpen} iconColor="#b91c1c" iconBg="#fee2e2" valueColor="#b91c1c" />
-        <KpiCard label="In Progress" value={stats.inProgress} caption="CAPA underway" icon={Loader2} iconColor="#0284c7" iconBg="#e0f2fe" valueColor="#0284c7" />
-        <KpiCard label="Closed" value={stats.closed} caption="Verified & resolved" icon={CheckCircle2} iconColor="#16a34a" iconBg="#f0fdf4" valueColor="#16a34a" />
-        <KpiCard label="Overdue" value={stats.overdue} caption="Past target due date" icon={AlertTriangle} iconColor="#9a3412" iconBg="#ffedd5" valueColor="#9a3412" />
-        <KpiCard label="Critical Active" value={stats.criticalActive} caption="Open critical severity" icon={ShieldAlert} iconColor="#dc2626" iconBg="#fee2e2" valueColor="#dc2626" />
-        <KpiCard label="Pending Review" value={stats.pendingReview} caption="CAPA submitted, awaiting review" icon={Eye} iconColor="#6d28d9" iconBg="#f3e8ff" valueColor="#6d28d9" />
+        <KpiCard label="Open Findings" value={findingsLoading ? "..." : stats.open} caption="Newly raised, not yet actioned" icon={FolderOpen} iconColor="#b91c1c" iconBg="#fee2e2" valueColor="#b91c1c" />
+        <KpiCard label="In Progress" value={findingsLoading ? "..." : stats.inProgress} caption="CAPA underway" icon={Loader2} iconColor="#0284c7" iconBg="#e0f2fe" valueColor="#0284c7" />
+        <KpiCard label="Closed" value={findingsLoading ? "..." : stats.closed} caption="Verified & resolved" icon={CheckCircle2} iconColor="#16a34a" iconBg="#f0fdf4" valueColor="#16a34a" />
+        <KpiCard label="Overdue" value={findingsLoading ? "..." : stats.overdue} caption="Past target due date" icon={AlertTriangle} iconColor="#9a3412" iconBg="#ffedd5" valueColor="#9a3412" />
+        <KpiCard label="Critical Active" value={findingsLoading ? "..." : stats.criticalActive} caption="Open critical severity" icon={ShieldAlert} iconColor="#dc2626" iconBg="#fee2e2" valueColor="#dc2626" />
+        <KpiCard label="Pending Review" value={findingsLoading ? "..." : stats.pendingReview} caption="CAPA submitted, awaiting review" icon={Eye} iconColor="#6d28d9" iconBg="#f3e8ff" valueColor="#6d28d9" />
       </div>
 
       <div className="mb-6 overflow-hidden rounded-[10px] border border-bd bg-bg1 shadow-[var(--shadow-sm)]">

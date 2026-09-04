@@ -4,13 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { SessionUser } from "@/types/domain";
 import { ROLE_ROUTES } from "@/lib/roles";
-import { isNavItemActive, navItemsForRoutes } from "@/lib/nav-items";
+import { activeNavHref, navItemsForRoutes } from "@/lib/nav-items";
 import { COMPANY_NAME } from "@/lib/constants";
 
 export function RoleBasedSidebar({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const allowed = ROLE_ROUTES[user.role] || [];
   const items = navItemsForRoutes(allowed);
+  const activeHref = activeNavHref(pathname, items);
 
   return (
     <aside className="sticky top-0 flex h-screen w-[244px] shrink-0 flex-col overflow-y-auto border-r border-bd bg-bg1 shadow-[1px_0_0_var(--color-bd)]">
@@ -21,7 +22,7 @@ export function RoleBasedSidebar({ user }: { user: SessionUser }) {
       <nav className="flex flex-col gap-0.5 px-2 py-3">
         {items.map((item) => {
           const Icon = item.icon;
-          const active = isNavItemActive(pathname, item.href);
+          const active = activeHref === item.href;
           return (
             <Link
               key={item.href}

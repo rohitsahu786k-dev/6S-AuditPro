@@ -29,7 +29,7 @@ export async function GET() {
       ...scope,
       "checklist.beforePhotos.0": { $exists: true }
     })
-      .select("auditNumber zone department date createdAt checklist.category checklist.question checklist.severity checklist.beforePhotos")
+      .select("auditNumber zone department date startDate createdAt checklist.category checklist.question checklist.severity checklist.beforePhotos")
       .lean();
 
     const allMedia: any[] = [];
@@ -97,7 +97,9 @@ export async function GET() {
               category: item.category,
               zone: a.zone,
               department: a.department,
-              date: a.date ? new Date(a.date).toISOString() : (a.createdAt ? new Date(a.createdAt).toISOString() : new Date().toISOString()),
+              // Matches every other view, which dates an audit by its start date and
+              // falls back to the legacy single date field.
+              date: new Date((a.startDate || a.date || a.createdAt || new Date()) as Date).toISOString(),
               description: item.question,
               severity: item.severity || "Low",
               assignedTo: "",

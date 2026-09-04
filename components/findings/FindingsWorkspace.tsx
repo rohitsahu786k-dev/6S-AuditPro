@@ -25,6 +25,8 @@ type Finding = {
   findingNumber: string;
   auditId?: string;
   auditNumber?: string;
+  // Joined from the parent audit by the API; findings do not store their own audit date.
+  auditDate?: string | null;
   zone: string;
   department: string;
   questionId: string;
@@ -88,10 +90,16 @@ function cleanTimelineAction(action?: string) {
   return (action || "").replace(/^[^\p{L}\p{N}]+/u, "").trim() || "Activity";
 }
 
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString();
+}
+
 export function FindingsWorkspace() {
   const findingsApi = useApi<Finding[]>("/api/findings?view=summary");
   const meApi = useApi<{ user: SessionUser | null }>("/api/auth/me");
-  const masters = useApi<Masters>("/api/masters");
+  const masters = useApi<Masters>("/api/masters?view=lookup");
   
   const user = meApi.data?.user;
 
@@ -260,6 +268,16 @@ export function FindingsWorkspace() {
       afterPhotos: finding.afterPhotos || [],
       timeline: finding.timeline || []
     };
+  }
+
+  // CAPA, review and metadata responses return the raw finding document, which
+  // carries no joined audit date. Keep the one already loaded so the panel does
+  // not blank the Audit Date out after an action.
+  function applySelectedFinding(updated: Finding) {
+    setSelectedFinding((current) => {
+      const next = normalizeFinding(updated);
+      return { ...next, auditDate: next.auditDate ?? current?.auditDate };
+    });
   }
 
   async function openDetails(finding: Finding) {
@@ -467,7 +485,7 @@ export function FindingsWorkspace() {
         closureRemarks,
         afterPhotos
       });
-      setSelectedFinding(updated);
+      applySelectedFinding(updated);
       setNote(`CAPA submitted successfully for ${updated.findingNumber}.`);
       await findingsApi.reload();
     } catch (err: any) {
@@ -492,7 +510,7 @@ export function FindingsWorkspace() {
         remarks: remarks || rejectionReason,
         rejectionReason: decision === "reject" ? rejectionReason : undefined
       });
-      setSelectedFinding(updated);
+      applySelectedFinding(updated);
       setNote(`Finding status updated to: ${updated.status}.`);
       await findingsApi.reload();
     } catch (err: any) {
@@ -512,7 +530,7 @@ export function FindingsWorkspace() {
         department: editAssignedDepartment || selectedFinding.department,
         assignedTo: editAssignedTo
       });
-      setSelectedFinding(updated);
+      applySelectedFinding(updated);
       setIsEditingMetadata(false);
       setNote(`Finding metadata updated.`);
       await findingsApi.reload();
@@ -595,6 +613,7 @@ export function FindingsWorkspace() {
                 <tr>
                   <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Finding ID</th>
                   <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit No</th>
+                  <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit Date</th>
                   <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Observation Details</th>
                   <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Department / Zone</th>
                   <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Severity</th>
@@ -613,6 +632,9 @@ export function FindingsWorkspace() {
                     >
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><strong>{f.findingNumber}</strong></td>
                       <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm"><span className="text-xs text-t2">{f.auditNumber || "Manual"}</span></td>
+                      <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top whitespace-nowrap text-sm">
+                        <span className="text-xs text-t2">{formatDate(f.auditDate)}</span>
+                      </td>
                       <td className="max-w-[250px] border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                         <div className="text-[13px] font-semibold">{f.question}</div>
                         {f.observation && (
@@ -837,6 +859,8 @@ export function FindingsWorkspace() {
                       <div className="grid grid-cols-2 gap-2 text-xs">
                         <div>Zone: <strong>{selectedFinding.zone}</strong></div>
                         <div>Action Owner Department: <strong>{selectedFinding.department}</strong></div>
+                        <div>Audit No: <strong>{selectedFinding.auditNumber || "Manual"}</strong></div>
+                        <div>Audit Date: <strong>{formatDate(selectedFinding.auditDate)}</strong></div>
                         <div>Severity: <strong>{selectedFinding.severity}</strong></div>
                         <div>Due Date: <strong>{selectedFinding.dueDate ? new Date(selectedFinding.dueDate).toLocaleDateString() : "No Date"}</strong></div>
                         <div className="col-span-2">Action Owner: <strong>{selectedFinding.assignedTo || selectedFinding.department}</strong></div>

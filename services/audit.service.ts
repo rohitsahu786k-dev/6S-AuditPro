@@ -2,7 +2,7 @@ import Audit from "@/models/Audit";
 import Department from "@/models/Department";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
-import { addWorkingDays, defaultSeverity, departmentAuditScore, scoreChecklist } from "@/lib/audit-scoring";
+import { addWorkingDays, defaultSeverity, scoreChecklist } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
@@ -13,9 +13,7 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  // The checklist fields are read to derive departmentScore and are stripped before
-  // the response is returned, so the dashboard payload stays small.
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores checklist.category checklist.response checklist.actionOwnerDepartment",
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
@@ -66,14 +64,8 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
         }))
       : audit.checklist;
 
-    if (view !== "analytics") return { ...audit, department, checklist };
-
-    const { checklist: _checklist, ...rest } = audit;
-    return {
-      ...rest,
-      department,
-      departmentScore: departmentAuditScore(checklist as never, department)
-    };
+    if (view === "analytics") return { ...audit, department };
+    return { ...audit, department, checklist };
   });
 }
 

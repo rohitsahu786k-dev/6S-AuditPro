@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await requireUser("findings:update");
+    const user = await requireUser("findings:create");
     const body = await parseJson(request, findingCreateSchema);
     await connectDB();
 

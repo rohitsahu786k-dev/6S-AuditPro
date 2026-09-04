@@ -70,14 +70,26 @@ function closureDateOf(finding: any) {
   return closure?.at;
 }
 
-function sameText(left: unknown, right: unknown) {
-  return String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+function normalizedText(value: unknown) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function sameText(left: unknown, right: unknown) {
+  return normalizedText(left) === normalizedText(right);
+}
+
+/**
+ * A checklist row and a finding are the same non-conformity when either their
+ * question ids or their question text line up.
+ *
+ * The id check alone is not enough: findings raised by older builds stored a
+ * generated id (e.g. "bwojd0c83") while the audit checklist kept the master
+ * question id (e.g. "q1"). Treating a mismatch as "no finding exists" made the
+ * reconciler raise a second copy of every historical finding on each run, so the
+ * text comparison has to stay as a fallback rather than an alternative branch.
+ */
 function isSameChecklistFinding(item: AuditChecklistItem, finding: any) {
-  if (item.questionId && finding.questionId) {
-    return String(item.questionId) === String(finding.questionId);
-  }
+  if (item.questionId && finding.questionId && String(item.questionId) === String(finding.questionId)) return true;
   return sameText(item.category, finding.category) && sameText(item.question, finding.question);
 }
 
@@ -171,7 +183,11 @@ async function reconcileMissingAuditFindings() {
       const auditDate = new Date((audit.startDate || audit.date || new Date()) as Date);
 
       try {
-        const finding = await Finding.create({
+        // createdAt is written explicitly (timestamps disabled for this save) so a
+        // restored finding is dated by its audit rather than by the moment the
+        // reconciler happened to run. Monthly reporting and the findings date
+        // filter both read createdAt, and "raised today" would be wrong here.
+        const finding = new Finding({
           findingNumber: nextFindingNumber(audit.auditNumber, usedNumbers),
           auditId: audit._id,
           auditNumber: audit.auditNumber,
@@ -193,8 +209,11 @@ async function reconcileMissingAuditFindings() {
             by: audit.createdBy,
             byName: audit.auditorName || "System",
             at: auditDate
-          }]
+          }],
+          createdAt: auditDate,
+          updatedAt: auditDate
         });
+        await finding.save({ timestamps: false });
         linkedIds.add(String(finding._id));
         existing.push(finding.toObject() as any);
         restored += 1;
@@ -224,7 +243,7 @@ async function refreshOverdueStatuses() {
   if (now - lastOverdueRefreshAt < OVERDUE_REFRESH_INTERVAL_MS) return;
   lastOverdueRefreshAt = now;
   await Finding.updateMany(
-    { status: { $in: ["OPEN", "IN_PROGRESS", "SUBMITTED", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
+    { status: { $in: ["OPEN", "IN_PROGRESS", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
     { $set: { status: "OVERDUE" } }
   );
 }
@@ -236,11 +255,26 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
   const projection = FINDING_PROJECTIONS[view] ?? FINDING_PROJECTIONS.full;
   const request = Finding.find(scopedQuery(user, dateRange)).sort({ createdAt: -1 });
   if (projection) request.select(projection);
-  const [findings, departments] = await Promise.all([
+  // The audit date is not stored on the finding, so it is joined from the parent
+  // audit. Only the date columns are read, which keeps this to one small query
+  // regardless of how many findings the list returns.
+  const [findings, departments, audits] = await Promise.all([
     request.lean(),
-    Department.find().select("name").lean()
+    Department.find().select("name").lean(),
+    Audit.find().select("auditNumber date startDate").lean()
   ]);
   const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+  const auditDates = new Map<string, Date | undefined>();
+  for (const audit of audits) {
+    const auditDate = (audit.startDate || audit.date) as Date | undefined;
+    if (!auditDate) continue;
+    auditDates.set(String(audit._id), auditDate);
+    if (audit.auditNumber) auditDates.set(audit.auditNumber, auditDate);
+  }
+
+  function auditDateOf(finding: { auditId?: unknown; auditNumber?: string | null }) {
+    return auditDates.get(String(finding.auditId || "")) || auditDates.get(finding.auditNumber || "");
+  }
 
   // Closure dates come from the timeline, but only closed findings have one. Reading
   // timelines for just those keeps them out of the much larger list query.
@@ -255,11 +289,12 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
 
   return findings.map((finding) => {
     const department = canonicalDepartmentName(finding.department, configuredDepartments);
-    if (view !== "summary") return { ...finding, department };
+    const auditDate = auditDateOf(finding);
+    if (view !== "summary") return { ...finding, department, auditDate };
     // Dashboard uses updatedAt as the closed timestamp. Preserve the true closure
     // timestamp even if action owner/department is edited after closure.
     const closureDate = closureDates.get(String(finding._id));
-    return { ...finding, department, ...(closureDate ? { updatedAt: closureDate } : {}) };
+    return { ...finding, department, auditDate, ...(closureDate ? { updatedAt: closureDate } : {}) };
   });
 }
 
@@ -271,7 +306,7 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
 export async function notifyOverdueFindings() {
   await connectDB();
   await Finding.updateMany(
-    { status: { $in: ["OPEN", "IN_PROGRESS", "SUBMITTED", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
+    { status: { $in: ["OPEN", "IN_PROGRESS", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
     { $set: { status: "OVERDUE" } }
   );
 

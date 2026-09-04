@@ -23,6 +23,12 @@ export function isNavItemActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+export function activeNavHref(pathname: string, items: NavItem[]): string | undefined {
+  return [...items]
+    .sort((left, right) => right.href.length - left.href.length)
+    .find((item) => isNavItemActive(pathname, item.href))?.href;
+}
+
 export function navItemsForRoutes(allowed: string[]): NavItem[] {
   return NAV_ITEMS.filter((item) => allowed.some((route) => item.href === route || item.href.startsWith(`${route}/`)));
 }

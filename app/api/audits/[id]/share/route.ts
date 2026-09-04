@@ -12,7 +12,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const input = await parseJson(request, shareReportSchema);
     await connectDB();
 
-    const audit = await Audit.findById(id).lean();
+    const audit = await Audit.findOne({
+      _id: id,
+      ...(user.role === "SPOC" && user.department ? { department: user.department } : {})
+    }).lean();
     if (!audit) throw Object.assign(new Error("Audit not found"), { status: 404 });
 
     const result = await sendTemplatedEmail({

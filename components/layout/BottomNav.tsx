@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/types/domain";
 import { ROLE_ROUTES } from "@/lib/roles";
-import { isNavItemActive, navItemsForRoutes } from "@/lib/nav-items";
+import { activeNavHref, navItemsForRoutes } from "@/lib/nav-items";
 
 export function BottomNav({ role }: { role: Role }) {
   const pathname = usePathname();
   const allowed = ROLE_ROUTES[role] || [];
   const items = navItemsForRoutes(allowed);
+  const activeHref = activeNavHref(pathname, items);
 
   return (
     <nav
@@ -18,7 +19,7 @@ export function BottomNav({ role }: { role: Role }) {
     >
       {items.map((item) => {
         const Icon = item.icon;
-        const active = isNavItemActive(pathname, item.href);
+        const active = activeHref === item.href;
         return (
           <Link
             key={item.href}

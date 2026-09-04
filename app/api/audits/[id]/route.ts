@@ -7,10 +7,13 @@ import { fail, ok, parseJson } from "@/utils/api";
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireUser("audits:read");
+    const user = await requireUser("audits:read");
     const { id } = await context.params;
     await connectDB();
-    const audit = await Audit.findById(id).lean();
+    const audit = await Audit.findOne({
+      _id: id,
+      ...(user.role === "SPOC" && user.department ? { department: user.department } : {})
+    }).lean();
     if (!audit) throw Object.assign(new Error("Audit not found"), { status: 404 });
     return ok(audit);
   } catch (error) {

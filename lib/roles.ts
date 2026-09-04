@@ -27,7 +27,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "findings:read", "findings:create", "findings:update", "findings:close",
     "capa:review", "analytics:read", "reports:export", "masters:read"
   ],
-  SPOC: ["findings:read", "findings:update", "capa:submit", "analytics:read", "reports:export"],
+  SPOC: ["audits:read", "findings:read", "findings:update", "capa:submit", "analytics:read", "reports:export"],
   MANAGEMENT: ["audits:read", "findings:read", "analytics:read", "reports:export"]
 };
 
@@ -36,7 +36,7 @@ export const ROLE_ROUTES: Record<Role, string[]> = {
   ADMIN: ["/dashboard", "/audits", "/audit-history", "/findings", "/register", "/analytics", "/admin", "/media"],
   AUDITOR: ["/dashboard", "/audits", "/audit-history", "/findings", "/register", "/analytics", "/media"],
   SPOC: ["/dashboard", "/findings", "/analytics", "/media"],
-  MANAGEMENT: ["/dashboard", "/audits", "/audit-history", "/findings", "/register", "/analytics", "/media"]
+  MANAGEMENT: ["/dashboard", "/audit-history", "/findings", "/register", "/analytics", "/media"]
 };
 
 export function permissionsForRole(role: Role): Permission[] {

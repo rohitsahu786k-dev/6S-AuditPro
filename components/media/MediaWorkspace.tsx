@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiUpload, useApi } from "@/hooks/useApi";
 import {
   Search,
@@ -39,6 +39,7 @@ type SessionUser = {
   username: string;
   role: "MASTER_ADMIN" | "ADMIN" | "AUDITOR" | "SPOC" | "MANAGEMENT";
   department?: string;
+  permissions: string[];
 };
 
 type Masters = {
@@ -61,14 +62,17 @@ type Finding = {
 
 type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
 
+const MEDIA_PAGE_SIZE = 50;
+
 export function MediaWorkspace() {
   const mediaApi = useApi<MediaItem[]>("/api/media");
   const meApi = useApi<{ user: SessionUser | null }>("/api/auth/me");
-  const masters = useApi<Masters>("/api/masters");
+  const masters = useApi<Masters>("/api/masters?view=lookup");
   const findingsApi = useApi<Finding[]>("/api/findings?view=media-selector");
 
   const user = meApi.data?.user;
   const isAdmin = user?.role === "MASTER_ADMIN" || user?.role === "ADMIN";
+  const canUpload = user?.permissions.includes("audits:create") || user?.permissions.includes("capa:submit");
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,6 +83,7 @@ export function MediaWorkspace() {
   const [fromDateInput, setFromDateInput] = useState("");
   const [toDateInput, setToDateInput] = useState("");
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: "", to: "" });
+  const [page, setPage] = useState(1);
 
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -123,6 +128,17 @@ export function MediaWorkspace() {
     });
   }, [mediaApi.data, searchQuery, pillarFilter, typeFilter, zoneFilter, deptFilter, dateRange]);
 
+  const pageCount = Math.max(1, Math.ceil(filteredMedia.length / MEDIA_PAGE_SIZE));
+  const pageRows = filteredMedia.slice((page - 1) * MEDIA_PAGE_SIZE, page * MEDIA_PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, pillarFilter, typeFilter, zoneFilter, deptFilter, dateRange]);
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, pageCount));
+  }, [pageCount]);
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -133,9 +149,15 @@ export function MediaWorkspace() {
   };
 
   const toggleSelectAll = () => {
-    setSelectedIds((prev) =>
-      prev.size === filteredMedia.length ? new Set() : new Set(filteredMedia.map((item) => item.id))
-    );
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allPageRowsSelected = pageRows.every((item) => next.has(item.id));
+      for (const item of pageRows) {
+        if (allPageRowsSelected) next.delete(item.id);
+        else next.add(item.id);
+      }
+      return next;
+    });
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -335,12 +357,14 @@ export function MediaWorkspace() {
           <h2 className="text-2xl font-extrabold text-t1">Media Manager</h2>
           <p className="mt-1 text-sm text-t2">Centralized digital assets, evidence library, and closure confirmations registry.</p>
         </div>
-        <button
-          className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
-          onClick={() => setIsUploadModalOpen(true)}
-        >
-          <UploadCloud size={16} /> Upload & Link Media
-        </button>
+        {canUpload ? (
+          <button
+            className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d"
+            onClick={() => setIsUploadModalOpen(true)}
+          >
+            <UploadCloud size={16} /> Upload & Link Media
+          </button>
+        ) : null}
       </div>
 
       {/* SUCCESS & ERROR NOTES */}
@@ -520,7 +544,7 @@ export function MediaWorkspace() {
                 <th className="bg-bg3 px-3 py-2.5 text-left">
                   <input
                     type="checkbox"
-                    checked={selectedIds.size > 0 && selectedIds.size === filteredMedia.length}
+                    checked={pageRows.length > 0 && pageRows.every((item) => selectedIds.has(item.id))}
                     onChange={toggleSelectAll}
                     aria-label="Select all"
                   />
@@ -538,7 +562,7 @@ export function MediaWorkspace() {
               </tr>
             </thead>
             <tbody>
-              {filteredMedia.map((item) => (
+              {pageRows.map((item) => (
                 <tr key={item.id} className={selectedIds.has(item.id) ? "bg-accent/40" : undefined}>
                   <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top">
                     <input
@@ -589,6 +613,28 @@ export function MediaWorkspace() {
               ))}
             </tbody>
           </table>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-bd px-4 py-3 text-sm text-t2">
+            <span>
+              Showing {(page - 1) * MEDIA_PAGE_SIZE + 1}-{Math.min(page * MEDIA_PAGE_SIZE, filteredMedia.length)} of {filteredMedia.length} media files
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                className="rounded-lg border border-bd bg-white px-3 py-1.5 text-xs font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Prev
+              </button>
+              <span className="min-w-[82px] text-center text-xs font-semibold">Page {page} / {pageCount}</span>
+              <button
+                className="rounded-lg border border-bd bg-white px-3 py-1.5 text-xs font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={page === pageCount}
+                onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
