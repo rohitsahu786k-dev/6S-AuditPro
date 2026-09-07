@@ -2,7 +2,7 @@ import Audit from "@/models/Audit";
 import Department from "@/models/Department";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
-import { addWorkingDays, defaultSeverity, scoreChecklist } from "@/lib/audit-scoring";
+import { addWorkingDays, calculateDepartmentAuditScore, defaultSeverity } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
@@ -12,8 +12,8 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
-  summary: "auditNumber department zone date startDate endDate totalScore status auditorName",
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores",
+  summary: "auditNumber department zone date startDate endDate totalScore status auditorName findingIds checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
+  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores findingIds checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
@@ -52,6 +52,34 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
     Department.find().select("name").lean()
   ]);
   const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+  const auditIds = audits.map((audit) => audit._id);
+  const auditNumbers = audits.map((audit) => audit.auditNumber).filter(Boolean);
+  const auditDepartments = audits.map((audit) => canonicalDepartmentName(audit.department, configuredDepartments)).filter(Boolean);
+  const scoringFindings = view === "register" || audits.length === 0
+    ? []
+    : await Finding.find({
+        $or: [
+          { auditId: { $in: auditIds } },
+          { auditNumber: { $in: auditNumbers } },
+          { department: { $in: auditDepartments } }
+        ]
+      }).select("_id auditId auditNumber department questionId category question").lean();
+  const sourceAuditRefs = view === "register" || scoringFindings.length === 0
+    ? []
+    : await Audit.find({
+        $or: [
+          { _id: { $in: scoringFindings.map((finding) => finding.auditId).filter(Boolean) } },
+          { auditNumber: { $in: scoringFindings.map((finding) => finding.auditNumber).filter(Boolean) } }
+        ]
+      }).select("_id auditNumber department").lean();
+  const sourceDepartmentByAuditId = new Map(sourceAuditRefs.map((audit) => [
+    String(audit._id),
+    canonicalDepartmentName(audit.department, configuredDepartments)
+  ]));
+  const sourceDepartmentByAuditNumber = new Map(sourceAuditRefs.map((audit) => [
+    audit.auditNumber,
+    canonicalDepartmentName(audit.department, configuredDepartments)
+  ]));
 
   return audits.map((audit) => {
     const department = canonicalDepartmentName(audit.department, configuredDepartments);
@@ -64,7 +92,34 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
         }))
       : audit.checklist;
 
-    if (view === "analytics") return { ...audit, department };
+    if (view !== "register") {
+      const scoring = calculateDepartmentAuditScore({
+        audit: { ...audit, department, checklist },
+        department,
+        findings: scoringFindings,
+        configuredDepartments,
+        sourceDepartmentByAuditId,
+        sourceDepartmentByAuditNumber
+      });
+      const scoredAudit = {
+        ...audit,
+        department,
+        checklist,
+        totalScore: scoring.score,
+        categoryScores: scoring.categoryScores,
+        adequateCount: scoring.adequateCount,
+        ownedNotAdequateCount: scoring.ownedNotAdequateCount,
+        applicableCount: scoring.applicableCount,
+        naCount: scoring.naCount
+      };
+      if (view === "summary" || view === "analytics") {
+        const listAudit = { ...scoredAudit };
+        delete (listAudit as { checklist?: unknown }).checklist;
+        return listAudit;
+      }
+      return scoredAudit;
+    }
+
     return { ...audit, department, checklist };
   });
 }
@@ -90,7 +145,13 @@ export async function createAudit(input: {
   }>;
 }, user: SessionUser) {
   await connectDB();
-  const { categoryScores, totalScore } = scoreChecklist(input.checklist);
+  const initialScoring = calculateDepartmentAuditScore({
+    audit: { department: input.department, checklist: input.checklist },
+    department: input.department,
+    includeTransferredIn: false
+  });
+  const categoryScores = initialScoring.categoryScores;
+  const totalScore = initialScoring.score;
   const startDate = input.startDate || input.date || new Date();
   const audit = await Audit.create({
     auditNumber: await nextAuditNumber(),
@@ -149,7 +210,7 @@ export async function createAudit(input: {
         zoneName: audit.zone,
         auditorName: audit.auditorName,
         status: audit.status,
-        totalScore: `${audit.totalScore}%`
+        totalScore: `${totalScore}%`
       },
       relatedAuditId: audit._id.toString()
     });

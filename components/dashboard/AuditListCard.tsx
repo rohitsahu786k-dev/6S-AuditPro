@@ -61,7 +61,7 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
                   <span
                     className="rounded-full border px-2.5 py-0.5 text-xs font-bold"
                     style={{ background: badge.bg, color: badge.text, borderColor: badge.border }}
-                    title="Stored audit score"
+                    title="Canonical department audit score"
                   >
                     {score}%
                   </span>

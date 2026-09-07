@@ -1,4 +1,5 @@
 import { CATEGORIES, CATEGORY_META, APP_NAME, COMPANY_NAME } from "@/lib/constants";
+import { calculateDepartmentAuditScore } from "@/lib/audit-scoring";
 
 export type AuditPdfPhoto = { secureUrl: string; publicId?: string };
 
@@ -278,21 +279,33 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
     ...[...new Set(reportChecklist.map((item) => item.category))].filter((category) => !(CATEGORIES as readonly string[]).includes(category))
   ];
 
-  const categoryStats = orderedCategories.map((category) => {
-    const items = reportChecklist.filter((item) => item.category === category);
-    const adequate = items.filter((item) => item.response === "Adequate").length;
-    const notAdequate = items.filter((item) => item.response === "Not Adequate").length;
-    const na = items.filter((item) => item.response === "N/A").length;
-    const computed = adequate + notAdequate > 0 ? Math.round((adequate / (adequate + notAdequate)) * 100) : 100;
-    return { category, adequate, notAdequate, na, score: computed };
+  const scoring = calculateDepartmentAuditScore({
+    audit: {
+      ...audit,
+      checklist: audit.checklist.filter((item) =>
+        item.response === "Adequate" || item.response === "Not Adequate" || item.response === "N/A"
+      ) as Array<typeof audit.checklist[number] & { response: "Adequate" | "Not Adequate" | "N/A" }>
+    },
+    department: audit.department,
+    findings: allFindings || [],
+    sourceDepartmentByAuditId: sourceAuditDepartmentById,
+    sourceDepartmentByAuditNumber: sourceAuditDepartmentByNumber
   });
-  const countedCategoryStats = categoryStats.filter((stat) => stat.adequate + stat.notAdequate > 0);
-  const computedTotalScore = countedCategoryStats.length
-    ? Math.round(countedCategoryStats.reduce((sum, stat) => sum + stat.score, 0) / countedCategoryStats.length)
-    : 0;
-  const reportTotalScore = Number.isFinite(audit.totalScore) ? audit.totalScore : computedTotalScore;
+  const categoryStats = orderedCategories.map((category) => {
+    const stat = scoring.categoryScores[category] || { adequate: 0, ownedNotAdequate: 0, total: 0, na: 0, score: 0 };
+    return {
+      category,
+      adequate: stat.adequate,
+      notAdequate: stat.ownedNotAdequate,
+      na: stat.na,
+      score: stat.score
+    };
+  });
+  const reportTotalScore = scoring.score;
 
-  const flaggedItems = reportChecklist.filter((item) => item.response === "Not Adequate");
+  const flaggedItems = reportChecklist.filter((item) =>
+    item.response === "Not Adequate" && (item.actionOwnerDepartment || audit.department) === audit.department
+  );
   const severityOrder = ["Critical", "High", "Medium", "Low"];
   const severityCounts = severityOrder.map((severity) => ({
     severity,

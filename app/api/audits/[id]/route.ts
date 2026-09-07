@@ -3,7 +3,43 @@ import { auditUpdateSchema } from "@/lib/validators";
 import Audit from "@/models/Audit";
 import Finding from "@/models/Finding";
 import { connectDB } from "@/lib/db";
+import { calculateDepartmentAuditScore } from "@/lib/audit-scoring";
 import { fail, ok, parseJson } from "@/utils/api";
+
+async function withCanonicalScore(audit: any) {
+  const findings = await Finding.find({
+    $or: [
+      { auditId: audit._id },
+      { auditNumber: audit.auditNumber },
+      { department: audit.department }
+    ]
+  }).select("_id auditId auditNumber department questionId category question").lean();
+  const sourceAudits = await Audit.find({
+    $or: [
+      { _id: { $in: findings.map((finding) => finding.auditId).filter(Boolean) } },
+      { auditNumber: { $in: findings.map((finding) => finding.auditNumber).filter(Boolean) } }
+    ]
+  }).select("_id auditNumber department").lean();
+  const sourceDepartmentByAuditId = new Map(sourceAudits.map((source) => [String(source._id), source.department]));
+  const sourceDepartmentByAuditNumber = new Map(sourceAudits.map((source) => [source.auditNumber, source.department]));
+  const scoring = calculateDepartmentAuditScore({
+    audit,
+    department: audit.department,
+    findings,
+    sourceDepartmentByAuditId,
+    sourceDepartmentByAuditNumber
+  });
+
+  return {
+    ...audit,
+    totalScore: scoring.score,
+    categoryScores: scoring.categoryScores,
+    adequateCount: scoring.adequateCount,
+    ownedNotAdequateCount: scoring.ownedNotAdequateCount,
+    applicableCount: scoring.applicableCount,
+    naCount: scoring.naCount
+  };
+}
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
@@ -15,7 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       ...(user.role === "SPOC" && user.department ? { department: user.department } : {})
     }).lean();
     if (!audit) throw Object.assign(new Error("Audit not found"), { status: 404 });
-    return ok(audit);
+    return ok(await withCanonicalScore(audit));
   } catch (error) {
     return fail(error);
   }
@@ -45,8 +81,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       throw Object.assign(new Error("Ending Date cannot be earlier than Starting Date."), { status: 400 });
     }
 
-    await audit.save();
-    return ok(audit);
+    const saved = await audit.save();
+    return ok(await withCanonicalScore(saved.toObject()));
   } catch (error) {
     return fail(error);
   }
