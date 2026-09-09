@@ -2,14 +2,19 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 
 const ChecklistItemSchema = new Schema({
   questionId: String,
+  sourceRowNumber: Number,
+  importBatchId: String,
   category: String,
   question: String,
   response: { type: String, enum: ["Adequate", "Not Adequate", "N/A"] },
   observation: String,
   severity: { type: String, enum: ["Critical", "High", "Medium", "Low"] },
   actionOwnerId: String,
+  actionOwnerUserId: { type: Schema.Types.ObjectId, ref: "User" },
   actionOwnerName: String,
   actionOwnerDepartment: String,
+  dueDate: Date,
+  remarks: String,
   beforePhotos: [{
     secureUrl: String,
     publicId: String,
@@ -21,6 +26,9 @@ const ChecklistItemSchema = new Schema({
 
 const AuditSchema = new Schema({
   auditNumber: { type: String, required: true, unique: true, index: true },
+  auditType: { type: String, enum: ["STANDARD", "ADHOC"], default: "STANDARD", index: true },
+  title: { type: String, trim: true },
+  description: { type: String, trim: true },
   zone: { type: String, required: true, index: true },
   department: { type: String, required: true, index: true },
   auditor: { type: Schema.Types.ObjectId, ref: "User" },
@@ -33,6 +41,17 @@ const AuditSchema = new Schema({
   categoryScores: { type: Schema.Types.Mixed, default: {} },
   totalScore: { type: Number, default: 0 },
   findingIds: [{ type: Schema.Types.ObjectId, ref: "Finding" }],
+  importMetadata: {
+    originalFileName: String,
+    importedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    importedByName: String,
+    importedAt: Date,
+    totalRows: Number,
+    successfulRows: Number,
+    failedRows: Number,
+    importBatchId: String,
+    fileHash: String
+  },
   createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true }
 }, { timestamps: true });
 

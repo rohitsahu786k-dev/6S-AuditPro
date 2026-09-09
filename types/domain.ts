@@ -16,6 +16,7 @@ export type Permission =
   | "emailLogs:read" | "settings:manage";
 
 export type AuditStatus = "DRAFT" | "COMPLETED" | "CANCELLED";
+export type AuditType = "STANDARD" | "ADHOC";
 export type FindingStatus = "OPEN" | "IN_PROGRESS" | "SUBMITTED" | "CLOSED" | "REJECTED" | "REOPENED" | "OVERDUE";
 export type Severity = "Critical" | "High" | "Medium" | "Low";
 export type EmailTriggerEvent =

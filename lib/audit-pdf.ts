@@ -6,6 +6,9 @@ export type AuditPdfPhoto = { secureUrl: string; publicId?: string };
 export type AuditPdfData = {
   _id?: string;
   auditNumber: string;
+  auditType?: "STANDARD" | "ADHOC";
+  title?: string;
+  description?: string;
   zone: string;
   department: string;
   auditorName: string;
@@ -401,6 +404,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
 
   // ----- Document -----
   const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const isAdhocAudit = (audit.auditType || "STANDARD") === "ADHOC";
   const rating = ratingFor(reportTotalScore);
   const startDateLabel = formatDate(audit.startDate || audit.date);
   const endDateLabel = formatDate(audit.endDate);
@@ -431,7 +435,7 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(17);
-  doc.text("6S AUDIT REPORT", MARGIN, 13.5);
+  doc.text(isAdhocAudit ? "ADHOC 6S AUDIT REPORT" : "6S AUDIT REPORT", MARGIN, 13.5);
   doc.setFontSize(11);
   doc.text(audit.auditNumber, PAGE_W - MARGIN, 13.5, { align: "right" });
   doc.setFont("helvetica", "normal");
@@ -643,6 +647,8 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   ensureSpace(64);
   sectionHeading("Audit Information");
   const infoRows: Array<[string, string]> = [
+    ["Audit Type:", isAdhocAudit ? "Adhoc Audit" : "Standard Audit"],
+    ...(audit.title ? [["Audit Title:", audit.title] as [string, string]] : []),
     ["Zone:", audit.zone],
     ["Department:", audit.department],
     ["Location:", zoneLocation || "-"],
@@ -860,11 +866,11 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   }
 
   // ===== Complete audit responses =====
-  sectionHeading(`Complete Audit Responses (All ${reportChecklist.length} Questions)`);
+  sectionHeading(`${isAdhocAudit ? "Imported Observation Details" : "Complete Audit Responses"} (All ${reportChecklist.length} ${isAdhocAudit ? "Rows" : "Questions"})`);
   autoTable(doc, {
     startY: y,
     margin: tableMargin,
-    head: [["#", "Category", "Question", "Response", "Action Owner", "Observation"]],
+    head: [["#", "Category", isAdhocAudit ? "Observation / Checkpoint" : "Question", "Response", "Action Owner", "Observation"]],
     body: reportChecklist.map((item, index) => [
       String(index + 1),
       item.category,
@@ -915,5 +921,5 @@ export async function downloadAuditPdf(audit: AuditPdfData) {
   }
 
   const safeName = audit.auditNumber.replace(/[^a-z0-9-_]/gi, "_");
-  doc.save(`${safeName}_Audit_Report.pdf`);
+  doc.save(`${safeName}_${isAdhocAudit ? "Adhoc_Audit_Report" : "Audit_Report"}.pdf`);
 }

@@ -1,6 +1,7 @@
 import Audit from "@/models/Audit";
 import Department from "@/models/Department";
 import Finding from "@/models/Finding";
+import User from "@/models/User";
 import { connectDB } from "@/lib/db";
 import { addWorkingDays, calculateDepartmentAuditScore, defaultSeverity } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
@@ -12,8 +13,8 @@ export type AuditListView = "full" | "summary" | "analytics" | "register";
 
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
-  summary: "auditNumber department zone date startDate endDate totalScore status auditorName findingIds checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
-  analytics: "auditNumber zone department auditorName date startDate endDate status totalScore categoryScores findingIds checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
+  summary: "auditNumber auditType title description department zone date startDate endDate totalScore status auditorName findingIds importMetadata checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
+  analytics: "auditNumber auditType zone department auditorName date startDate endDate status totalScore categoryScores findingIds checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
   register: "auditNumber department zone date startDate endDate status checklist.questionId checklist.category checklist.question checklist.response checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
 };
 
@@ -42,6 +43,7 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
       { startDate: { $exists: false }, date: { $gte: from, $lt: to } },
       { startDate: null, date: { $gte: from, $lt: to } }
     ];
+    query.auditType = { $in: ["STANDARD", null] };
   }
 
   const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;
@@ -125,6 +127,9 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
 }
 
 export async function createAudit(input: {
+  auditType?: "STANDARD" | "ADHOC";
+  title?: string;
+  description?: string;
   zone: string;
   department: string;
   auditorName: string;
@@ -139,12 +144,72 @@ export async function createAudit(input: {
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
     actionOwnerId?: string;
+    actionOwnerUserId?: string;
     actionOwnerName?: string;
     actionOwnerDepartment?: string;
+    sourceRowNumber?: number;
+    importBatchId?: string;
+    dueDate?: Date;
+    remarks?: string;
     beforePhotos?: Array<{ secureUrl: string; publicId: string }>;
   }>;
+  importMetadata?: {
+    originalFileName: string;
+    totalRows: number;
+    successfulRows: number;
+    failedRows: number;
+    importBatchId: string;
+    fileHash: string;
+  };
 }, user: SessionUser) {
   await connectDB();
+  const auditType = input.auditType || "STANDARD";
+
+  if (auditType === "ADHOC") {
+    const departments = await Department.find({ isActive: { $ne: false } }).select("name").lean();
+    const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
+    const canonicalAuditDepartment = canonicalDepartmentName(input.department, configuredDepartments);
+    if (!configuredDepartments.includes(canonicalAuditDepartment)) {
+      throw Object.assign(new Error("Invalid audited department for Adhoc Audit."), { status: 400 });
+    }
+    input.department = canonicalAuditDepartment;
+
+    const users = await User.find({ status: { $ne: "inactive" } }).select("_id name department").lean();
+    const usersById = new Map(users.map((portalUser) => [String(portalUser._id), portalUser]));
+    const adequateCount = input.checklist.filter((item) => item.response === "Adequate").length;
+    const notAdequateCount = input.checklist.filter((item) => item.response === "Not Adequate").length;
+    if (adequateCount === 0 && notAdequateCount > 0) {
+      throw Object.assign(new Error("A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."), { status: 400 });
+    }
+
+    input.checklist = input.checklist.map((item, index) => {
+      if (!item.question?.trim()) throw Object.assign(new Error(`Row ${index + 1}: Missing Observation.`), { status: 400 });
+      if (item.response === "Not Adequate") {
+        const ownerDepartment = canonicalDepartmentName(item.actionOwnerDepartment || "", configuredDepartments);
+        if (!configuredDepartments.includes(ownerDepartment)) throw Object.assign(new Error(`Row ${index + 1}: Unknown Department.`), { status: 400 });
+        if (!item.actionOwnerUserId) throw Object.assign(new Error(`Row ${index + 1}: Unknown Responsible Person.`), { status: 400 });
+        const ownerUser = usersById.get(String(item.actionOwnerUserId));
+        if (!ownerUser) throw Object.assign(new Error(`Row ${index + 1}: Responsible Person is not an active portal user.`), { status: 400 });
+        const userDepartment = canonicalDepartmentName(ownerUser.department || "", configuredDepartments);
+        if (userDepartment && userDepartment !== ownerDepartment) {
+          throw Object.assign(new Error(`Row ${index + 1}: Responsible Person does not belong to selected department.`), { status: 400 });
+        }
+        if (!item.dueDate) throw Object.assign(new Error(`Row ${index + 1}: Invalid Target Date.`), { status: 400 });
+        return {
+          ...item,
+          actionOwnerDepartment: ownerDepartment,
+          actionOwnerName: item.actionOwnerName || ownerUser.name,
+          questionId: item.questionId || `adhoc-${input.importMetadata?.importBatchId || "row"}-${index + 1}`,
+          severity: item.severity || defaultSeverity("Not Adequate", item.category)
+        };
+      }
+      return {
+        ...item,
+        questionId: item.questionId || `adhoc-${input.importMetadata?.importBatchId || "row"}-${index + 1}`
+      };
+    });
+  }
+
   const initialScoring = calculateDepartmentAuditScore({
     audit: { department: input.department, checklist: input.checklist },
     department: input.department,
@@ -155,6 +220,9 @@ export async function createAudit(input: {
   const startDate = input.startDate || input.date || new Date();
   const audit = await Audit.create({
     auditNumber: await nextAuditNumber(),
+    auditType,
+    title: input.title,
+    description: input.description,
     zone: input.zone,
     department: input.department,
     auditorName: input.auditorName,
@@ -168,6 +236,15 @@ export async function createAudit(input: {
     totalScore,
     createdBy: user.id
   });
+  if (input.importMetadata) {
+    audit.importMetadata = {
+      ...input.importMetadata,
+      importedBy: user.id,
+      importedByName: user.name,
+      importedAt: new Date()
+    } as any;
+    await audit.save();
+  }
 
   const findings = await Finding.insertMany(input.checklist
     .filter((item) => item.response === "Not Adequate")
@@ -178,6 +255,7 @@ export async function createAudit(input: {
         findingNumber: `${audit.auditNumber}-F${String(index + 1).padStart(2, "0")}`,
         auditId: audit._id,
         auditNumber: audit.auditNumber,
+        auditType,
         zone: audit.zone,
         department: ownerDepartment,
         questionId: item.questionId,
@@ -187,10 +265,11 @@ export async function createAudit(input: {
         observation: item.observation,
         beforePhotos: item.beforePhotos || [],
         assignedTo: ownerName,
-        dueDate: addWorkingDays(new Date(), 7),
+        assignedUser: item.actionOwnerUserId,
+        dueDate: item.dueDate || addWorkingDays(new Date(), 7),
         status: "OPEN",
         createdBy: user.id,
-        timeline: [{ action: "Finding created", note: "Created from audit checklist", by: user.id, byName: user.name }]
+        timeline: [{ action: "Finding created", note: auditType === "ADHOC" ? "Created from Adhoc Excel assessment import" : "Created from audit checklist", by: user.id, byName: user.name }]
       };
     }));
 

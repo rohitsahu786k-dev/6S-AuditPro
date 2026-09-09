@@ -19,6 +19,7 @@ const FindingSchema = new Schema({
   findingNumber: { type: String, required: true, unique: true, index: true },
   auditId: { type: Schema.Types.ObjectId, ref: "Audit", index: true },
   auditNumber: { type: String, index: true },
+  auditType: { type: String, enum: ["STANDARD", "ADHOC"], default: "STANDARD", index: true },
   zone: { type: String, required: true, index: true },
   department: { type: String, required: true, index: true },
   questionId: String,

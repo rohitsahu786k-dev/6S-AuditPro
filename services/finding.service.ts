@@ -129,6 +129,7 @@ async function reconcileMissingAuditFindings() {
   const audits = await Audit.find({ status: "COMPLETED" })
     .select([
       "_id auditNumber zone department auditorName date startDate findingIds createdBy",
+      "auditType",
       "checklist.questionId checklist.category checklist.question checklist.response",
       "checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
     ].join(" "))
@@ -200,6 +201,7 @@ async function reconcileMissingAuditFindings() {
           findingNumber: nextFindingNumber(audit.auditNumber, usedNumbers),
           auditId: audit._id,
           auditNumber: audit.auditNumber,
+          auditType: (audit as any).auditType || "STANDARD",
           zone: audit.zone,
           department: ownerDepartment,
           questionId: item.questionId,

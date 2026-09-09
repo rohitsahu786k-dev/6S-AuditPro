@@ -18,7 +18,9 @@ import {
   AlertTriangle,
   ExternalLink,
   Mail,
-  Download
+  Download,
+  FileSpreadsheet,
+  ClipboardList
 } from "lucide-react";
 import { defaultSeverity } from "@/lib/audit-scoring";
 import { downloadAuditPdf } from "@/lib/audit-pdf";
@@ -31,11 +33,15 @@ type Masters = {
   zones: Array<{ name: string; department: string }>; 
   questions: Array<{ _id: string; category: string; text: string; subSection: string; serialNumber?: number; sortOrder?: number }>;
   people: Array<{ _id: string; name: string; type: string; department?: string; isActive?: boolean }>;
+  users: Array<{ _id: string; name: string; username: string; email?: string; department?: string; role: string; status?: string }>;
 };
 
 type Audit = { 
   _id: string; 
   auditNumber: string; 
+  auditType?: "STANDARD" | "ADHOC";
+  title?: string;
+  description?: string;
   zone: string; 
   department: string; 
   auditorName: string; 
@@ -46,19 +52,37 @@ type Audit = {
   // Absent on the history list, which omits the checklist to keep the response small.
   checklist?: Array<{
     questionId: string;
+    sourceRowNumber?: number;
+    importBatchId?: string;
     category: string;
     question: string;
     response: "Adequate" | "Not Adequate" | "N/A";
     observation?: string;
     severity?: "Critical" | "High" | "Medium" | "Low";
     actionOwnerId?: string;
+    actionOwnerUserId?: string;
     actionOwnerName?: string;
     actionOwnerDepartment?: string;
+    dueDate?: string;
+    remarks?: string;
     beforePhotos?: Array<UploadedPhoto>;
   }>;
-  // Stored either as a plain number or as the { adequate, total, score } shape from scoreChecklist()
-  categoryScores?: Record<string, number | { adequate: number; total: number; score: number }>;
+  categoryScores?: Record<string, number | { adequate: number; ownedNotAdequate?: number; total: number; na?: number; score: number }>;
   findingIds?: string[];
+  adequateCount?: number;
+  ownedNotAdequateCount?: number;
+  applicableCount?: number;
+  naCount?: number;
+  importMetadata?: {
+    originalFileName?: string;
+    importedByName?: string;
+    importedAt?: string;
+    totalRows?: number;
+    successfulRows?: number;
+    failedRows?: number;
+    importBatchId?: string;
+    fileHash?: string;
+  };
 };
 
 type FullAudit = Audit & { checklist: NonNullable<Audit["checklist"]> };
@@ -68,22 +92,64 @@ type CreateAuditResponse = {
   findings?: Finding[];
 };
 
-function categoryScoreValue(score: number | { adequate: number; total: number; score: number }): number {
+function categoryScoreValue(score: number | { adequate?: number; total?: number; score?: number }): number {
   return typeof score === "object" && score !== null ? score.score ?? 0 : score;
 }
 
 type Finding = {
   _id: string;
   findingNumber: string;
+  auditId?: string;
+  auditNumber?: string;
+  questionId?: string;
   question: string;
   category: string;
   severity: string;
   observation?: string;
   assignedTo?: string;
   department?: string;
+  dueDate?: string;
+  status?: string;
+  capaStatus?: string;
+  capaAction?: string;
+  closureRemarks?: string;
+  beforePhotos?: UploadedPhoto[];
+  afterPhotos?: UploadedPhoto[];
 };
 
 type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
+
+type AdhocPreviewRow = {
+  rowNumber: number;
+  srNo: string;
+  category: string;
+  observation: string;
+  assessment: "Adequate" | "Not Adequate" | "N/A" | "";
+  responsibleDepartment: string;
+  responsiblePerson: string;
+  responsibleUserId?: string;
+  severity: "Critical" | "High" | "Medium" | "Low" | "";
+  targetDate?: string;
+  remarks: string;
+  validationStatus: "VALID" | "INVALID" | "WARNING";
+  errors: string[];
+  warnings: string[];
+};
+
+type AdhocPreview = {
+  fileName: string;
+  fileHash: string;
+  importBatchId: string;
+  totalRows: number;
+  successfulRows: number;
+  failedRows: number;
+  adequateCount: number;
+  notAdequateCount: number;
+  naCount: number;
+  invalidRows: number;
+  scoreWarning?: string;
+  rows: AdhocPreviewRow[];
+};
 
 function responseBadgeClass(response: "Adequate" | "Not Adequate" | "N/A") {
   if (response === "Adequate") return "bg-green";
@@ -117,7 +183,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const isUserAdmin = currentUser && ["MASTER_ADMIN", "ADMIN"].includes(currentUser.role);
 
   // Navigation & Step State ("New Audit" page jumps straight into the setup form)
-  const [step, setStep] = useState<"history" | "setup" | "checklist" | "success">(newOnly ? "setup" : "history");
+  const [step, setStep] = useState<"history" | "auditType" | "setup" | "checklist" | "adhocDetails" | "adhocImport" | "success">(newOnly ? "auditType" : "history");
 
   // In newOnly mode the history list lives on /audit-history, so "back to
   // history" navigates there instead of switching the local step.
@@ -132,6 +198,13 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const [startDate, setStartDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [endDate, setEndDate] = useState("");
   const [setupError, setSetupError] = useState("");
+  const [adhocTitle, setAdhocTitle] = useState("");
+  const [adhocDescription, setAdhocDescription] = useState("");
+  const [adhocPreview, setAdhocPreview] = useState<AdhocPreview | null>(null);
+  const [adhocUploading, setAdhocUploading] = useState(false);
+  const [adhocUploadError, setAdhocUploadError] = useState("");
+  const [adhocFilterAssessment, setAdhocFilterAssessment] = useState("ALL");
+  const [adhocFilterDepartment, setAdhocFilterDepartment] = useState("ALL");
 
   // Checklist State
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
@@ -153,6 +226,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
 
   // Detail Modal State
   const [selectedAuditDetail, setSelectedAuditDetail] = useState<Audit | null>(null);
+  const [auditDetailFindings, setAuditDetailFindings] = useState<Finding[]>([]);
   const [downloadingAuditId, setDownloadingAuditId] = useState<string | null>(null);
   const [isLoadingAuditDetail, setIsLoadingAuditDetail] = useState(false);
   const [isEditingAuditDates, setIsEditingAuditDates] = useState(false);
@@ -162,6 +236,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const [historySearch, setHistorySearch] = useState("");
   const [historyDepartment, setHistoryDepartment] = useState("ALL");
   const [historyZone, setHistoryZone] = useState("ALL");
+  const [historyAuditType, setHistoryAuditType] = useState("ALL");
 
   // Share Report State
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -207,14 +282,24 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
 
   async function openAuditDetail(audit: Audit) {
     setSelectedAuditDetail(audit);
+    setAuditDetailFindings([]);
     setEditStartDate(dateInputValue(auditStartDate(audit)));
     setEditEndDate(dateInputValue(audit.endDate));
     setIsEditingAuditDates(false);
-    if (audit.checklist) return;
 
     setIsLoadingAuditDetail(true);
     try {
-      setSelectedAuditDetail(await fetchFullAudit(audit));
+      const fullAudit = await fetchFullAudit(audit);
+      setSelectedAuditDetail(fullAudit);
+      if ((fullAudit.auditType || "STANDARD") === "ADHOC") {
+        const response = await fetch("/api/findings?view=full", { cache: "no-store" });
+        const json = await response.json();
+        if (response.ok && json.ok) {
+          setAuditDetailFindings((json.data as Finding[]).filter((finding) =>
+            finding.auditNumber === fullAudit.auditNumber || String(finding.auditId || "") === String(fullAudit._id)
+          ));
+        }
+      }
     } catch (error) {
       alert(error instanceof Error ? `Unable to load audit details: ${error.message}` : "Unable to load audit details.");
     } finally {
@@ -326,9 +411,10 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
         .some((value) => value.toLowerCase().includes(query));
       const matchesDepartment = historyDepartment === "ALL" || audit.department === historyDepartment;
       const matchesZone = historyZone === "ALL" || audit.zone === historyZone;
-      return matchesSearch && matchesDepartment && matchesZone;
+      const matchesAuditType = historyAuditType === "ALL" || (audit.auditType || "STANDARD") === historyAuditType;
+      return matchesSearch && matchesDepartment && matchesZone && matchesAuditType;
     });
-  }, [audits.data, historySearch, historyDepartment, historyZone]);
+  }, [audits.data, historySearch, historyDepartment, historyZone, historyAuditType]);
 
   const auditCategories = useMemo(() => {
     const categories = masters.data?.questions
@@ -448,14 +534,10 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   }
 
   function startAuditSetup() {
-    setZoneName("");
-    setAuditorName("");
-    setStartDate(new Date().toISOString().split("T")[0]);
-    setEndDate("");
+    resetAuditSetup();
     setChecklistResponses({});
     setCurrentCategoryIndex(0);
-    setSetupError("");
-    setStep("setup");
+    setStep("auditType");
   }
 
   function validateSetupAndStart() {
@@ -517,6 +599,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       });
 
       const response = await apiPost<CreateAuditResponse>("/api/audits", {
+        auditType: "STANDARD",
         zone: selectedZone?.name,
         department: selectedZone?.department,
         auditorName,
@@ -531,6 +614,231 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       await audits.reload();
     } catch (err: any) {
       alert(`Failed to save audit: ${err.message}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function resetAuditSetup() {
+    setZoneName("");
+    setAuditorName("");
+    setStartDate(new Date().toISOString().split("T")[0]);
+    setEndDate("");
+    setSetupError("");
+    setAdhocTitle("");
+    setAdhocDescription("");
+    setAdhocPreview(null);
+    setAdhocUploadError("");
+    setAdhocFilterAssessment("ALL");
+    setAdhocFilterDepartment("ALL");
+  }
+
+  function startStandardAudit() {
+    resetAuditSetup();
+    setChecklistResponses({});
+    setCurrentCategoryIndex(0);
+    setStep("setup");
+  }
+
+  function startAdhocAudit() {
+    resetAuditSetup();
+    setStep("adhocDetails");
+  }
+
+  function validateAdhocDetailsAndContinue() {
+    if (!adhocTitle.trim()) {
+      setSetupError("Audit Title is required.");
+      return;
+    }
+    if (!zoneName) {
+      setSetupError("Please select an audited area / zone.");
+      return;
+    }
+    if (!auditorName) {
+      setSetupError("Please select or enter an auditor name.");
+      return;
+    }
+    if (!startDate) {
+      setSetupError("Starting Date is required.");
+      return;
+    }
+    if (endDate && new Date(endDate) < new Date(startDate)) {
+      setSetupError("Ending Date cannot be earlier than Starting Date.");
+      return;
+    }
+    setSetupError("");
+    setStep("adhocImport");
+  }
+
+  async function downloadAdhocTemplate() {
+    const response = await fetch("/api/audits/adhoc/template");
+    if (!response.ok) {
+      alert("Unable to download Adhoc template.");
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "Adhoc-6S-Audit-Template.xlsx";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function previewAdhocFile(file: File) {
+    setAdhocUploading(true);
+    setAdhocUploadError("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const preview = await apiUpload<AdhocPreview>("/api/audits/adhoc/preview", formData);
+      setAdhocPreview(preview);
+    } catch (err: any) {
+      setAdhocPreview(null);
+      setAdhocUploadError(err.message || "Unable to parse Excel file.");
+    } finally {
+      setAdhocUploading(false);
+    }
+  }
+
+  function handleAdhocFileInput(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) void previewAdhocFile(file);
+    event.target.value = "";
+  }
+
+  function findingForAuditItem(item: NonNullable<Audit["checklist"]>[number]) {
+    return auditDetailFindings.find((finding) =>
+      (item.questionId && String((finding as any).questionId || "") === String(item.questionId)) ||
+      (finding.category === item.category && finding.question === item.question)
+    );
+  }
+
+  async function handleAdhocBeforePhotoUpload(item: NonNullable<Audit["checklist"]>[number], event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const finding = findingForAuditItem(item);
+    if (!finding) {
+      alert("Unable to find linked Finding for this observation.");
+      return;
+    }
+
+    setUploading((prev) => ({ ...prev, [item.questionId]: true }));
+    try {
+      const processed = await processImageToWebP(file);
+      const formData = new FormData();
+      formData.append("file", processed.file);
+      formData.append("folderSuffix", "audit-photos");
+      const uploadResult = await apiUpload<UploadedPhoto>("/api/upload", formData);
+      const beforePhotos = [
+        ...(finding.beforePhotos || item.beforePhotos || []),
+        { secureUrl: uploadResult.secureUrl, publicId: uploadResult.publicId, sizeBytes: uploadResult.sizeBytes, uploadedBy: uploadResult.uploadedBy, uploadedByName: uploadResult.uploadedByName }
+      ];
+      const updated = await apiPatch<Finding>(`/api/findings/${finding._id}`, { beforePhotos });
+      setAuditDetailFindings((current) => current.map((row) => row._id === updated._id ? { ...row, ...updated, beforePhotos } : row));
+      setSelectedAuditDetail((current) => current ? {
+        ...current,
+        checklist: current.checklist?.map((row) => row.questionId === item.questionId ? { ...row, beforePhotos } : row)
+      } : current);
+    } catch (err: any) {
+      alert(`Upload error: ${err.message}`);
+    } finally {
+      setUploading((prev) => ({ ...prev, [item.questionId]: false }));
+    }
+  }
+
+  function updateAdhocRow(index: number, patch: Partial<AdhocPreviewRow>) {
+    setAdhocPreview((current) => {
+      if (!current) return current;
+      const rows = current.rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch, errors: [], validationStatus: "VALID" as const } : row);
+      const adequateCount = rows.filter((row) => row.assessment === "Adequate").length;
+      const notAdequateCount = rows.filter((row) => row.assessment === "Not Adequate").length;
+      const naCount = rows.filter((row) => row.assessment === "N/A").length;
+      const invalidRows = rows.filter((row) => row.errors.length > 0).length;
+      return {
+        ...current,
+        rows,
+        adequateCount,
+        notAdequateCount,
+        naCount,
+        invalidRows,
+        failedRows: invalidRows,
+        successfulRows: rows.length - invalidRows,
+        scoreWarning: adequateCount === 0 && notAdequateCount > 0
+          ? "A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."
+          : undefined
+      };
+    });
+  }
+
+  async function submitAdhocAudit() {
+    if (!masters.data || !selectedZone || !adhocPreview) return;
+    const invalidRows = adhocPreview.rows.filter((row) => row.errors.length > 0);
+    if (invalidRows.length > 0) {
+      alert(`Please correct ${invalidRows.length} invalid row${invalidRows.length === 1 ? "" : "s"} before creating the Adhoc Audit.`);
+      return;
+    }
+    if (adhocPreview.adequateCount === 0 && adhocPreview.notAdequateCount > 0) {
+      alert("A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations.");
+      return;
+    }
+    const incompleteRows = adhocPreview.rows.filter((row) => {
+      if (!row.category || !row.observation || !row.assessment) return true;
+      if (row.assessment !== "Not Adequate") return false;
+      return !row.responsibleDepartment || !row.responsibleUserId || !row.severity || !row.targetDate;
+    });
+    if (incompleteRows.length > 0) {
+      alert(`Please complete required values for ${incompleteRows.length} row${incompleteRows.length === 1 ? "" : "s"} before creating the Adhoc Audit.`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const checklistPayload = adhocPreview.rows.map((row, index) => ({
+        questionId: `adhoc-${adhocPreview.importBatchId}-${row.srNo || index + 1}`,
+        sourceRowNumber: row.rowNumber,
+        importBatchId: adhocPreview.importBatchId,
+        category: row.category,
+        question: row.observation,
+        response: row.assessment,
+        observation: row.remarks,
+        severity: row.assessment === "Not Adequate" ? row.severity || "Medium" : undefined,
+        actionOwnerId: row.responsibleUserId,
+        actionOwnerUserId: row.responsibleUserId,
+        actionOwnerName: row.responsiblePerson,
+        actionOwnerDepartment: row.responsibleDepartment,
+        dueDate: row.targetDate ? new Date(row.targetDate) : undefined,
+        remarks: row.remarks,
+        beforePhotos: []
+      }));
+
+      const response = await apiPost<CreateAuditResponse>("/api/audits", {
+        auditType: "ADHOC",
+        title: adhocTitle.trim(),
+        description: adhocDescription.trim(),
+        zone: selectedZone.name,
+        department: selectedZone.department,
+        auditorName,
+        startDate: new Date(startDate),
+        endDate: endDate ? new Date(endDate) : null,
+        checklist: checklistPayload,
+        importMetadata: {
+          originalFileName: adhocPreview.fileName,
+          totalRows: adhocPreview.totalRows,
+          successfulRows: adhocPreview.successfulRows,
+          failedRows: adhocPreview.failedRows,
+          importBatchId: adhocPreview.importBatchId,
+          fileHash: adhocPreview.fileHash
+        }
+      });
+
+      setCreatedAudit(response.audit);
+      setCreatedFindings(response.findings || []);
+      setStep("success");
+      await audits.reload();
+    } catch (err: any) {
+      alert(`Failed to create Adhoc Audit: ${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -555,6 +863,42 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
         )}
       </div>
 
+      {step === "auditType" && (
+        <div className="mx-auto grid max-w-[860px] gap-4 md:grid-cols-2">
+          <button
+            className="group flex min-h-[190px] flex-col items-start justify-between rounded-lg border border-bd bg-bg1 p-5 text-left shadow-[var(--shadow-sm)] hover:border-brand"
+            onClick={startStandardAudit}
+          >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-accent text-brand-d">
+              <ClipboardList size={22} />
+            </span>
+            <div>
+              <div className="mb-1 text-lg font-extrabold text-t1">Standard Audit</div>
+              <p className="text-sm text-t2">Audit using the predefined 6S checklist.</p>
+            </div>
+            <span className="text-xs font-extrabold uppercase tracking-wide text-brand-d">Use fixed checklist</span>
+          </button>
+          <button
+            className="group flex min-h-[190px] flex-col items-start justify-between rounded-lg border border-bd bg-bg1 p-5 text-left shadow-[var(--shadow-sm)] hover:border-brand"
+            onClick={startAdhocAudit}
+          >
+            <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#eef6ff] text-[#1d4ed8]">
+              <FileSpreadsheet size={22} />
+            </span>
+            <div>
+              <div className="mb-1 text-lg font-extrabold text-t1">Adhoc Audit</div>
+              <p className="text-sm text-t2">Create a flexible 6S audit by importing observations from Excel.</p>
+            </div>
+            <span className="text-xs font-extrabold uppercase tracking-wide text-[#1d4ed8]">Import Excel assessment</span>
+          </button>
+          <div className="md:col-span-2">
+            <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" onClick={goToHistory}>
+              <ChevronLeft size={16} /> Back
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* STEP 1: HISTORY VIEW */}
       {step === "history" && (
         <div className={`grid grid-cols-1 gap-5 ${historyOnly ? "" : "md:grid-cols-[2fr_1fr]"}`}>
@@ -564,7 +908,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               <h2 className="font-extrabold text-t1">Audit History</h2>
               <span className="text-xs text-t2">{filteredAuditHistory.length} audit{filteredAuditHistory.length === 1 ? "" : "s"}</span>
             </div>
-            <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(220px,1fr)_190px_190px]">
+            <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(220px,1fr)_160px_160px_150px]">
               <input
                 className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
                 placeholder="Search audit number, zone, department, auditor..."
@@ -587,6 +931,15 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <option value="ALL">All Zones</option>
                 {historyZones.map((zone) => <option key={zone} value={zone}>{zone}</option>)}
               </select>
+              <select
+                className="w-full rounded-lg border border-bd px-3 py-2 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={historyAuditType}
+                onChange={(event) => setHistoryAuditType(event.target.value)}
+              >
+                <option value="ALL">All Types</option>
+                <option value="STANDARD">Standard</option>
+                <option value="ADHOC">Adhoc</option>
+              </select>
             </div>
             {audits.loading ? (
               <div className="py-5 text-t2">Loading completed audits...</div>
@@ -600,6 +953,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                   <thead>
                     <tr>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit No</th>
+                      <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Type</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Starting Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Ending Date</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Zone / Dept</th>
@@ -615,6 +969,12 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                       <tr key={audit._id}>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                           <strong>{audit.auditNumber}</strong>
+                          {audit.title && <div className="mt-0.5 max-w-[180px] truncate text-[11px] font-semibold text-t2">{audit.title}</div>}
+                        </td>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                          <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${((audit.auditType || "STANDARD") === "ADHOC") ? "border-blue-200 bg-blue-50 text-blue-700" : "border-bd bg-bg3 text-t2"}`}>
+                            {(audit.auditType || "STANDARD") === "ADHOC" ? "Adhoc" : "Standard"}
+                          </span>
                         </td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatAuditDate(auditStartDate(audit))}</td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">{formatAuditDate(audit.endDate)}</td>
@@ -683,6 +1043,290 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               </div>
             </div>
           </div>}
+        </div>
+      )}
+
+      {step === "adhocDetails" && (
+        <div className="mx-auto my-5 max-w-[760px] rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+          <div className="mb-4 flex items-center gap-2">
+            <FileSpreadsheet size={20} className="text-brand" />
+            <h2 className="font-extrabold text-t1">Adhoc Audit Details</h2>
+          </div>
+          {setupError && <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red">{setupError}</div>}
+
+          <div className="grid gap-4">
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audit Title</span>
+              <input
+                className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={adhocTitle}
+                onChange={(event) => setAdhocTitle(event.target.value)}
+                placeholder="Example: Line 2 Special 6S Audit"
+              />
+            </label>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Audited Area / Zone</span>
+                <select
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={zoneName}
+                  onChange={(e) => setZoneName(e.target.value)}
+                >
+                  <option value="">Select Audit Area / Zone</option>
+                  {masters.data?.zones.map((z) => (
+                    <option key={z.name} value={z.name}>{z.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Auditor</span>
+                <select
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={auditorName}
+                  onChange={(e) => setAuditorName(e.target.value)}
+                >
+                  <option value="">Select Auditor</option>
+                  {auditors.map((p) => (
+                    <option key={p._id} value={p.name}>{p.name}</option>
+                  ))}
+                  <option value={currentUser?.name || "Lead Auditor"}>{currentUser?.name || "Lead Auditor"}</option>
+                </select>
+              </label>
+            </div>
+
+            {selectedZone && (
+              <div className="flex items-center gap-2.5 rounded-lg border border-bd bg-bg3 p-3">
+                <MapPin size={16} className="text-t2" />
+                <div>
+                  <div className="text-[11px] font-bold uppercase text-t2">Audited Department</div>
+                  <strong>{selectedZone.department}</strong>
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Starting Date</span>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Ending Date</span>
+                <input
+                  type="date"
+                  className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <label className="grid gap-1.5">
+              <span className="text-[11px] font-extrabold uppercase tracking-wide text-t2">Description / Remarks</span>
+              <textarea
+                rows={3}
+                className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12"
+                value={adhocDescription}
+                onChange={(event) => setAdhocDescription(event.target.value)}
+                placeholder="Scope, reason, area context, or special audit remarks..."
+              />
+            </label>
+
+            <div className="mt-2.5 flex justify-between">
+              <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" onClick={() => setStep("auditType")}>
+                <ChevronLeft size={16} /> Back
+              </button>
+              <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d" onClick={validateAdhocDetailsAndContinue}>
+                Next: Excel Import <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "adhocImport" && (
+        <div className="grid gap-5">
+          <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-extrabold text-blue-700">
+                  <FileSpreadsheet size={13} /> ADHOC AUDIT
+                </div>
+                <h2 className="font-extrabold text-t1">Excel Template / Upload</h2>
+                <p className="mt-1 max-w-3xl text-sm text-t2">
+                  Use one row per assessed checkpoint or observation. Select Adequate, Not Adequate or N/A for every row. Not Adequate rows will automatically create Findings and enter the CAPA workflow.
+                </p>
+              </div>
+              <button
+                className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3"
+                onClick={downloadAdhocTemplate}
+              >
+                <Download size={16} /> Download Template
+              </button>
+            </div>
+
+            <label
+              className="flex min-h-[150px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-t2 bg-bg3 px-4 py-6 text-center hover:border-brand"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const file = event.dataTransfer.files?.[0];
+                if (file) void previewAdhocFile(file);
+              }}
+            >
+              <UploadCloud size={28} className="mb-2 text-t2" />
+              <strong className="text-sm text-t1">{adhocUploading ? "Parsing Excel..." : "Drag and drop Excel here"}</strong>
+              <span className="mt-1 text-xs text-t2">or browse a .xlsx / .xls file up to 5 MB</span>
+              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={adhocUploading} onChange={handleAdhocFileInput} />
+            </label>
+
+            {adhocUploadError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red">{adhocUploadError}</div>}
+          </div>
+
+          {adhocPreview && (
+            <div className="rounded-lg border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="font-extrabold text-t1">Import Preview</h2>
+                  <p className="mt-1 text-sm text-t2">{adhocPreview.fileName}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
+                  <div className="rounded-md border border-bd bg-bg3 px-3 py-2"><div className="text-[10px] font-bold text-t2">Rows</div><strong>{adhocPreview.totalRows}</strong></div>
+                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2"><div className="text-[10px] font-bold text-green">Adequate</div><strong>{adhocPreview.adequateCount}</strong></div>
+                  <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2"><div className="text-[10px] font-bold text-red">Not Adequate</div><strong>{adhocPreview.notAdequateCount}</strong></div>
+                  <div className="rounded-md border border-bd bg-[#f8fafc] px-3 py-2"><div className="text-[10px] font-bold text-t2">N/A</div><strong>{adhocPreview.naCount}</strong></div>
+                  <div className="rounded-md border border-orange-200 bg-orange-50 px-3 py-2"><div className="text-[10px] font-bold text-orange">Invalid</div><strong>{adhocPreview.invalidRows}</strong></div>
+                </div>
+              </div>
+
+              {adhocPreview.scoreWarning && (
+                <div className="mb-3 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2.5 text-[13px] font-semibold text-orange">{adhocPreview.scoreWarning}</div>
+              )}
+
+              <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[180px_220px_1fr]">
+                <select className="rounded-lg border border-bd px-3 py-2 text-sm" value={adhocFilterAssessment} onChange={(event) => setAdhocFilterAssessment(event.target.value)}>
+                  <option value="ALL">All Assessments</option>
+                  <option value="Adequate">Adequate</option>
+                  <option value="Not Adequate">Not Adequate</option>
+                  <option value="N/A">N/A</option>
+                </select>
+                <select className="rounded-lg border border-bd px-3 py-2 text-sm" value={adhocFilterDepartment} onChange={(event) => setAdhocFilterDepartment(event.target.value)}>
+                  <option value="ALL">All Responsible Departments</option>
+                  {masters.data?.departments.filter((department) => department.isActive !== false).map((department) => (
+                    <option key={department.name} value={department.name}>{department.name}</option>
+                  ))}
+                </select>
+                <div className="flex justify-end gap-2">
+                  <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2 text-sm font-bold text-t1 hover:bg-bg3" onClick={() => setStep("adhocDetails")}>
+                    <ChevronLeft size={16} /> Back
+                  </button>
+                  <button
+                    className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-55"
+                    onClick={submitAdhocAudit}
+                    disabled={isSubmitting || adhocPreview.invalidRows > 0 || Boolean(adhocPreview.scoreWarning)}
+                  >
+                    <Check size={16} /> {isSubmitting ? "Creating..." : "Create Adhoc Audit"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-lg border border-bd bg-white">
+                <table className="w-full min-w-[1180px] border-collapse text-xs">
+                  <thead>
+                    <tr>
+                      {["Sr", "Category", "Observation", "Assessment", "Resp. Department", "Responsible Person", "Severity", "Target Date", "Validation"].map((head) => (
+                        <th key={head} className="bg-bg3 px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-t2">{head}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adhocPreview.rows
+                      .map((row, originalIndex) => ({ row, originalIndex }))
+                      .filter(({ row }) => adhocFilterAssessment === "ALL" || row.assessment === adhocFilterAssessment)
+                      .filter(({ row }) => adhocFilterDepartment === "ALL" || row.responsibleDepartment === adhocFilterDepartment)
+                      .map(({ row, originalIndex }) => {
+                        const rowInvalid = row.errors.length > 0;
+                        const userOptions = (masters.data?.users || []).filter((portalUser) =>
+                          portalUser.status !== "inactive" &&
+                          (!row.responsibleDepartment || !portalUser.department || portalUser.department === row.responsibleDepartment)
+                        );
+                        return (
+                          <tr key={`${row.rowNumber}-${originalIndex}`} className={rowInvalid ? "bg-red-50" : ""}>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">{row.srNo}</td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <select className="w-36 rounded border border-bd px-2 py-1" value={row.category} onChange={(event) => updateAdhocRow(originalIndex, { category: event.target.value })}>
+                                <option value="">Select</option>
+                                {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+                              </select>
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <textarea className="h-16 w-72 rounded border border-bd px-2 py-1" value={row.observation} onChange={(event) => updateAdhocRow(originalIndex, { observation: event.target.value })} />
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <select className="w-32 rounded border border-bd px-2 py-1" value={row.assessment} onChange={(event) => updateAdhocRow(originalIndex, { assessment: event.target.value as AdhocPreviewRow["assessment"] })}>
+                                <option value="">Select</option>
+                                <option value="Adequate">Adequate</option>
+                                <option value="Not Adequate">Not Adequate</option>
+                                <option value="N/A">N/A</option>
+                              </select>
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <select className="w-44 rounded border border-bd px-2 py-1" value={row.responsibleDepartment} onChange={(event) => updateAdhocRow(originalIndex, { responsibleDepartment: event.target.value, responsibleUserId: undefined, responsiblePerson: "" })}>
+                                <option value="">Select</option>
+                                {masters.data?.departments.filter((department) => department.isActive !== false).map((department) => <option key={department.name} value={department.name}>{department.name}</option>)}
+                              </select>
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <select
+                                className="w-56 rounded border border-bd px-2 py-1"
+                                value={row.responsibleUserId || ""}
+                                onChange={(event) => {
+                                  const portalUser = masters.data?.users.find((item) => item._id === event.target.value);
+                                  updateAdhocRow(originalIndex, {
+                                    responsibleUserId: portalUser?._id,
+                                    responsiblePerson: portalUser?.name || "",
+                                    responsibleDepartment: portalUser?.department || row.responsibleDepartment
+                                  });
+                                }}
+                              >
+                                <option value="">Select Portal User</option>
+                                {userOptions.map((portalUser) => <option key={portalUser._id} value={portalUser._id}>{portalUser.name} ({portalUser.department || "No department"})</option>)}
+                              </select>
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <select className="w-28 rounded border border-bd px-2 py-1" value={row.severity} onChange={(event) => updateAdhocRow(originalIndex, { severity: event.target.value as AdhocPreviewRow["severity"] })}>
+                                <option value="">Select</option>
+                                <option value="Critical">Critical</option>
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                              </select>
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <input className="w-36 rounded border border-bd px-2 py-1" type="date" value={dateInputValue(row.targetDate)} onChange={(event) => updateAdhocRow(originalIndex, { targetDate: event.target.value ? new Date(event.target.value).toISOString() : undefined })} />
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-extrabold ${rowInvalid ? "border-red-200 bg-red-50 text-red" : "border-green-200 bg-green-50 text-green"}`}>
+                                {rowInvalid ? "Invalid" : "Valid"}
+                              </span>
+                              {(row.errors.length > 0 || row.warnings.length > 0) && (
+                                <div className="mt-1 max-w-[220px] text-[11px] text-red">{[...row.errors, ...row.warnings].join(", ")}</div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1277,8 +1921,119 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               </div>
             </div>
 
+            {(selectedAuditDetail.auditType || "STANDARD") === "ADHOC" && (
+              <div className="mb-[18px] grid gap-4">
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="inline-flex rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[10px] font-extrabold text-blue-700">ADHOC AUDIT</span>
+                      <h4 className="mt-2 text-base font-extrabold text-t1">{selectedAuditDetail.title || "Adhoc 6S Audit"}</h4>
+                      {selectedAuditDetail.description && <p className="mt-1 text-sm text-t2">{selectedAuditDetail.description}</p>}
+                    </div>
+                    <div className="text-right text-xs text-t2">
+                      <div>Imported File</div>
+                      <strong className="text-t1">{selectedAuditDetail.importMetadata?.originalFileName || "Excel import"}</strong>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-6">
+                    <div className="rounded-md border border-bd bg-white px-3 py-2"><div className="text-[10px] font-bold text-t2">Score</div><strong>{selectedAuditDetail.totalScore}%</strong></div>
+                    <div className="rounded-md border border-green-200 bg-white px-3 py-2"><div className="text-[10px] font-bold text-green">Adequate</div><strong>{selectedAuditDetail.adequateCount ?? selectedAuditDetail.checklist?.filter((item) => item.response === "Adequate").length ?? 0}</strong></div>
+                    <div className="rounded-md border border-red-200 bg-white px-3 py-2"><div className="text-[10px] font-bold text-red">Not Adeq.</div><strong>{selectedAuditDetail.checklist?.filter((item) => item.response === "Not Adequate").length ?? 0}</strong></div>
+                    <div className="rounded-md border border-bd bg-white px-3 py-2"><div className="text-[10px] font-bold text-t2">N/A</div><strong>{selectedAuditDetail.naCount ?? selectedAuditDetail.checklist?.filter((item) => item.response === "N/A").length ?? 0}</strong></div>
+                    <div className="rounded-md border border-orange-200 bg-white px-3 py-2"><div className="text-[10px] font-bold text-orange">Open</div><strong>{auditDetailFindings.filter((finding) => finding.status !== "CLOSED").length}</strong></div>
+                    <div className="rounded-md border border-green-200 bg-white px-3 py-2"><div className="text-[10px] font-bold text-green">Closure %</div><strong>{auditDetailFindings.length ? Math.round((auditDetailFindings.filter((finding) => finding.status === "CLOSED").length / auditDetailFindings.length) * 100) : 0}%</strong></div>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="m-0 mb-2.5 text-xs uppercase tracking-wide text-t2">
+                    Imported Observations
+                  </h4>
+                  <div className="overflow-x-auto rounded-lg border border-bd bg-white">
+                    <table className="w-full min-w-[1120px] border-collapse text-xs">
+                      <thead>
+                        <tr>
+                          {["Sr", "Category", "Observation", "Assessment", "Responsible", "Severity", "Due Date", "Before Evidence", "CAPA / After", "Finding"].map((head) => (
+                            <th key={head} className="bg-bg3 px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-t2">{head}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(selectedAuditDetail.checklist || []).map((item, index) => {
+                          const finding = findingForAuditItem(item);
+                          const beforePhotos = finding?.beforePhotos?.length ? finding.beforePhotos : item.beforePhotos || [];
+                          const afterPhotos = finding?.afterPhotos || [];
+                          return (
+                            <tr key={item.questionId || index}>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">{item.sourceRowNumber || index + 1}</td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top font-semibold">{item.category}</td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                                <div className="max-w-[280px] font-semibold text-t1">{item.question}</div>
+                                {(item.remarks || item.observation) && <div className="mt-1 max-w-[280px] text-[11px] text-t2">{item.remarks || item.observation}</div>}
+                              </td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                                <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold text-white ${responseBadgeClass(item.response)}`}>{item.response}</span>
+                              </td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                                <div>{item.actionOwnerName || "-"}</div>
+                                <span className="text-[11px] text-t2">{item.actionOwnerDepartment || "-"}</span>
+                              </td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">{item.severity || "-"}</td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">{formatAuditDate(item.dueDate)}</td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                                {item.response === "Not Adequate" && (
+                                  <div className="grid gap-1.5">
+                                    <div className="flex flex-wrap gap-1">
+                                      {beforePhotos.map((photo) => (
+                                        <a href={photo.secureUrl} target="_blank" rel="noopener noreferrer" key={photo.publicId}>
+                                          <img src={photo.secureUrl} alt="Before evidence" className="h-10 w-10 rounded border border-bd object-cover" />
+                                        </a>
+                                      ))}
+                                    </div>
+                                    <label className="inline-flex w-fit cursor-pointer items-center gap-1 rounded-lg border border-bd bg-white px-2 py-1 text-[11px] font-bold text-t1 hover:bg-bg3">
+                                      <UploadCloud size={12} /> {uploading[item.questionId] ? "Uploading" : beforePhotos.length ? "Add / Replace" : "Upload"}
+                                      <input type="file" accept="image/*" className="hidden" disabled={uploading[item.questionId]} onChange={(event) => handleAdhocBeforePhotoUpload(item, event)} />
+                                    </label>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                                {finding ? (
+                                  <div className="max-w-[220px]">
+                                    <div className="font-semibold">{finding.capaStatus || "NOT_SUBMITTED"}</div>
+                                    <div className="mt-1 text-[11px] text-t2">{finding.capaAction || "CAPA pending"}</div>
+                                    {afterPhotos.length > 0 && (
+                                      <div className="mt-1 flex gap-1">
+                                        {afterPhotos.map((photo) => (
+                                          <a href={photo.secureUrl} target="_blank" rel="noopener noreferrer" key={photo.publicId}>
+                                            <img src={photo.secureUrl} alt="After evidence" className="h-10 w-10 rounded border border-bd object-cover" />
+                                          </a>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : item.response === "Not Adequate" ? "Finding not linked" : "-"}
+                              </td>
+                              <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                                {finding ? (
+                                  <div>
+                                    <strong>{finding.findingNumber}</strong>
+                                    <div className="mt-1 text-[11px] text-t2">{finding.status || "OPEN"}</div>
+                                  </div>
+                                ) : "-"}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Checklist Details */}
-            <div>
+            {(selectedAuditDetail.auditType || "STANDARD") !== "ADHOC" && <div>
               <h4 className="m-0 mb-2.5 text-xs uppercase tracking-wide text-t2">
                 Full Response checklist
               </h4>
@@ -1356,7 +2111,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                   </div>
                 ))}
               </div>
-            </div>
+            </div>}
 
             <div className="mt-5 flex justify-end">
               <button

@@ -58,6 +58,9 @@ const optionalDateSchema = z.preprocess(
 );
 
 export const auditSchema = z.object({
+  auditType: z.enum(["STANDARD", "ADHOC"]).optional().default("STANDARD"),
+  title: z.string().trim().max(180).optional(),
+  description: z.string().trim().max(2000).optional(),
   zone: z.string().trim().min(1),
   department: z.string().trim().min(1),
   auditorName: z.string().trim().min(1),
@@ -66,16 +69,30 @@ export const auditSchema = z.object({
   endDate: optionalDateSchema,
   checklist: z.array(z.object({
     questionId: z.string(),
+    sourceRowNumber: z.number().int().positive().optional(),
+    importBatchId: z.string().trim().optional(),
     category: z.string(),
     question: z.string(),
     response: z.enum(["Adequate", "Not Adequate", "N/A"]),
     observation: z.string().optional(),
     severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
     actionOwnerId: z.string().trim().optional(),
+    actionOwnerUserId: z.string().trim().optional(),
     actionOwnerName: z.string().trim().optional(),
     actionOwnerDepartment: z.string().trim().optional(),
+    dueDate: optionalDateSchema,
+    remarks: z.string().trim().max(2000).optional(),
     beforePhotos: z.array(photoSchema).optional().default([])
   })).default([])
+  ,
+  importMetadata: z.object({
+    originalFileName: z.string().trim().max(260),
+    totalRows: z.number().int().nonnegative(),
+    successfulRows: z.number().int().nonnegative(),
+    failedRows: z.number().int().nonnegative(),
+    importBatchId: z.string().trim().min(1),
+    fileHash: z.string().trim().min(16)
+  }).optional()
 }).refine((input) => input.startDate || input.date, {
   message: "Starting Date is required.",
   path: ["startDate"]
@@ -85,6 +102,12 @@ export const auditSchema = z.object({
 }, {
   message: "Ending Date cannot be earlier than Starting Date.",
   path: ["endDate"]
+}).refine((input) => input.auditType !== "ADHOC" || Boolean(input.title?.trim()), {
+  message: "Audit Title is required for Adhoc Audit.",
+  path: ["title"]
+}).refine((input) => input.auditType !== "ADHOC" || input.checklist.length > 0, {
+  message: "At least one imported Adhoc observation is required.",
+  path: ["checklist"]
 });
 
 export const auditUpdateSchema = z.object({
