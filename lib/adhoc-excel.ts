@@ -12,8 +12,11 @@ export const ADHOC_TEMPLATE_COLUMNS = [
   "Responsible Person",
   "Severity",
   "Target Date",
-  "Remarks"
+  "Remarks",
+  "Before Upload"
 ] as const;
+
+const REQUIRED_ADHOC_TEMPLATE_COLUMNS = ADHOC_TEMPLATE_COLUMNS.filter((column) => column !== "Before Upload");
 
 export const ASSESSMENTS = ["Adequate", "Not Adequate", "N/A"] as const;
 export const SEVERITIES = ["Critical", "High", "Medium", "Low"] as const;
@@ -44,6 +47,7 @@ export type AdhocPreviewRow = {
   severity: SeverityValue | "";
   targetDate?: string;
   remarks: string;
+  beforePhotos: Array<{ secureUrl: string; publicId: string }>;
   validationStatus: "VALID" | "INVALID" | "WARNING";
   errors: string[];
   warnings: string[];
@@ -123,7 +127,13 @@ const HEADER_ALIASES: Record<string, typeof ADHOC_TEMPLATE_COLUMNS[number]> = {
   TARGETDATE: "Target Date",
   DUEDATE: "Target Date",
   REMARKS: "Remarks",
-  NOTES: "Remarks"
+  NOTES: "Remarks",
+  BEFOREUPLOAD: "Before Upload",
+  BEFOREPHOTO: "Before Upload",
+  BEFOREPHOTOS: "Before Upload",
+  BEFOREIMAGE: "Before Upload",
+  BEFOREIMAGES: "Before Upload",
+  BEFOREEVIDENCE: "Before Upload"
 };
 
 function compact(value: unknown) {
@@ -159,6 +169,33 @@ function parseExcelDate(value: unknown): string | undefined {
   }
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function parseBeforeUploadPhotos(value: unknown, importBatchId: string, rowIndex: number) {
+  const raw = compact(value);
+  if (!raw) return { photos: [] as Array<{ secureUrl: string; publicId: string }>, invalidValues: [] as string[] };
+
+  const values = raw
+    .split(/[\n,;]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const photos: Array<{ secureUrl: string; publicId: string }> = [];
+  const invalidValues: string[] = [];
+
+  values.forEach((item, photoIndex) => {
+    try {
+      const url = new URL(item);
+      if (!["http:", "https:"].includes(url.protocol)) throw new Error("Unsupported URL protocol");
+      photos.push({
+        secureUrl: url.toString(),
+        publicId: `adhoc-before-url-${importBatchId}-${rowIndex + 1}-${photoIndex + 1}`
+      });
+    } catch {
+      invalidValues.push(item);
+    }
+  });
+
+  return { photos, invalidValues };
 }
 
 function userMatchKey(value: unknown) {
@@ -203,7 +240,7 @@ export function validateAdhocWorkbook(input: {
     .filter((row) => !compact(row.Remarks).toLowerCase().includes("sample row - delete"));
 
   const first = normalizedRows[0] || {};
-  const missingColumns = ADHOC_TEMPLATE_COLUMNS.filter((column) => !(column in first));
+  const missingColumns = REQUIRED_ADHOC_TEMPLATE_COLUMNS.filter((column) => !(column in first));
   if (missingColumns.length > 0) {
     throw Object.assign(new Error(`Missing required columns: ${missingColumns.join(", ")}`), { status: 400 });
   }
@@ -222,6 +259,7 @@ export function validateAdhocWorkbook(input: {
     const responsiblePerson = compact(row["Responsible Person"]);
     const severity = normalizeSeverity(row.Severity);
     const targetDate = parseExcelDate(row["Target Date"]);
+    const beforeUpload = parseBeforeUploadPhotos(row["Before Upload"], importBatchId, index);
 
     if (!observation) errors.push("Missing Observation");
     if (!category) errors.push("Invalid 6S Category");
@@ -246,6 +284,7 @@ export function validateAdhocWorkbook(input: {
     }
 
     if (assessment === "Not Adequate" && observation.length < 3) warnings.push("Observation is very short");
+    if (beforeUpload.invalidValues.length > 0) warnings.push("Before Upload accepts only public http/https image links; upload files from the preview screen instead");
 
     return {
       rowNumber,
@@ -259,6 +298,7 @@ export function validateAdhocWorkbook(input: {
       severity,
       targetDate,
       remarks: compact(row.Remarks),
+      beforePhotos: beforeUpload.photos,
       validationStatus: errors.length ? "INVALID" : warnings.length ? "WARNING" : "VALID",
       errors,
       warnings
@@ -291,14 +331,14 @@ export function validateAdhocWorkbook(input: {
 
 export function buildAdhocTemplateWorkbook() {
   const sampleRows = [
-    [1, "SORT", "Only required materials are present at the audited area.", "Adequate", "Production", "responsible.person@company.com", "Medium", new Date(), "Sample row - delete before import"],
-    [2, "SAFETY", "Electrical panel access is blocked by stored material.", "Not Adequate", "Maintenance", "maintenance.spoc@company.com", "High", new Date(), "Sample row - delete before import"],
-    [3, "SHINE", "Machine under maintenance was not assessed.", "N/A", "Production", "", "Low", "", "Sample row - delete before import"]
+    [1, "SORT", "Only required materials are present at the audited area.", "Adequate", "Production", "responsible.person@company.com", "Medium", new Date(), "Sample row - delete before import", ""],
+    [2, "SAFETY", "Electrical panel access is blocked by stored material.", "Not Adequate", "Maintenance", "maintenance.spoc@company.com", "High", new Date(), "Sample row - delete before import", ""],
+    [3, "SHINE", "Machine under maintenance was not assessed.", "N/A", "Production", "", "Low", "", "Sample row - delete before import", ""]
   ];
   const worksheet = XLSX.utils.aoa_to_sheet([[...ADHOC_TEMPLATE_COLUMNS], ...sampleRows]);
   worksheet["!cols"] = [
     { wch: 10 }, { wch: 18 }, { wch: 48 }, { wch: 18 }, { wch: 24 },
-    { wch: 30 }, { wch: 14 }, { wch: 16 }, { wch: 32 }
+    { wch: 30 }, { wch: 14 }, { wch: 16 }, { wch: 32 }, { wch: 24 }
   ];
 
   const categorySheet = XLSX.utils.aoa_to_sheet([["6S Category"], ...CATEGORIES.map((category) => [category])]);

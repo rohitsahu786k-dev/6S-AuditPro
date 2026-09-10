@@ -11,6 +11,8 @@ import { canonicalDepartmentName } from "@/lib/org-utils";
 
 export type AuditListView = "full" | "summary" | "analytics" | "register";
 
+const ADHOC_AUDIT_EMAIL_RECIPIENTS = ["jatin.chouhan@onepws.com", "process@onepws.com"];
+
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
   summary: "auditNumber auditType title description department zone date startDate endDate totalScore status auditorName findingIds importMetadata checklist.questionId checklist.category checklist.question checklist.response checklist.actionOwnerDepartment",
@@ -277,8 +279,10 @@ export async function createAudit(input: {
   await audit.save();
 
   try {
-    const recipients = await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
-    if (user.email && !recipients.includes(user.email)) recipients.push(user.email);
+    const recipients = auditType === "ADHOC"
+      ? [...ADHOC_AUDIT_EMAIL_RECIPIENTS]
+      : await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
+    if (auditType !== "ADHOC" && user.email && !recipients.includes(user.email)) recipients.push(user.email);
     await sendTemplatedEmail({
       triggerEvent: "AUDIT_COMPLETED",
       recipients,
@@ -299,7 +303,9 @@ export async function createAudit(input: {
 
   await Promise.all(findings.map(async (finding) => {
     try {
-      const spocRecipients = await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
+      const spocRecipients = auditType === "ADHOC"
+        ? [...ADHOC_AUDIT_EMAIL_RECIPIENTS]
+        : await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
       await sendTemplatedEmail({
         triggerEvent: "FINDING_ASSIGNED",
         recipients: spocRecipients,

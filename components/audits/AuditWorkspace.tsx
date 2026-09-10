@@ -131,6 +131,7 @@ type AdhocPreviewRow = {
   severity: "Critical" | "High" | "Medium" | "Low" | "";
   targetDate?: string;
   remarks: string;
+  beforePhotos: UploadedPhoto[];
   validationStatus: "VALID" | "INVALID" | "WARNING";
   errors: string[];
   warnings: string[];
@@ -171,6 +172,63 @@ function dateInputValue(value?: string | null) {
 
 function auditStartDate(audit: Audit) {
   return audit.startDate || audit.date || null;
+}
+
+function validateAdhocPreviewRow(row: AdhocPreviewRow, mastersData: Masters) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const activeDepartments = mastersData.departments.filter((department) => department.isActive !== false).map((department) => department.name);
+  const activeUsers = mastersData.users.filter((portalUser) => portalUser.status !== "inactive");
+
+  if (!row.category || !CATEGORIES.includes(row.category as any)) errors.push("Missing / invalid 6S Category");
+  if (!row.observation.trim()) errors.push("Missing Observation");
+  if (!row.assessment) errors.push("Missing Assessment");
+
+  if (row.assessment === "Not Adequate") {
+    if (!row.responsibleDepartment || !activeDepartments.includes(row.responsibleDepartment)) errors.push("Missing / unknown Responsible Department");
+    if (!row.responsibleUserId) {
+      errors.push("Missing Responsible Person");
+    } else {
+      const portalUser = activeUsers.find((item) => item._id === row.responsibleUserId);
+      if (!portalUser) {
+        errors.push("Unknown Responsible Person");
+      } else if (row.responsibleDepartment && portalUser.department && portalUser.department !== row.responsibleDepartment) {
+        errors.push("Responsible Person does not belong to selected department");
+      }
+    }
+    if (!row.severity) errors.push("Missing Severity");
+    if (!row.targetDate || Number.isNaN(new Date(row.targetDate).getTime())) errors.push("Missing / invalid Target Date");
+  }
+
+  if (row.assessment === "Not Adequate" && row.observation.trim().length > 0 && row.observation.trim().length < 3) {
+    warnings.push("Observation is very short");
+  }
+
+  return {
+    errors,
+    warnings,
+    validationStatus: errors.length ? "INVALID" as const : warnings.length ? "WARNING" as const : "VALID" as const
+  };
+}
+
+function recalculateAdhocPreview(current: AdhocPreview, rows: AdhocPreviewRow[]): AdhocPreview {
+  const adequateCount = rows.filter((row) => row.assessment === "Adequate").length;
+  const notAdequateCount = rows.filter((row) => row.assessment === "Not Adequate").length;
+  const naCount = rows.filter((row) => row.assessment === "N/A").length;
+  const invalidRows = rows.filter((row) => row.errors.length > 0).length;
+  return {
+    ...current,
+    rows,
+    adequateCount,
+    notAdequateCount,
+    naCount,
+    invalidRows,
+    failedRows: invalidRows,
+    successfulRows: rows.length - invalidRows,
+    scoreWarning: adequateCount === 0 && notAdequateCount > 0
+      ? "A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."
+      : undefined
+  };
 }
 
 export function AuditWorkspace({ historyOnly = false, newOnly = false }: { historyOnly?: boolean; newOnly?: boolean }) {
@@ -237,6 +295,8 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const [historyDepartment, setHistoryDepartment] = useState("ALL");
   const [historyZone, setHistoryZone] = useState("ALL");
   const [historyAuditType, setHistoryAuditType] = useState("ALL");
+  const [selectedHistoryAuditIds, setSelectedHistoryAuditIds] = useState<string[]>([]);
+  const [isBulkHistoryActionRunning, setIsBulkHistoryActionRunning] = useState(false);
 
   // Share Report State
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -415,6 +475,30 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       return matchesSearch && matchesDepartment && matchesZone && matchesAuditType;
     });
   }, [audits.data, historySearch, historyDepartment, historyZone, historyAuditType]);
+
+  const selectedHistoryAudits = useMemo(
+    () => filteredAuditHistory.filter((audit) => selectedHistoryAuditIds.includes(audit._id)),
+    [filteredAuditHistory, selectedHistoryAuditIds]
+  );
+
+  const allFilteredHistorySelected = filteredAuditHistory.length > 0
+    && filteredAuditHistory.every((audit) => selectedHistoryAuditIds.includes(audit._id));
+
+  function toggleHistoryAuditSelection(auditId: string) {
+    setSelectedHistoryAuditIds((current) =>
+      current.includes(auditId) ? current.filter((id) => id !== auditId) : [...current, auditId]
+    );
+  }
+
+  function toggleAllFilteredHistorySelection() {
+    setSelectedHistoryAuditIds((current) => {
+      if (allFilteredHistorySelected) {
+        const filteredIds = new Set(filteredAuditHistory.map((audit) => audit._id));
+        return current.filter((id) => !filteredIds.has(id));
+      }
+      return [...new Set([...current, ...filteredAuditHistory.map((audit) => audit._id)])];
+    });
+  }
 
   const auditCategories = useMemo(() => {
     const categories = masters.data?.questions
@@ -619,6 +703,46 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     }
   }
 
+  async function handleDownloadSelectedAuditPdfs() {
+    if (selectedHistoryAudits.length === 0) return;
+    setIsBulkHistoryActionRunning(true);
+    try {
+      for (const audit of selectedHistoryAudits) {
+        await downloadAuditPdf(await fetchFullAudit(audit));
+      }
+    } catch (error) {
+      alert(error instanceof Error ? `Unable to create selected PDF reports: ${error.message}` : "Unable to create selected PDF reports.");
+    } finally {
+      setIsBulkHistoryActionRunning(false);
+    }
+  }
+
+  async function handleDeleteSelectedAudits() {
+    if (selectedHistoryAudits.length === 0) return;
+    const label = selectedHistoryAudits.map((audit) => audit.auditNumber).join(", ");
+    if (!window.confirm(`Delete ${selectedHistoryAudits.length} selected audit${selectedHistoryAudits.length === 1 ? "" : "s"} (${label})? All associated findings and CAPA requests will be deleted permanently.`)) {
+      return;
+    }
+
+    setIsBulkHistoryActionRunning(true);
+    try {
+      for (const audit of selectedHistoryAudits) {
+        const response = await fetch(`/api/audits/${audit._id}`, { method: "DELETE" });
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.error || `Delete failed for ${audit.auditNumber}`);
+        }
+      }
+      alert("Selected audits deleted successfully.");
+      setSelectedHistoryAuditIds([]);
+      await audits.reload();
+    } catch (err: any) {
+      alert(`Error deleting selected audits: ${err.message}`);
+    } finally {
+      setIsBulkHistoryActionRunning(false);
+    }
+  }
+
   function resetAuditSetup() {
     setZoneName("");
     setAuditorName("");
@@ -748,57 +872,75 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     }
   }
 
+  async function handleAdhocPreviewBeforePhotoUpload(rowIndex: number, event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    const uploadKey = `adhoc-preview-${rowIndex}`;
+    setUploading((prev) => ({ ...prev, [uploadKey]: true }));
+    try {
+      const processed = await processImageToWebP(file);
+      const formData = new FormData();
+      formData.append("file", processed.file);
+      formData.append("folderSuffix", "audit-photos");
+      const uploadResult = await apiUpload<UploadedPhoto>("/api/upload", formData);
+      updateAdhocRow(rowIndex, {
+        beforePhotos: [
+          ...(adhocPreview?.rows[rowIndex]?.beforePhotos || []),
+          { secureUrl: uploadResult.secureUrl, publicId: uploadResult.publicId, sizeBytes: uploadResult.sizeBytes, uploadedBy: uploadResult.uploadedBy, uploadedByName: uploadResult.uploadedByName }
+        ]
+      });
+    } catch (err: any) {
+      alert(`Upload error: ${err.message}`);
+    } finally {
+      setUploading((prev) => ({ ...prev, [uploadKey]: false }));
+    }
+  }
+
+  function removeAdhocPreviewBeforePhoto(rowIndex: number, photoPublicId: string) {
+    updateAdhocRow(rowIndex, {
+      beforePhotos: (adhocPreview?.rows[rowIndex]?.beforePhotos || []).filter((photo) => photo.publicId !== photoPublicId)
+    });
+  }
+
   function updateAdhocRow(index: number, patch: Partial<AdhocPreviewRow>) {
     setAdhocPreview((current) => {
       if (!current) return current;
-      const rows = current.rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch, errors: [], validationStatus: "VALID" as const } : row);
-      const adequateCount = rows.filter((row) => row.assessment === "Adequate").length;
-      const notAdequateCount = rows.filter((row) => row.assessment === "Not Adequate").length;
-      const naCount = rows.filter((row) => row.assessment === "N/A").length;
-      const invalidRows = rows.filter((row) => row.errors.length > 0).length;
-      return {
-        ...current,
-        rows,
-        adequateCount,
-        notAdequateCount,
-        naCount,
-        invalidRows,
-        failedRows: invalidRows,
-        successfulRows: rows.length - invalidRows,
-        scoreWarning: adequateCount === 0 && notAdequateCount > 0
-          ? "A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."
-          : undefined
-      };
+      const rows = current.rows.map((row, rowIndex) => {
+        if (rowIndex !== index) return row;
+        const updated = { ...row, ...patch };
+        if (!masters.data) return updated;
+        return { ...updated, ...validateAdhocPreviewRow(updated, masters.data) };
+      });
+      return recalculateAdhocPreview(current, rows);
     });
   }
 
   async function submitAdhocAudit() {
     if (!masters.data || !selectedZone || !adhocPreview) return;
-    const invalidRows = adhocPreview.rows.filter((row) => row.errors.length > 0);
+    const revalidatedRows = adhocPreview.rows.map((row) => ({ ...row, ...validateAdhocPreviewRow(row, masters.data!) }));
+    const revalidatedPreview = recalculateAdhocPreview(adhocPreview, revalidatedRows);
+    setAdhocPreview(revalidatedPreview);
+
+    const invalidRows = revalidatedRows.filter((row) => row.errors.length > 0);
     if (invalidRows.length > 0) {
-      alert(`Please correct ${invalidRows.length} invalid row${invalidRows.length === 1 ? "" : "s"} before creating the Adhoc Audit.`);
+      const details = invalidRows.slice(0, 8).map((row) => `Row ${row.srNo || row.rowNumber}: ${row.errors.join(", ")}`).join("\n");
+      const extra = invalidRows.length > 8 ? `\n...and ${invalidRows.length - 8} more row${invalidRows.length - 8 === 1 ? "" : "s"}.` : "";
+      alert(`Please correct these required values before creating the Adhoc Audit:\n\n${details}${extra}`);
       return;
     }
-    if (adhocPreview.adequateCount === 0 && adhocPreview.notAdequateCount > 0) {
+    if (revalidatedPreview.adequateCount === 0 && revalidatedPreview.notAdequateCount > 0) {
       alert("A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations.");
-      return;
-    }
-    const incompleteRows = adhocPreview.rows.filter((row) => {
-      if (!row.category || !row.observation || !row.assessment) return true;
-      if (row.assessment !== "Not Adequate") return false;
-      return !row.responsibleDepartment || !row.responsibleUserId || !row.severity || !row.targetDate;
-    });
-    if (incompleteRows.length > 0) {
-      alert(`Please complete required values for ${incompleteRows.length} row${incompleteRows.length === 1 ? "" : "s"} before creating the Adhoc Audit.`);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const checklistPayload = adhocPreview.rows.map((row, index) => ({
-        questionId: `adhoc-${adhocPreview.importBatchId}-${row.srNo || index + 1}`,
+      const checklistPayload = revalidatedRows.map((row, index) => ({
+        questionId: `adhoc-${revalidatedPreview.importBatchId}-${row.srNo || index + 1}`,
         sourceRowNumber: row.rowNumber,
-        importBatchId: adhocPreview.importBatchId,
+        importBatchId: revalidatedPreview.importBatchId,
         category: row.category,
         question: row.observation,
         response: row.assessment,
@@ -810,7 +952,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
         actionOwnerDepartment: row.responsibleDepartment,
         dueDate: row.targetDate ? new Date(row.targetDate) : undefined,
         remarks: row.remarks,
-        beforePhotos: []
+        beforePhotos: row.assessment === "Not Adequate" ? row.beforePhotos || [] : []
       }));
 
       const response = await apiPost<CreateAuditResponse>("/api/audits", {
@@ -824,12 +966,12 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
         endDate: endDate ? new Date(endDate) : null,
         checklist: checklistPayload,
         importMetadata: {
-          originalFileName: adhocPreview.fileName,
-          totalRows: adhocPreview.totalRows,
-          successfulRows: adhocPreview.successfulRows,
-          failedRows: adhocPreview.failedRows,
-          importBatchId: adhocPreview.importBatchId,
-          fileHash: adhocPreview.fileHash
+          originalFileName: revalidatedPreview.fileName,
+          totalRows: revalidatedPreview.totalRows,
+          successfulRows: revalidatedPreview.successfulRows,
+          failedRows: revalidatedPreview.failedRows,
+          importBatchId: revalidatedPreview.importBatchId,
+          fileHash: revalidatedPreview.fileHash
         }
       });
 
@@ -941,6 +1083,31 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <option value="ADHOC">Adhoc</option>
               </select>
             </div>
+            {filteredAuditHistory.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-bd bg-bg3 px-3 py-2">
+                <span className="text-xs font-semibold text-t2">
+                  {selectedHistoryAudits.length} selected
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    className="inline-flex items-center gap-1 rounded-lg border border-brand bg-white px-2.5 py-1.5 text-xs font-bold text-brand hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={handleDownloadSelectedAuditPdfs}
+                    disabled={selectedHistoryAudits.length === 0 || isBulkHistoryActionRunning}
+                  >
+                    <Download size={12} /> PDF Selected
+                  </button>
+                  {isUserAdmin && (
+                    <button
+                      className="inline-flex items-center gap-1 rounded-lg border border-red bg-white px-2.5 py-1.5 text-xs font-bold text-red hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={handleDeleteSelectedAudits}
+                      disabled={selectedHistoryAudits.length === 0 || isBulkHistoryActionRunning}
+                    >
+                      <Trash2 size={12} /> Delete Selected
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             {audits.loading ? (
               <div className="py-5 text-t2">Loading completed audits...</div>
             ) : !audits.data || audits.data.length === 0 ? (
@@ -952,6 +1119,15 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr>
+                      <th className="w-10 bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-bd"
+                          checked={allFilteredHistorySelected}
+                          onChange={toggleAllFilteredHistorySelection}
+                          aria-label="Select all filtered audits"
+                        />
+                      </th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Audit No</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Type</th>
                       <th className="bg-bg3 px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide text-t2">Starting Date</th>
@@ -967,6 +1143,15 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                       const scoreBadge = scoreBadgeStyle(audit.totalScore);
                       return (
                       <tr key={audit._id}>
+                        <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-bd"
+                            checked={selectedHistoryAuditIds.includes(audit._id)}
+                            onChange={() => toggleHistoryAuditSelection(audit._id)}
+                            aria-label={`Select audit ${audit.auditNumber}`}
+                          />
+                        </td>
                         <td className="border-b border-[#edf0f4] px-3 py-2.5 align-top text-sm">
                           <strong>{audit.auditNumber}</strong>
                           {audit.title && <div className="mt-0.5 max-w-[180px] truncate text-[11px] font-semibold text-t2">{audit.title}</div>}
@@ -1229,7 +1414,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                   <button
                     className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2 text-sm font-bold text-white hover:bg-brand-d disabled:cursor-not-allowed disabled:opacity-55"
                     onClick={submitAdhocAudit}
-                    disabled={isSubmitting || adhocPreview.invalidRows > 0 || Boolean(adhocPreview.scoreWarning)}
+                    disabled={isSubmitting}
                   >
                     <Check size={16} /> {isSubmitting ? "Creating..." : "Create Adhoc Audit"}
                   </button>
@@ -1237,10 +1422,10 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               </div>
 
               <div className="overflow-x-auto rounded-lg border border-bd bg-white">
-                <table className="w-full min-w-[1180px] border-collapse text-xs">
+                <table className="w-full min-w-[1320px] border-collapse text-xs">
                   <thead>
                     <tr>
-                      {["Sr", "Category", "Observation", "Assessment", "Resp. Department", "Responsible Person", "Severity", "Target Date", "Validation"].map((head) => (
+                      {["Sr", "Category", "Observation", "Assessment", "Resp. Department", "Responsible Person", "Severity", "Target Date", "Validation", "Before Upload"].map((head) => (
                         <th key={head} className="bg-bg3 px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-t2">{head}</th>
                       ))}
                     </tr>
@@ -1317,6 +1502,43 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                               </span>
                               {(row.errors.length > 0 || row.warnings.length > 0) && (
                                 <div className="mt-1 max-w-[220px] text-[11px] text-red">{[...row.errors, ...row.warnings].join(", ")}</div>
+                              )}
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              {row.assessment === "Not Adequate" ? (
+                                <div className="grid gap-1.5">
+                                  {(row.beforePhotos || []).length > 0 && (
+                                    <div className="flex max-w-[180px] flex-wrap gap-1">
+                                      {(row.beforePhotos || []).map((photo) => (
+                                        <div key={photo.publicId} className="relative h-10 w-10">
+                                          <a href={photo.secureUrl} target="_blank" rel="noopener noreferrer">
+                                            <img src={photo.secureUrl} alt="Before upload" className="h-10 w-10 rounded border border-bd object-cover" />
+                                          </a>
+                                          <button
+                                            type="button"
+                                            className="absolute -right-1 -top-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-red bg-white text-red shadow-sm"
+                                            onClick={() => removeAdhocPreviewBeforePhoto(originalIndex, photo.publicId)}
+                                            title="Remove before photo"
+                                          >
+                                            <X size={10} />
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <label className="inline-flex w-fit cursor-pointer items-center gap-1 rounded-lg border border-bd bg-white px-2 py-1 text-[11px] font-bold text-t1 hover:bg-bg3">
+                                    <UploadCloud size={12} /> {uploading[`adhoc-preview-${originalIndex}`] ? "Uploading" : (row.beforePhotos || []).length ? "Add More" : "Upload"}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      disabled={uploading[`adhoc-preview-${originalIndex}`]}
+                                      onChange={(event) => handleAdhocPreviewBeforePhotoUpload(originalIndex, event)}
+                                    />
+                                  </label>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-t2">Not required</span>
                               )}
                             </td>
                           </tr>
