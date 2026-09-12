@@ -236,10 +236,13 @@ export function validateAdhocWorkbook(input: {
   }
 
   const normalizedRows = rows
-    .map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [headerName(key), value])) as RawRow)
-    .filter((row) => !compact(row.Remarks).toLowerCase().includes("sample row - delete"));
+    .map((row, rowIndex) => ({
+      row: Object.fromEntries(Object.entries(row).map(([key, value]) => [headerName(key), value])) as RawRow,
+      sourceRowNumber: rowIndex + 2
+    }))
+    .filter((entry) => !compact(entry.row.Remarks).toLowerCase().includes("sample row - delete"));
 
-  const first = normalizedRows[0] || {};
+  const first = normalizedRows[0]?.row || {};
   const missingColumns = REQUIRED_ADHOC_TEMPLATE_COLUMNS.filter((column) => !(column in first));
   if (missingColumns.length > 0) {
     throw Object.assign(new Error(`Missing required columns: ${missingColumns.join(", ")}`), { status: 400 });
@@ -248,10 +251,11 @@ export function validateAdhocWorkbook(input: {
   const usersByValue = buildUserMaps(input.users);
   const fileHash = crypto.createHash("sha256").update(input.buffer).digest("hex");
   const importBatchId = crypto.randomUUID();
-  const previewRows: AdhocPreviewRow[] = normalizedRows.map((row, index) => {
+  const previewRows: AdhocPreviewRow[] = normalizedRows.map((entry, index) => {
+    const row = entry.row;
     const errors: string[] = [];
     const warnings: string[] = [];
-    const rowNumber = index + 2;
+    const rowNumber = entry.sourceRowNumber;
     const category = normalizeCategory(row["6S Category"]);
     const observation = compact(row["Observation / Checkpoint"]);
     const assessment = normalizeAssessment(row.Assessment);
@@ -288,7 +292,7 @@ export function validateAdhocWorkbook(input: {
 
     return {
       rowNumber,
-      srNo: compact(row["Sr. No."]) || String(index + 1),
+      srNo: String(index + 1),
       category,
       observation,
       assessment,

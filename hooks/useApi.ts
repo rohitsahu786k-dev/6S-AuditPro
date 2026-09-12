@@ -11,10 +11,14 @@ async function parseApiResponse<T>(res: Response) {
   return ("data" in json ? json.data : json) as T;
 }
 
-export function useApi<T>(url: string) {
-  const [state, setState] = useState<ApiState<T>>({ loading: true });
+export function useApi<T>(url: string | null) {
+  const [state, setState] = useState<ApiState<T>>({ loading: Boolean(url) });
   const requestId = useRef(0);
   const load = useCallback(async () => {
+    if (!url) {
+      setState({ loading: false });
+      return;
+    }
     const currentRequestId = ++requestId.current;
     setState((current) => ({ ...current, loading: true, error: undefined }));
     try {

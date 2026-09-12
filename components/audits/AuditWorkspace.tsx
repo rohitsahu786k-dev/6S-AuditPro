@@ -235,7 +235,7 @@ function recalculateAdhocPreview(current: AdhocPreview, rows: AdhocPreviewRow[])
 export function AuditWorkspace({ historyOnly = false, newOnly = false }: { historyOnly?: boolean; newOnly?: boolean }) {
   const router = useRouter();
   const masters = useApi<Masters>("/api/masters?view=lookup");
-  const audits = useApi<Audit[]>("/api/audits?view=summary");
+  const audits = useApi<Audit[]>(newOnly ? null : "/api/audits?view=summary");
   const meApi = useApi<{ user: any | null }>("/api/auth/me");
 
   const currentUser = meApi.data?.user;
