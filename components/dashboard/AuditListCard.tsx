@@ -5,6 +5,7 @@ import { scoreBadgeStyle } from "@/lib/status-styles";
 type Audit = {
   _id: string;
   auditNumber: string;
+  auditType?: "STANDARD" | "ADHOC";
   department: string;
   zone: string;
   date: string;
@@ -47,7 +48,12 @@ export function AuditListCard({ audits, loading }: { audits: Audit[]; loading: b
               return (
                 <div key={audit._id} className="flex items-center justify-between border-b border-[#f1f5f9] py-2.5 last:border-b-0">
                   <div>
-                    <div className="text-[13px] font-semibold">{audit.auditNumber}</div>
+                    <div className="flex items-center gap-2 text-[13px] font-semibold">
+                      {audit.auditNumber}
+                      {(audit.auditType || "STANDARD") === "ADHOC" ? (
+                        <span className="rounded-full border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[9px] font-extrabold uppercase text-blue-700">Adhoc</span>
+                      ) : null}
+                    </div>
                     <div className="mt-0.5 flex gap-2 text-[11px] text-t2">
                       <span className="flex items-center gap-1">
                         <Building size={10} /> {audit.department} - {audit.zone}

@@ -36,6 +36,8 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
   // Department Summary, Overall Rating, Monthly Audit Score and Recent Audits on
   // the same current-year audit dataset. This prevents historical audits from
   // changing the current dashboard score while the monthly table shows only this year.
+  // Adhoc audits stay in this dataset: dashboard and analytics merge them with the
+  // department's standard audit of the same month into one score.
   if (view === "analytics") {
     const year = new Date().getFullYear();
     const from = new Date(year, 0, 1, 0, 0, 0, 0);
@@ -45,7 +47,6 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
       { startDate: { $exists: false }, date: { $gte: from, $lt: to } },
       { startDate: null, date: { $gte: from, $lt: to } }
     ];
-    query.auditType = { $in: ["STANDARD", null] };
   }
 
   const projection = AUDIT_PROJECTIONS[view] ?? AUDIT_PROJECTIONS.full;

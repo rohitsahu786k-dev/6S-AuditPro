@@ -17,6 +17,7 @@ import {
   Filter
 } from "lucide-react";
 import { downloadInsightsPdf } from "@/lib/insights-pdf";
+import { mergeAuditScoresByDepartmentMonth } from "@/lib/audit-scoring";
 
 type Audit = {
   _id: string;
@@ -28,7 +29,10 @@ type Audit = {
   startDate?: string | null;
   endDate?: string | null;
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
+  auditType?: "STANDARD" | "ADHOC";
   totalScore: number;
+  adequateCount?: number;
+  applicableCount?: number;
   categoryScores?: Record<string, number>;
   // Omitted by the analytics view, which sends categoryScores instead.
   checklist?: Array<{
@@ -119,24 +123,29 @@ export function AnalyticsClient() {
     return { total, open, submitted, closed, overdue };
   }, [findings]);
 
-  // Average Department Scores
+  // Average Department Scores. A department's standard and adhoc audits of the same
+  // month are merged into one score first, so the average is over audited months.
   const departmentStats = useMemo(() => {
-    const map = new Map<string, { totalScore: number; count: number; openFindings: number }>();
-    
-    // Audits scores
+    const map = new Map<string, { monthScores: number[]; count: number; openFindings: number }>();
+    const newStats = () => ({ monthScores: [] as number[], count: 0, openFindings: 0 });
+
     for (const a of audits) {
       if (a.status !== "COMPLETED") continue;
-      const dept = a.department;
-      const stats = map.get(dept) || { totalScore: 0, count: 0, openFindings: 0 };
-      stats.totalScore += a.totalScore ?? 0;
+      const stats = map.get(a.department) || newStats();
       stats.count += 1;
-      map.set(dept, stats);
+      map.set(a.department, stats);
+    }
+
+    for (const group of mergeAuditScoresByDepartmentMonth(audits.filter((a) => a.status === "COMPLETED")).values()) {
+      const stats = map.get(group.department) || newStats();
+      stats.monthScores.push(group.score);
+      map.set(group.department, stats);
     }
 
     // Open findings count
     for (const f of findings) {
       if (f.status !== "CLOSED") {
-        const stats = map.get(f.department) || { totalScore: 0, count: 0, openFindings: 0 };
+        const stats = map.get(f.department) || newStats();
         stats.openFindings += 1;
         map.set(f.department, stats);
       }
@@ -144,7 +153,9 @@ export function AnalyticsClient() {
 
     return [...map.entries()].map(([department, s]) => ({
       department,
-      avgScore: s.count > 0 ? Math.round(s.totalScore / s.count) : 0,
+      avgScore: s.monthScores.length > 0
+        ? Math.round(s.monthScores.reduce((sum, score) => sum + score, 0) / s.monthScores.length)
+        : 0,
       auditCount: s.count,
       openFindings: s.openFindings
     })).sort((a, b) => b.avgScore - a.avgScore);

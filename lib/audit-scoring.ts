@@ -228,6 +228,99 @@ export function departmentAuditScore(
   }).score;
 }
 
+export type MergeableAudit = {
+  department?: string | null;
+  date?: string | Date | null;
+  startDate?: string | Date | null;
+  totalScore?: number | null;
+  adequateCount?: number | null;
+  applicableCount?: number | null;
+};
+
+export type MergedAuditScore = {
+  adequateCount: number;
+  applicableCount: number;
+  auditCount: number;
+  score: number;
+};
+
+export type MergedAuditGroup = MergedAuditScore & { department: string; monthKey: string };
+
+export function auditPeriodDate(audit: MergeableAudit) {
+  return audit.startDate || audit.date || null;
+}
+
+export function auditMonthKey(value?: string | Date | null) {
+  if (!value) return "";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function departmentMonthKey(department: string, monthKey: string) {
+  return `${department} ${monthKey}`;
+}
+
+/**
+ * Standard and Adhoc audits of the same department in the same month describe one
+ * assessment of that area, so their checklist items are pooled into a single score
+ * instead of averaging each audit's percentage - averaging would give a two-item
+ * adhoc sheet the same weight as a full checklist.
+ */
+export function mergeAuditScores(audits: MergeableAudit[]): MergedAuditScore | null {
+  if (audits.length === 0) return null;
+  let adequateCount = 0;
+  let applicableCount = 0;
+
+  for (const audit of audits) {
+    const adequate = Number(audit.adequateCount);
+    const applicable = Number(audit.applicableCount);
+    // An audit with counts but nothing applicable to this department (every item N/A
+    // or owned elsewhere) adds nothing rather than pulling the month down to 0%.
+    if (Number.isFinite(adequate) && Number.isFinite(applicable)) {
+      adequateCount += adequate;
+      applicableCount += applicable;
+      continue;
+    }
+    const totalScore = Number(audit.totalScore);
+    // Records without stored counts contribute their percentage with equal weight.
+    if (Number.isFinite(totalScore)) {
+      adequateCount += totalScore;
+      applicableCount += 100;
+    }
+  }
+
+  if (applicableCount === 0) return null;
+
+  return {
+    adequateCount,
+    applicableCount,
+    auditCount: audits.length,
+    score: roundedPercent(adequateCount, applicableCount)
+  };
+}
+
+export function mergeAuditScoresByDepartmentMonth<T extends MergeableAudit>(audits: T[]) {
+  const buckets = new Map<string, { department: string; monthKey: string; audits: T[] }>();
+
+  for (const audit of audits) {
+    const department = String(audit.department || "").trim();
+    const monthKey = auditMonthKey(auditPeriodDate(audit));
+    if (!department || !monthKey) continue;
+    const key = departmentMonthKey(department, monthKey);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.audits.push(audit);
+    else buckets.set(key, { department, monthKey, audits: [audit] });
+  }
+
+  const merged = new Map<string, MergedAuditGroup>();
+  for (const [key, bucket] of buckets) {
+    const score = mergeAuditScores(bucket.audits);
+    if (score) merged.set(key, { ...score, department: bucket.department, monthKey: bucket.monthKey });
+  }
+  return merged;
+}
+
 export function scoreLabel(score: number) {
   if (score <= 30) return { label: "1S", desc: "Sort Only" };
   if (score <= 50) return { label: "2S", desc: "Set in Order" };

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Eye, FileDown, FolderOpen, Loader2, Plus, ShieldAlert } from "lucide-react";
 import { useApi } from "@/hooks/useApi";
 import { downloadInsightsPdf } from "@/lib/insights-pdf";
-import { scoreLabel } from "@/lib/audit-scoring";
+import { auditMonthKey, departmentMonthKey, mergeAuditScoresByDepartmentMonth, scoreLabel } from "@/lib/audit-scoring";
 import { COMPANY_NAME } from "@/lib/constants";
 import { AuditListCard } from "@/components/dashboard/AuditListCard";
 import { FindingListCard } from "@/components/dashboard/FindingListCard";
@@ -14,19 +14,18 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 type Audit = {
   _id: string;
   auditNumber: string;
+  auditType?: "STANDARD" | "ADHOC";
   department: string;
   zone: string;
   date: string;
   startDate?: string | null;
   endDate?: string | null;
   totalScore: number;
+  adequateCount?: number;
+  applicableCount?: number;
   status: string;
   auditorName: string;
 };
-
-function auditScore(audit: Audit) {
-  return audit.totalScore ?? 0;
-}
 
 type Finding = {
   _id: string;
@@ -103,13 +102,6 @@ function timestampOf(value?: string | null) {
   if (!value) return -1;
   const timestamp = new Date(value).getTime();
   return Number.isNaN(timestamp) ? -1 : timestamp;
-}
-
-function monthKeyOf(value?: string) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function isFindingOverdue(finding: Finding) {
@@ -251,9 +243,17 @@ export function DashboardClient() {
     [audits]
   );
 
+  // One score per department per month: a department's standard and adhoc audits of
+  // the same month are merged, so every table below reads from the same merged set.
+  const mergedScores = useMemo(
+    () => mergeAuditScoresByDepartmentMonth(completedAudits),
+    [completedAudits]
+  );
+
   const overallAuditRating = useMemo(() => {
-    const score = completedAudits.length
-      ? Math.round(completedAudits.reduce((sum, audit) => sum + auditScore(audit), 0) / completedAudits.length)
+    const groupScores = [...mergedScores.values()].map((group) => group.score);
+    const score = groupScores.length
+      ? Math.round(groupScores.reduce((sum, groupScore) => sum + groupScore, 0) / groupScores.length)
       : 0;
     return {
       auditCount: completedAudits.length,
@@ -261,7 +261,7 @@ export function DashboardClient() {
       rating: scoreLabel(score),
       compliant: score >= COMPLIANCE_TARGET
     };
-  }, [completedAudits]);
+  }, [completedAudits, mergedScores]);
 
   const departmentSummary = useMemo(() => {
     const map = new Map<string, DepartmentState>();
@@ -277,14 +277,16 @@ export function DashboardClient() {
       map.set(finding.department, row);
     }
 
-    for (const audit of completedAudits) {
-      const row = map.get(audit.department) || newDepartmentState();
-      const auditAt = timestampOf(auditStartDate(audit));
-      if (row.latestAuditScore === null || auditAt > row.latestAuditAt) {
-        row.latestAuditScore = auditScore(audit);
-        row.latestAuditAt = auditAt;
+    // Latest score = merged score of the department's most recent audited month,
+    // so a mid-month adhoc audit adds to that month instead of replacing it.
+    for (const group of mergedScores.values()) {
+      const row = map.get(group.department) || newDepartmentState();
+      const monthAt = new Date(`${group.monthKey}-01T00:00:00`).getTime();
+      if (row.latestAuditScore === null || monthAt > row.latestAuditAt) {
+        row.latestAuditScore = group.score;
+        row.latestAuditAt = monthAt;
       }
-      map.set(audit.department, row);
+      map.set(group.department, row);
     }
 
     return [...map.entries()]
@@ -300,22 +302,17 @@ export function DashboardClient() {
         compliant: row.latestAuditScore !== null && row.latestAuditScore >= COMPLIANCE_TARGET
       }))
       .sort((left, right) => right.total - left.total || left.department.localeCompare(right.department));
-  }, [departments, findings, completedAudits]);
+  }, [departments, findings, mergedScores]);
 
   const monthlyAuditScore = useMemo<MonthlyRow[]>(() => {
     return departments.map((department) => ({
       department,
       values: YEAR_MONTHS.map((month) => {
         if (month.isFuture) return null;
-        const scores = completedAudits
-          .filter((audit) => audit.department === department && monthKeyOf(auditStartDate(audit)) === month.key)
-          .map((audit) => auditScore(audit));
-        return scores.length
-          ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
-          : null;
+        return mergedScores.get(departmentMonthKey(department, month.key))?.score ?? null;
       })
     }));
-  }, [departments, completedAudits]);
+  }, [departments, mergedScores]);
 
   const monthlyClosureTrend = useMemo<MonthlyRow[]>(() => {
     return departments.map((department) => ({
@@ -337,8 +334,8 @@ export function DashboardClient() {
   const monthlyRaisedVsClosed = useMemo(() => {
     return YEAR_MONTHS.map((month) => ({
       month: month.label,
-      raised: month.isFuture ? null : findings.filter((finding) => monthKeyOf(finding.createdAt) === month.key).length,
-      closed: month.isFuture ? null : findings.filter((finding) => finding.status === "CLOSED" && monthKeyOf(finding.updatedAt) === month.key).length
+      raised: month.isFuture ? null : findings.filter((finding) => auditMonthKey(finding.createdAt) === month.key).length,
+      closed: month.isFuture ? null : findings.filter((finding) => finding.status === "CLOSED" && auditMonthKey(finding.updatedAt) === month.key).length
     }));
   }, [findings]);
 
@@ -422,7 +419,7 @@ export function DashboardClient() {
           },
           {
             title: `Monthly Audit Score - ${DASHBOARD_YEAR}`,
-            note: "Monthly average of completed audit scores by audited department",
+            note: "Standard + Adhoc audits of a month merged into one score per department",
             head: ["Department", ...monthHeads],
             rows: monthlyRows(monthlyAuditScore, false)
           },
@@ -539,7 +536,7 @@ export function DashboardClient() {
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
           <div className="mb-3 flex items-center justify-between gap-2">
             <h3 className="font-bold text-t1">Department Summary</h3>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Latest completed audit score</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Latest audited month - standard + adhoc merged</span>
           </div>
           {departmentSummary.length === 0 ? (
             <div className="flex h-[220px] items-center justify-center text-sm text-t2">No department activity yet.</div>
@@ -584,7 +581,7 @@ export function DashboardClient() {
         <div className="rounded-[10px] border border-bd bg-bg1 p-4 shadow-[var(--shadow-sm)]">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold text-t1">Monthly Audit Score - {DASHBOARD_YEAR}</h3>
-            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Monthly average score by audited department</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-t3">Standard + adhoc audits of the month merged per department</span>
           </div>
           <MonthlyDepartmentTable rows={monthlyAuditScore} emptyMessage="No completed audits yet." />
         </div>
