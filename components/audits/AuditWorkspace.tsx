@@ -1543,13 +1543,6 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                   ))}
                 </select>
                 <div className="flex justify-end gap-2">
-                  <button
-                    className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2 text-sm font-bold text-t1 hover:bg-bg3"
-                    onClick={addAdhocRow}
-                    type="button"
-                  >
-                    <Plus size={16} /> Add Row
-                  </button>
                   <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2 text-sm font-bold text-t1 hover:bg-bg3" onClick={() => setStep("adhocDetails")}>
                     <ChevronLeft size={16} /> Back
                   </button>
@@ -1702,6 +1695,15 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                       })}
                   </tbody>
                 </table>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2 text-sm font-bold text-t1 hover:bg-bg3"
+                  onClick={addAdhocRow}
+                  type="button"
+                >
+                  <Plus size={16} /> Add Row
+                </button>
               </div>
             </div>
           )}
