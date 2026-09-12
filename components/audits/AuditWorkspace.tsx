@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiPatch, apiPost, apiUpload, useApi } from "@/hooks/useApi";
 import { CATEGORIES } from "@/lib/constants";
@@ -153,6 +153,26 @@ type AdhocPreview = {
   rows: AdhocPreviewRow[];
 };
 
+type AuditWorkspaceStep = "history" | "auditType" | "setup" | "checklist" | "adhocDetails" | "adhocImport" | "success";
+
+type AdhocDraft = {
+  version: 1;
+  step: Extract<AuditWorkspaceStep, "adhocDetails" | "adhocImport">;
+  zoneName: string;
+  auditorName: string;
+  startDate: string;
+  endDate: string;
+  setupError: string;
+  adhocTitle: string;
+  adhocDescription: string;
+  adhocPreview: AdhocPreview | null;
+  adhocUploadError: string;
+  adhocFilterAssessment: string;
+  adhocFilterDepartment: string;
+};
+
+const ADHOC_DRAFT_STORAGE_KEY = "onepws-6s-audit:adhoc-draft:v1";
+
 function responseBadgeClass(response: "Adequate" | "Not Adequate" | "N/A") {
   if (response === "Adequate") return "bg-green";
   if (response === "Not Adequate") return "bg-red";
@@ -242,7 +262,8 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const isUserAdmin = currentUser && ["MASTER_ADMIN", "ADMIN"].includes(currentUser.role);
 
   // Navigation & Step State ("New Audit" page jumps straight into the setup form)
-  const [step, setStep] = useState<"history" | "auditType" | "setup" | "checklist" | "adhocDetails" | "adhocImport" | "success">(newOnly ? "auditType" : "history");
+  const [step, setStep] = useState<AuditWorkspaceStep>(newOnly ? "auditType" : "history");
+  const [adhocDraftHydrated, setAdhocDraftHydrated] = useState(!newOnly);
 
   // In newOnly mode the history list lives on /audit-history, so "back to
   // history" navigates there instead of switching the local step.
@@ -264,6 +285,82 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
   const [adhocUploadError, setAdhocUploadError] = useState("");
   const [adhocFilterAssessment, setAdhocFilterAssessment] = useState("ALL");
   const [adhocFilterDepartment, setAdhocFilterDepartment] = useState("ALL");
+
+  useEffect(() => {
+    if (!newOnly) return;
+    try {
+      const rawDraft = window.localStorage.getItem(ADHOC_DRAFT_STORAGE_KEY);
+      if (!rawDraft) {
+        setAdhocDraftHydrated(true);
+        return;
+      }
+      const draft = JSON.parse(rawDraft) as Partial<AdhocDraft>;
+      if (draft.version !== 1 || (draft.step !== "adhocDetails" && draft.step !== "adhocImport")) {
+        window.localStorage.removeItem(ADHOC_DRAFT_STORAGE_KEY);
+        setAdhocDraftHydrated(true);
+        return;
+      }
+      setZoneName(draft.zoneName || "");
+      setAuditorName(draft.auditorName || "");
+      setStartDate(draft.startDate || new Date().toISOString().split("T")[0]);
+      setEndDate(draft.endDate || "");
+      setSetupError(draft.setupError || "");
+      setAdhocTitle(draft.adhocTitle || "");
+      setAdhocDescription(draft.adhocDescription || "");
+      setAdhocPreview(draft.adhocPreview || null);
+      setAdhocUploadError(draft.adhocUploadError || "");
+      setAdhocFilterAssessment(draft.adhocFilterAssessment || "ALL");
+      setAdhocFilterDepartment(draft.adhocFilterDepartment || "ALL");
+      setStep(draft.step);
+    } catch {
+      window.localStorage.removeItem(ADHOC_DRAFT_STORAGE_KEY);
+    } finally {
+      setAdhocDraftHydrated(true);
+    }
+  }, [newOnly]);
+
+  useEffect(() => {
+    if (!newOnly || !adhocDraftHydrated) return;
+    if (step !== "adhocDetails" && step !== "adhocImport") {
+      window.localStorage.removeItem(ADHOC_DRAFT_STORAGE_KEY);
+      return;
+    }
+    const draft: AdhocDraft = {
+      version: 1,
+      step,
+      zoneName,
+      auditorName,
+      startDate,
+      endDate,
+      setupError,
+      adhocTitle,
+      adhocDescription,
+      adhocPreview,
+      adhocUploadError,
+      adhocFilterAssessment,
+      adhocFilterDepartment
+    };
+    try {
+      window.localStorage.setItem(ADHOC_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    } catch {
+      // Draft persistence is a convenience; submission should never be blocked by storage limits.
+    }
+  }, [
+    newOnly,
+    adhocDraftHydrated,
+    step,
+    zoneName,
+    auditorName,
+    startDate,
+    endDate,
+    setupError,
+    adhocTitle,
+    adhocDescription,
+    adhocPreview,
+    adhocUploadError,
+    adhocFilterAssessment,
+    adhocFilterDepartment
+  ]);
 
   // Checklist State
   const [currentCategoryIndex, setCurrentCategoryIndex] = useState(0);
@@ -1012,6 +1109,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
         }
       });
 
+      window.localStorage.removeItem(ADHOC_DRAFT_STORAGE_KEY);
       setCreatedAudit(response.audit);
       setCreatedFindings(response.findings || []);
       setStep("success");
