@@ -178,12 +178,6 @@ export async function createAudit(input: {
 
     const users = await User.find({ status: { $ne: "inactive" } }).select("_id name department").lean();
     const usersById = new Map(users.map((portalUser) => [String(portalUser._id), portalUser]));
-    const adequateCount = input.checklist.filter((item) => item.response === "Adequate").length;
-    const notAdequateCount = input.checklist.filter((item) => item.response === "Not Adequate").length;
-    if (adequateCount === 0 && notAdequateCount > 0) {
-      throw Object.assign(new Error("A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."), { status: 400 });
-    }
-
     input.checklist = input.checklist.map((item, index) => {
       if (!item.question?.trim()) throw Object.assign(new Error(`Row ${index + 1}: Missing Observation.`), { status: 400 });
       if (item.response === "Not Adequate") {

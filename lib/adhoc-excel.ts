@@ -226,13 +226,13 @@ export function validateAdhocWorkbook(input: {
 }): AdhocPreviewResult {
   const workbook = XLSX.read(input.buffer, { type: "buffer", cellDates: true, cellFormula: false });
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) throw Object.assign(new Error("Excel workbook does not contain any sheets."), { status: 400 });
+  if (!sheetName) throw Object.assign(new Error("Import file does not contain any sheets."), { status: 400 });
 
   const sheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: "", raw: false });
-  if (rows.length === 0) throw Object.assign(new Error("Excel workbook is empty."), { status: 400 });
+  if (rows.length === 0) throw Object.assign(new Error("Import file is empty."), { status: 400 });
   if (rows.length > MAX_ADHOC_ROWS) {
-    throw Object.assign(new Error(`Excel contains ${rows.length} rows. Maximum allowed rows are ${MAX_ADHOC_ROWS}.`), { status: 400 });
+    throw Object.assign(new Error(`Import file contains ${rows.length} rows. Maximum allowed rows are ${MAX_ADHOC_ROWS}.`), { status: 400 });
   }
 
   const normalizedRows = rows
@@ -309,10 +309,6 @@ export function validateAdhocWorkbook(input: {
   const notAdequateCount = previewRows.filter((row) => row.assessment === "Not Adequate").length;
   const naCount = previewRows.filter((row) => row.assessment === "N/A").length;
   const invalidRows = previewRows.filter((row) => row.errors.length > 0).length;
-  const scoreWarning = adequateCount === 0 && notAdequateCount > 0
-    ? "A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."
-    : undefined;
-
   return {
     fileName: input.fileName,
     fileHash,
@@ -324,7 +320,7 @@ export function validateAdhocWorkbook(input: {
     notAdequateCount,
     naCount,
     invalidRows,
-    scoreWarning,
+    scoreWarning: undefined,
     rows: previewRows
   };
 }

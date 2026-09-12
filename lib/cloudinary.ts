@@ -9,5 +9,5 @@ export function configureCloudinary() {
   return cloudinary;
 }
 
-export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/heic", "image/heif"];
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;

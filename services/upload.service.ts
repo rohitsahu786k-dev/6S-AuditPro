@@ -1,9 +1,26 @@
 import { ALLOWED_IMAGE_TYPES, configureCloudinary, MAX_UPLOAD_BYTES } from "@/lib/cloudinary";
 
 const SAFE_FOLDER_SUFFIX = /^[a-zA-Z0-9_-]{1,64}$/;
+const IMAGE_TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  gif: "image/gif",
+  bmp: "image/bmp",
+  heic: "image/heic",
+  heif: "image/heif"
+};
+
+function imageTypeFor(file: File) {
+  if (file.type) return file.type.toLowerCase();
+  const extension = file.name.split(".").pop()?.toLowerCase() || "";
+  return IMAGE_TYPE_BY_EXTENSION[extension] || "";
+}
 
 export async function uploadImage(file: File, folderSuffix = "audit-photos", uploader?: { id: string; name: string }) {
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type)) throw Object.assign(new Error("Unsupported image type"), { status: 400 });
+  const imageType = imageTypeFor(file);
+  if (!ALLOWED_IMAGE_TYPES.includes(imageType)) throw Object.assign(new Error("Unsupported image type. Please upload JPG, PNG, WebP, GIF, BMP, HEIC, or HEIF."), { status: 400 });
   if (file.size > MAX_UPLOAD_BYTES) throw Object.assign(new Error("File is larger than 5 MB"), { status: 400 });
   if (!SAFE_FOLDER_SUFFIX.test(folderSuffix)) throw Object.assign(new Error("Invalid folderSuffix"), { status: 400 });
 

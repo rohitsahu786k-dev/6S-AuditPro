@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiPatch, apiPost, apiUpload, useApi } from "@/hooks/useApi";
 import { CATEGORIES } from "@/lib/constants";
+import { canonicalDepartmentName } from "@/lib/org-utils";
 import {
   Check,
   X,
@@ -179,20 +180,21 @@ function validateAdhocPreviewRow(row: AdhocPreviewRow, mastersData: Masters) {
   const warnings: string[] = [];
   const activeDepartments = mastersData.departments.filter((department) => department.isActive !== false).map((department) => department.name);
   const activeUsers = mastersData.users.filter((portalUser) => portalUser.status !== "inactive");
+  const responsibleDepartment = canonicalDepartmentName(row.responsibleDepartment, activeDepartments);
 
   if (!row.category || !CATEGORIES.includes(row.category as any)) errors.push("Missing / invalid 6S Category");
   if (!row.observation.trim()) errors.push("Missing Observation");
   if (!row.assessment) errors.push("Missing Assessment");
 
   if (row.assessment === "Not Adequate") {
-    if (!row.responsibleDepartment || !activeDepartments.includes(row.responsibleDepartment)) errors.push("Missing / unknown Responsible Department");
+    if (!responsibleDepartment || !activeDepartments.includes(responsibleDepartment)) errors.push("Missing / unknown Responsible Department");
     if (!row.responsibleUserId) {
       errors.push("Missing Responsible Person");
     } else {
       const portalUser = activeUsers.find((item) => item._id === row.responsibleUserId);
       if (!portalUser) {
         errors.push("Unknown Responsible Person");
-      } else if (row.responsibleDepartment && portalUser.department && portalUser.department !== row.responsibleDepartment) {
+      } else if (responsibleDepartment && portalUser.department && canonicalDepartmentName(portalUser.department, activeDepartments) !== responsibleDepartment) {
         errors.push("Responsible Person does not belong to selected department");
       }
     }
@@ -219,15 +221,14 @@ function recalculateAdhocPreview(current: AdhocPreview, rows: AdhocPreviewRow[])
   return {
     ...current,
     rows,
+    totalRows: rows.length,
     adequateCount,
     notAdequateCount,
     naCount,
     invalidRows,
     failedRows: invalidRows,
     successfulRows: rows.length - invalidRows,
-    scoreWarning: adequateCount === 0 && notAdequateCount > 0
-      ? "A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations."
-      : undefined
+    scoreWarning: undefined
   };
 }
 
@@ -819,7 +820,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       setAdhocPreview(preview);
     } catch (err: any) {
       setAdhocPreview(null);
-      setAdhocUploadError(err.message || "Unable to parse Excel file.");
+      setAdhocUploadError(err.message || "Unable to parse import file.");
     } finally {
       setAdhocUploading(false);
     }
@@ -904,6 +905,47 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
     });
   }
 
+  function emptyAdhocPreviewRow(index: number): AdhocPreviewRow {
+    const activeDepartments = masters.data?.departments.filter((department) => department.isActive !== false).map((department) => department.name) || [];
+    const responsibleDepartment = selectedZone?.department
+      ? canonicalDepartmentName(selectedZone.department, activeDepartments)
+      : "";
+    return {
+      rowNumber: index + 2,
+      srNo: String(index + 1),
+      category: "",
+      observation: "",
+      assessment: "",
+      responsibleDepartment,
+      responsiblePerson: "",
+      severity: "",
+      remarks: "",
+      beforePhotos: [],
+      validationStatus: "INVALID",
+      errors: ["Missing / invalid 6S Category", "Missing Observation", "Missing Assessment"],
+      warnings: []
+    };
+  }
+
+  function addAdhocRow() {
+    setAdhocPreview((current) => {
+      if (!current) return current;
+      const nextRow = emptyAdhocPreviewRow(current.rows.length);
+      const validatedRow = masters.data ? { ...nextRow, ...validateAdhocPreviewRow(nextRow, masters.data) } : nextRow;
+      return recalculateAdhocPreview(current, [...current.rows, validatedRow]);
+    });
+  }
+
+  function deleteAdhocRow(index: number) {
+    setAdhocPreview((current) => {
+      if (!current) return current;
+      const rows = current.rows
+        .filter((_, rowIndex) => rowIndex !== index)
+        .map((row, rowIndex) => ({ ...row, srNo: row.srNo || String(rowIndex + 1), rowNumber: rowIndex + 2 }));
+      return recalculateAdhocPreview(current, rows);
+    });
+  }
+
   function updateAdhocRow(index: number, patch: Partial<AdhocPreviewRow>) {
     setAdhocPreview((current) => {
       if (!current) return current;
@@ -930,11 +972,6 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       alert(`Please correct these required values before creating the Adhoc Audit:\n\n${details}${extra}`);
       return;
     }
-    if (revalidatedPreview.adequateCount === 0 && revalidatedPreview.notAdequateCount > 0) {
-      alert("A proper 6S compliance score requires Adequate and Not Adequate assessment data. Please include all assessed checkpoints, not only negative observations.");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       const checklistPayload = revalidatedRows.map((row, index) => ({
@@ -1029,9 +1066,9 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
             </span>
             <div>
               <div className="mb-1 text-lg font-extrabold text-t1">Adhoc Audit</div>
-              <p className="text-sm text-t2">Create a flexible 6S audit by importing observations from Excel.</p>
+              <p className="text-sm text-t2">Create a flexible 6S audit by importing observations from CSV or Excel.</p>
             </div>
-            <span className="text-xs font-extrabold uppercase tracking-wide text-[#1d4ed8]">Import Excel assessment</span>
+            <span className="text-xs font-extrabold uppercase tracking-wide text-[#1d4ed8]">Import CSV / Excel assessment</span>
           </button>
           <div className="md:col-span-2">
             <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2.5 text-sm font-bold text-t1 hover:bg-bg3" onClick={goToHistory}>
@@ -1328,7 +1365,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <ChevronLeft size={16} /> Back
               </button>
               <button className="inline-flex items-center gap-2 rounded-lg border border-brand bg-brand px-3.5 py-2.5 text-sm font-bold text-white hover:bg-brand-d" onClick={validateAdhocDetailsAndContinue}>
-                Next: Excel Import <ChevronRight size={16} />
+                Next: CSV / Excel Import <ChevronRight size={16} />
               </button>
             </div>
           </div>
@@ -1343,7 +1380,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <div className="mb-1 inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-[11px] font-extrabold text-blue-700">
                   <FileSpreadsheet size={13} /> ADHOC AUDIT
                 </div>
-                <h2 className="font-extrabold text-t1">Excel Template / Upload</h2>
+                <h2 className="font-extrabold text-t1">CSV / Excel Template Upload</h2>
                 <p className="mt-1 max-w-3xl text-sm text-t2">
                   Use one row per assessed checkpoint or observation. Select Adequate, Not Adequate or N/A for every row. Not Adequate rows will automatically create Findings and enter the CAPA workflow.
                 </p>
@@ -1366,9 +1403,9 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
               }}
             >
               <UploadCloud size={28} className="mb-2 text-t2" />
-              <strong className="text-sm text-t1">{adhocUploading ? "Parsing Excel..." : "Drag and drop Excel here"}</strong>
-              <span className="mt-1 text-xs text-t2">or browse a .xlsx / .xls file up to 5 MB</span>
-              <input type="file" accept=".xlsx,.xls" className="hidden" disabled={adhocUploading} onChange={handleAdhocFileInput} />
+              <strong className="text-sm text-t1">{adhocUploading ? "Parsing file..." : "Drag and drop CSV / Excel here"}</strong>
+              <span className="mt-1 text-xs text-t2">or browse a .csv / .xlsx / .xls file up to 5 MB</span>
+              <input type="file" accept=".csv,.xlsx,.xls" className="hidden" disabled={adhocUploading} onChange={handleAdhocFileInput} />
             </label>
 
             {adhocUploadError && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red">{adhocUploadError}</div>}
@@ -1408,6 +1445,13 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                   ))}
                 </select>
                 <div className="flex justify-end gap-2">
+                  <button
+                    className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2 text-sm font-bold text-t1 hover:bg-bg3"
+                    onClick={addAdhocRow}
+                    type="button"
+                  >
+                    <Plus size={16} /> Add Row
+                  </button>
                   <button className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-3.5 py-2 text-sm font-bold text-t1 hover:bg-bg3" onClick={() => setStep("adhocDetails")}>
                     <ChevronLeft size={16} /> Back
                   </button>
@@ -1425,7 +1469,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                 <table className="w-full min-w-[1320px] border-collapse text-xs">
                   <thead>
                     <tr>
-                      {["Sr", "Category", "Observation", "Assessment", "Resp. Department", "Responsible Person", "Severity", "Target Date", "Validation", "Before Upload"].map((head) => (
+                      {["Sr", "Category", "Observation", "Assessment", "Resp. Department", "Responsible Person", "Severity", "Target Date", "Validation", "Before Upload", "Actions"].map((head) => (
                         <th key={head} className="bg-bg3 px-2 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-t2">{head}</th>
                       ))}
                     </tr>
@@ -1437,9 +1481,11 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                       .filter(({ row }) => adhocFilterDepartment === "ALL" || row.responsibleDepartment === adhocFilterDepartment)
                       .map(({ row, originalIndex }) => {
                         const rowInvalid = row.errors.length > 0;
+                        const activeDepartments = masters.data?.departments.filter((department) => department.isActive !== false).map((department) => department.name) || [];
+                        const rowDepartment = canonicalDepartmentName(row.responsibleDepartment, activeDepartments);
                         const userOptions = (masters.data?.users || []).filter((portalUser) =>
                           portalUser.status !== "inactive" &&
-                          (!row.responsibleDepartment || !portalUser.department || portalUser.department === row.responsibleDepartment)
+                          (!rowDepartment || !portalUser.department || canonicalDepartmentName(portalUser.department, activeDepartments) === rowDepartment)
                         );
                         return (
                           <tr key={`${row.rowNumber}-${originalIndex}`} className={rowInvalid ? "bg-red-50" : ""}>
@@ -1473,10 +1519,11 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                                 value={row.responsibleUserId || ""}
                                 onChange={(event) => {
                                   const portalUser = masters.data?.users.find((item) => item._id === event.target.value);
+                                  const department = portalUser?.department ? canonicalDepartmentName(portalUser.department, activeDepartments) : row.responsibleDepartment;
                                   updateAdhocRow(originalIndex, {
                                     responsibleUserId: portalUser?._id,
                                     responsiblePerson: portalUser?.name || "",
-                                    responsibleDepartment: portalUser?.department || row.responsibleDepartment
+                                    responsibleDepartment: department
                                   });
                                 }}
                               >
@@ -1540,6 +1587,17 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                               ) : (
                                 <span className="text-[11px] text-t2">Not required</span>
                               )}
+                            </td>
+                            <td className="border-b border-[#edf0f4] px-2 py-2 align-top">
+                              <button
+                                type="button"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
+                                onClick={() => deleteAdhocRow(originalIndex)}
+                                disabled={adhocPreview.rows.length <= 1}
+                                title="Delete row"
+                              >
+                                <Trash2 size={14} />
+                              </button>
                             </td>
                           </tr>
                         );
@@ -2154,7 +2212,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                     </div>
                     <div className="text-right text-xs text-t2">
                       <div>Imported File</div>
-                      <strong className="text-t1">{selectedAuditDetail.importMetadata?.originalFileName || "Excel import"}</strong>
+                      <strong className="text-t1">{selectedAuditDetail.importMetadata?.originalFileName || "Imported file"}</strong>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-6">
