@@ -1,11 +1,21 @@
-const SCRIPT_RE = /<script[\s\S]*?>[\s\S]*?<\/script>/gi;
-const EVENT_HANDLER_RE = /\son\w+="[^"]*"/gi;
+import sanitize from "sanitize-html";
 
 export function sanitizeHtml(html: string) {
-  return html.replace(SCRIPT_RE, "").replace(EVENT_HANDLER_RE, "");
+  return sanitize(html, {
+    allowedTags: [...sanitize.defaults.allowedTags, "img", "html", "head", "body", "meta", "title"],
+    allowedAttributes: {
+      "*": ["style", "class", "id", "align", "valign", "width", "height", "bgcolor", "role"],
+      a: ["href", "target", "rel"],
+      img: ["src", "alt", "width", "height"],
+      table: ["cellpadding", "cellspacing", "border", "width", "role", "style"],
+      td: ["colspan", "rowspan", "align", "valign", "style", "width", "height", "bgcolor"]
+    },
+    allowedSchemes: ["https", "http", "mailto", "cid"],
+    allowProtocolRelative: false
+  });
 }
 
-export function renderTemplate(input: string, data: Record<string, string | number | undefined | null>) {
+export function renderTemplate(input: string, data: Record<string, string | number | undefined | null>, mode: "html" | "text" = "html") {
   const missing = new Set<string>();
   const rendered = input.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => {
     const value = data[key];
@@ -13,9 +23,9 @@ export function renderTemplate(input: string, data: Record<string, string | numb
       missing.add(key);
       return "";
     }
-    return String(value).replace(/[<>&"]/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;" }[ch] || ch));
+    return mode === "text" ? String(value) : String(value).replace(/[<>&"']/g, (ch) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "\"": "&quot;", "'": "&#39;" }[ch] || ch));
   });
-  return { rendered: sanitizeHtml(rendered), missingVariables: [...missing] };
+  return { rendered: mode === "html" ? sanitizeHtml(rendered) : rendered, missingVariables: [...missing] };
 }
 
 export function variablesInTemplate(...parts: string[]) {

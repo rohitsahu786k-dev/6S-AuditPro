@@ -212,22 +212,7 @@ export function scoreChecklist(items: ChecklistResponse[]) {
   return { categoryScores, totalScore: roundedPercent(adequate, adequate + notAdequate) };
 }
 
-/**
- * A department's score for an audit. Non-conformities that another department owns
- * are left out, so a department is not marked down for issues it was not asked to
- * fix. Computed from the checklist rather than the stored totalScore, which holds
- * the raw all-items score on some audits and this filtered score on others.
- */
-export function departmentAuditScore(
-  items: Array<ChecklistResponse & { actionOwnerDepartment?: string }>,
-  department: string
-) {
-  return calculateDepartmentAuditScore({
-    audit: { department, checklist: items },
-    department,
-    includeTransferredIn: false
-  }).score;
-}
+
 
 export type MergeableAudit = {
   department?: string | null;

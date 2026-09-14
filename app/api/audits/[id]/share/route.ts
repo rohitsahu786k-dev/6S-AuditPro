@@ -1,4 +1,5 @@
 import { requireUser } from "@/lib/auth";
+import { consumeRateLimit } from "@/lib/rate-limit";
 import Audit from "@/models/Audit";
 import { connectDB } from "@/lib/db";
 import { shareReportSchema } from "@/lib/validators";
@@ -10,6 +11,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const user = await requireUser("audits:read");
     const { id } = await context.params;
     const input = await parseJson(request, shareReportSchema);
+    // The recipient is caller-supplied and every role holds audits:read, so without
+    // a cap this endpoint can address mail from our domain to anyone.
+    await consumeRateLimit("audit-share", user.id, 20, 60 * 60_000);
+    await consumeRateLimit("audit-share-global", "all", 200, 60 * 60_000);
     await connectDB();
 
     const audit = await Audit.findOne({

@@ -1,3 +1,5 @@
+import { getAppLink } from "@/lib/app-url";
+
 const BRAND_RED = "#ef2b2d";
 const BRAND_RED_DARK = "#b91c1c";
 const TEXT_DARK = "#1e293b";
@@ -6,7 +8,7 @@ const BORDER = "#e2e8f0";
 const BG = "#f1f5f9";
 
 export const EMAIL_LOGO_URL =
-  "https://res.cloudinary.com/mcymctsr/image/upload/v1783505369/onepws-6s-auditpro/branding/onepws-logo-email.png";
+  process.env.EMAIL_LOGO_URL || getAppLink("/onepws-dark-logo-scaled.png");
 
 /**
  * Wraps template body content in a shared, table-based HTML shell for

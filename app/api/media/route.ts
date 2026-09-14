@@ -163,46 +163,36 @@ export async function DELETE(request: Request) {
 
     await connectDB();
 
-    // 1. Remove references in findings beforePhotos
-    const findingBefore = await Finding.findOne({ "beforePhotos.publicId": publicId });
-    if (findingBefore) {
-      findingBefore.beforePhotos = findingBefore.beforePhotos.filter((p: any) => p.publicId !== publicId) as any;
-      findingBefore.timeline.push({
-        action: "Evidence photo deleted",
-        note: `Deleted photo with public ID: ${publicId}`,
-        by: user.id,
-        byName: user.name,
-        at: new Date()
-      });
-      await findingBefore.save();
-    }
+    // The same Cloudinary asset is routinely referenced by more than one record:
+    // the audit checklist row it was captured on and the finding raised from that
+    // row both point at it, and the GET above de-duplicates exactly that overlap.
+    // Clearing only the first match left every other record holding the URL of an
+    // asset that had just been destroyed, so every reference is pulled before the
+    // asset itself goes.
+    const [beforeRefs, afterRefs] = await Promise.all([
+      Finding.find({ "beforePhotos.publicId": publicId }).select("_id").lean(),
+      Finding.find({ "afterPhotos.publicId": publicId }).select("_id").lean()
+    ]);
 
-    // 2. Remove references in findings afterPhotos
-    const findingAfter = await Finding.findOne({ "afterPhotos.publicId": publicId });
-    if (findingAfter) {
-      findingAfter.afterPhotos = findingAfter.afterPhotos.filter((p: any) => p.publicId !== publicId) as any;
-      findingAfter.timeline.push({
-        action: "CAPA photo deleted",
-        note: `Deleted CAPA photo with public ID: ${publicId}`,
-        by: user.id,
-        byName: user.name,
-        at: new Date()
-      });
-      await findingAfter.save();
-    }
+    await Promise.all([
+      beforeRefs.length
+        ? Finding.updateMany({ _id: { $in: beforeRefs.map((finding) => finding._id) } }, {
+            $pull: { beforePhotos: { publicId } },
+            $push: { timeline: { action: "Evidence photo deleted", note: `Deleted photo with public ID: ${publicId}`, by: user.id, byName: user.name, at: new Date() } }
+          })
+        : Promise.resolve(),
+      afterRefs.length
+        ? Finding.updateMany({ _id: { $in: afterRefs.map((finding) => finding._id) } }, {
+            $pull: { afterPhotos: { publicId } },
+            $push: { timeline: { action: "CAPA photo deleted", note: `Deleted CAPA photo with public ID: ${publicId}`, by: user.id, byName: user.name, at: new Date() } }
+          })
+        : Promise.resolve(),
+      Audit.updateMany({ "checklist.beforePhotos.publicId": publicId }, {
+        $pull: { "checklist.$[].beforePhotos": { publicId } }
+      })
+    ]);
 
-    // 3. Remove references in audits checklist beforePhotos
-    const auditWithPhoto = await Audit.findOne({ "checklist.beforePhotos.publicId": publicId });
-    if (auditWithPhoto) {
-      for (const item of auditWithPhoto.checklist) {
-        if (item.beforePhotos) {
-          item.beforePhotos = item.beforePhotos.filter((p: any) => p.publicId !== publicId) as any;
-        }
-      }
-      await auditWithPhoto.save();
-    }
-
-    // 4. Delete the photo from Cloudinary
+    // Only now that nothing references it is the asset itself destroyed.
     const deleted = await deleteImage(publicId);
 
     return ok({ 

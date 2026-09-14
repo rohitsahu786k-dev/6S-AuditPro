@@ -1,6 +1,6 @@
 import { requireUser } from "@/lib/auth";
 import { userCreateSchema } from "@/lib/validators";
-import { createUser, listUsers } from "@/services/user.service";
+import { assertCanManageUser, createUser, listUsers } from "@/services/user.service";
 import { fail, ok, parseJson } from "@/utils/api";
 
 export async function GET() {
@@ -14,8 +14,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    await requireUser("users:create");
+    const actor = await requireUser("users:create");
     const input = await parseJson(request, userCreateSchema);
+    await assertCanManageUser(actor, undefined, input.role);
     const user = await createUser(input);
     return ok(user, { status: 201 });
   } catch (error) {

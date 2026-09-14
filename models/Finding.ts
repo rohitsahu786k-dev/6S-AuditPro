@@ -41,7 +41,7 @@ const FindingSchema = new Schema({
   status: { type: String, enum: ["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"], default: "OPEN", index: true },
   overdueNotifiedAt: { type: Date },
   createdBy: { type: Schema.Types.ObjectId, ref: "User" }
-}, { timestamps: true });
+}, { timestamps: true, optimisticConcurrency: true });
 
 FindingSchema.index({ department: 1, status: 1 });
 FindingSchema.index({ dueDate: 1, status: 1 });

@@ -16,12 +16,13 @@ function countBy(items, field) {
 
 async function main() {
   if (!process.env.MONGODB_URI) throw new Error("MONGODB_URI is not configured");
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(process.env.MONGODB_URI, { maxPoolSize: 2, serverSelectionTimeoutMS: 10000, socketTimeoutMS: 30000, autoIndex: false });
+  mongoose.set("maxTimeMS", 15000);
   const db = mongoose.connection.db;
 
   const [audits, findings, departments, zones, people, questions, users] = await Promise.all([
-    db.collection("audits").find({}).toArray(),
-    db.collection("findings").find({}).toArray(),
+    db.collection("audits").find({}, { projection: { "checklist.beforePhotos.secureUrl": 0 }, maxTimeMS: 15000 }).toArray(),
+    db.collection("findings").find({}, { projection: { "beforePhotos.secureUrl": 0, "afterPhotos.secureUrl": 0, timeline: 0 }, maxTimeMS: 15000 }).toArray(),
     db.collection("departments").find({}).toArray(),
     db.collection("zones").find({}).toArray(),
     db.collection("people").find({}).toArray(),

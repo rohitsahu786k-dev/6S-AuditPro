@@ -1,13 +1,14 @@
 import { requireUser } from "@/lib/auth";
 import { passwordChangeSchema } from "@/lib/validators";
-import { updateUser } from "@/services/user.service";
+import { assertCanManageUser, updateUser } from "@/services/user.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 import { fail, ok, parseJson } from "@/utils/api";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await requireUser("users:update");
+    const actor = await requireUser("users:update");
     const { id } = await context.params;
+    await assertCanManageUser(actor, id);
     const input = await parseJson(request, passwordChangeSchema);
     const updated = await updateUser(id, { password: input.newPassword });
 

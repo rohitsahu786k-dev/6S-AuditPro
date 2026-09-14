@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut } from "next-auth/react";
 import { apiPost } from "@/hooks/useApi";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
     setLoading(true);
     try {
       await apiPost("/api/auth/change-password", { currentPassword, newPassword });
+      await signOut({ callbackUrl: "/login" });
       setSuccess(true);
       setCurrentPassword("");
       setNewPassword("");

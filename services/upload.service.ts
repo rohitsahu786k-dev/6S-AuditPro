@@ -21,7 +21,7 @@ function imageTypeFor(file: File) {
 export async function uploadImage(file: File, folderSuffix = "audit-photos", uploader?: { id: string; name: string }) {
   const imageType = imageTypeFor(file);
   if (!ALLOWED_IMAGE_TYPES.includes(imageType)) throw Object.assign(new Error("Unsupported image type. Please upload JPG, PNG, WebP, GIF, BMP, HEIC, or HEIF."), { status: 400 });
-  if (file.size > MAX_UPLOAD_BYTES) throw Object.assign(new Error("File is larger than 5 MB"), { status: 400 });
+  if (file.size > MAX_UPLOAD_BYTES) throw Object.assign(new Error(`File is larger than ${Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB`), { status: 400 });
   if (!SAFE_FOLDER_SUFFIX.test(folderSuffix)) throw Object.assign(new Error("Invalid folderSuffix"), { status: 400 });
 
   const arrayBuffer = await file.arrayBuffer();

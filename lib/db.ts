@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { positiveInteger } from "@/lib/runtime-config";
 
 type MongooseCache = {
   conn: typeof mongoose | null;
@@ -16,9 +17,14 @@ export async function connectDB() {
   if (!uri) throw new Error("MONGODB_URI is not configured");
 
   if (!cache.promise) {
+    mongoose.set("maxTimeMS", positiveInteger("MONGODB_QUERY_TIMEOUT_MS", 15_000));
     cache.promise = mongoose.connect(uri, {
       bufferCommands: false,
-      maxPoolSize: 10,
+      maxPoolSize: positiveInteger("MONGODB_MAX_POOL_SIZE", 5, 100),
+      minPoolSize: 0,
+      maxIdleTimeMS: 60_000,
+      waitQueueTimeoutMS: 10_000,
+      socketTimeoutMS: 30_000,
       serverSelectionTimeoutMS: 10_000
     });
   }

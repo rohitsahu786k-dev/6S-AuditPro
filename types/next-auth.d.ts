@@ -10,6 +10,7 @@ declare module "next-auth" {
       department?: string;
       zone?: string;
       permissions: Permission[];
+      signedInAt?: number;
     } & DefaultSession["user"];
   }
 
@@ -24,6 +25,7 @@ declare module "next-auth" {
 declare module "@auth/core/jwt" {
   interface JWT {
     id: string;
+    signedInAt?: number;
     username: string;
     role: Role;
     department?: string;

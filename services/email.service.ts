@@ -29,9 +29,9 @@ export async function sendTemplatedEmail(input: {
     logoUrl: EMAIL_LOGO_URL,
     ...input.data
   };
-  const subject = renderTemplate(template.subject, data).rendered;
+  const subject = renderTemplate(template.subject, data, "text").rendered;
   const html = renderTemplate(template.htmlBody, data).rendered;
-  const text = renderTemplate(template.textBody, data).rendered;
+  const text = renderTemplate(template.textBody, data, "text").rendered;
 
   try {
     const transporter = createTransporter();
@@ -58,7 +58,7 @@ export async function sendTemplatedEmail(input: {
       relatedAuditId: input.relatedAuditId,
       relatedFindingId: input.relatedFindingId,
       sentBySystem: true,
-      payload: input
+      payload: input.triggerEvent === "PASSWORD_RESET_REQUESTED" ? undefined : input
     });
   }
 }

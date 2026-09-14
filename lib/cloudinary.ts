@@ -1,4 +1,5 @@
 import { v2 as cloudinary } from "cloudinary";
+import { maxUploadBytes } from "@/lib/runtime-config";
 
 export function configureCloudinary() {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
@@ -10,4 +11,4 @@ export function configureCloudinary() {
 }
 
 export const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/bmp", "image/heic", "image/heif"];
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = maxUploadBytes();

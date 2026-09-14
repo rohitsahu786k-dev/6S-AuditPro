@@ -13,6 +13,7 @@ export async function POST(request: Request) {
 
     const log = await EmailLog.findById(input.logId).lean();
     if (!log) throw Object.assign(new Error("Email log not found"), { status: 404 });
+    if (log.triggerEvent === "PASSWORD_RESET_REQUESTED") throw Object.assign(new Error("Request a new password reset link instead"), { status: 400 });
     if (log.status !== "failed") throw Object.assign(new Error("Only failed sends can be retried"), { status: 400 });
     if (!log.payload) throw Object.assign(new Error("Original send payload was not captured; cannot retry"), { status: 400 });
 

@@ -1,5 +1,6 @@
 import EmailLog from "@/models/EmailLog";
 import { connectDB } from "@/lib/db";
+import { positiveInteger } from "@/lib/runtime-config";
 
 export async function logEmail(input: Record<string, unknown>) {
   await connectDB();
@@ -8,5 +9,5 @@ export async function logEmail(input: Record<string, unknown>) {
 
 export async function listEmailLogs() {
   await connectDB();
-  return EmailLog.find().sort({ createdAt: -1 }).limit(300).lean();
+  return EmailLog.find().select("-payload").sort({ createdAt: -1 }).limit(positiveInteger("EMAIL_LOG_PAGE_SIZE", 300, 5000)).lean();
 }

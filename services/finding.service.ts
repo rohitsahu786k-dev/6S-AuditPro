@@ -2,11 +2,11 @@ import Finding from "@/models/Finding";
 import Audit from "@/models/Audit";
 import Department from "@/models/Department";
 import { connectDB } from "@/lib/db";
-import { addWorkingDays, defaultSeverity } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 import { canonicalDepartmentName } from "@/lib/org-utils";
+import { canActOnDepartment } from "@/lib/roles";
 
 export type FindingListView = "full" | "summary" | "register" | "media-selector";
 
@@ -32,23 +32,6 @@ type FindingDateRange = {
   fromDate?: Date;
   toDate?: Date;
 };
-
-type AuditChecklistItem = {
-  questionId?: unknown;
-  category?: string;
-  question?: string;
-  response?: string;
-  observation?: string;
-  severity?: "Critical" | "High" | "Medium" | "Low";
-  actionOwnerName?: string;
-  actionOwnerDepartment?: string;
-  beforePhotos?: unknown[];
-};
-
-let lastOverdueRefreshAt = 0;
-let lastFindingReconcileAt = 0;
-const OVERDUE_REFRESH_INTERVAL_MS = 60_000;
-const FINDING_RECONCILE_INTERVAL_MS = 5 * 60_000;
 
 function scopedQuery(user: SessionUser, dateRange?: FindingDateRange) {
   const query: Record<string, unknown> = {};
@@ -79,201 +62,24 @@ function closureDateOf(finding: any) {
   return closure?.at;
 }
 
-function normalizedText(value: unknown) {
-  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
-}
 
-function sameText(left: unknown, right: unknown) {
-  return normalizedText(left) === normalizedText(right);
-}
-
-/**
- * A checklist row and a finding are the same non-conformity when either their
- * question ids or their question text line up.
- *
- * The id check alone is not enough: findings raised by older builds stored a
- * generated id (e.g. "bwojd0c83") while the audit checklist kept the master
- * question id (e.g. "q1"). Treating a mismatch as "no finding exists" made the
- * reconciler raise a second copy of every historical finding on each run, so the
- * text comparison has to stay as a fallback rather than an alternative branch.
- */
-function isSameChecklistFinding(item: AuditChecklistItem, finding: any) {
-  if (item.questionId && finding.questionId && String(item.questionId) === String(finding.questionId)) return true;
-  return sameText(item.category, finding.category) && sameText(item.question, finding.question);
-}
-
-function nextFindingNumber(auditNumber: string, usedNumbers: Set<string>) {
-  let sequence = 1;
-  while (usedNumbers.has(`${auditNumber}-F${String(sequence).padStart(2, "0")}`)) sequence += 1;
-  const findingNumber = `${auditNumber}-F${String(sequence).padStart(2, "0")}`;
-  usedNumbers.add(findingNumber);
-  return findingNumber;
-}
-
-/**
- * Historical/imported audits can contain valid "Not Adequate" checklist rows
- * without a matching Finding document. Reconcile those rows so Audit History,
- * Findings and dashboard reports all use the same source data.
- *
- * This is intentionally throttled and idempotent. It does not send assignment
- * emails for restored historical rows, avoiding duplicate notifications.
- */
-async function reconcileMissingAuditFindings() {
-  const now = Date.now();
-  if (now - lastFindingReconcileAt < FINDING_RECONCILE_INTERVAL_MS) return;
-  lastFindingReconcileAt = now;
-
-  // checklist.beforePhotos is excluded here on purpose. Legacy photos are stored as
-  // base64 data URIs, so selecting them pulls ~16 MB across every audit. Restoring a
-  // finding is rare, so the photos for one audit are fetched only when it is needed.
-  const audits = await Audit.find({ status: "COMPLETED" })
-    .select([
-      "_id auditNumber zone department auditorName date startDate findingIds createdBy",
-      "auditType",
-      "checklist.questionId checklist.category checklist.question checklist.response",
-      "checklist.observation checklist.severity checklist.actionOwnerName checklist.actionOwnerDepartment"
-    ].join(" "))
-    .lean();
-  if (audits.length === 0) return;
-
-  const allExisting = await Finding.find({
-    $or: [
-      { auditId: { $in: audits.map((audit) => audit._id) } },
-      { auditNumber: { $in: audits.map((audit) => audit.auditNumber) } }
-    ]
-  }).select("_id findingNumber auditId auditNumber questionId category question").lean();
-
-  const existingByAudit = new Map<string, any[]>();
-  for (const finding of allExisting) {
-    for (const key of [String(finding.auditId || ""), String(finding.auditNumber || "")]) {
-      if (!key) continue;
-      const bucket = existingByAudit.get(key);
-      if (bucket) bucket.push(finding);
-      else existingByAudit.set(key, [finding]);
-    }
-  }
-
-  for (const audit of audits) {
-    const checklist = (audit.checklist || []) as AuditChecklistItem[];
-    const nonConformities = checklist.filter((item) => item.response === "Not Adequate");
-    if (nonConformities.length === 0) continue;
-
-    const existing = [
-      ...new Map(
-        [
-          ...(existingByAudit.get(String(audit._id)) || []),
-          ...(existingByAudit.get(String(audit.auditNumber)) || [])
-        ].map((finding) => [String(finding._id), finding])
-      ).values()
-    ];
-
-    const missing = nonConformities.filter(
-      (item) => !existing.some((finding) => isSameChecklistFinding(item, finding))
-    );
-    if (missing.length > 0) {
-      const withPhotos = await Audit.findById(audit._id).select("checklist.questionId checklist.beforePhotos").lean();
-      const photosByQuestion = new Map(
-        ((withPhotos?.checklist || []) as AuditChecklistItem[])
-          .map((item) => [String(item.questionId), item.beforePhotos || []])
-      );
-      for (const item of missing) {
-        item.beforePhotos = photosByQuestion.get(String(item.questionId)) || [];
-      }
-    }
-
-    const usedNumbers = new Set(existing.map((finding) => finding.findingNumber).filter(Boolean));
-    const linkedIds = new Set(existing.map((finding) => String(finding._id)));
-    let restored = 0;
-
-    for (const item of nonConformities) {
-      if (existing.some((finding) => isSameChecklistFinding(item, finding))) continue;
-
-      const ownerDepartment = item.actionOwnerDepartment || audit.department;
-      const ownerName = item.actionOwnerName || ownerDepartment;
-      const auditDate = new Date((audit.startDate || audit.date || new Date()) as Date);
-
-      try {
-        // createdAt is written explicitly (timestamps disabled for this save) so a
-        // restored finding is dated by its audit rather than by the moment the
-        // reconciler happened to run. Monthly reporting and the findings date
-        // filter both read createdAt, and "raised today" would be wrong here.
-        const finding = new Finding({
-          findingNumber: nextFindingNumber(audit.auditNumber, usedNumbers),
-          auditId: audit._id,
-          auditNumber: audit.auditNumber,
-          auditType: (audit as any).auditType || "STANDARD",
-          zone: audit.zone,
-          department: ownerDepartment,
-          questionId: item.questionId,
-          category: item.category || "",
-          question: item.question || "Audit finding",
-          severity: item.severity || defaultSeverity("Not Adequate", item.category || ""),
-          observation: item.observation || "",
-          beforePhotos: item.beforePhotos || [],
-          assignedTo: ownerName,
-          dueDate: addWorkingDays(auditDate, 7),
-          status: "OPEN",
-          createdBy: audit.createdBy,
-          timeline: [{
-            action: "Finding restored from audit checklist",
-            note: "Restored automatically because the historical audit finding record was missing.",
-            by: audit.createdBy,
-            byName: audit.auditorName || "System",
-            at: auditDate
-          }],
-          createdAt: auditDate,
-          updatedAt: auditDate
-        });
-        await finding.save({ timestamps: false });
-        linkedIds.add(String(finding._id));
-        existing.push(finding.toObject() as any);
-        restored += 1;
-      } catch (error: any) {
-        // Concurrent requests can race on the unique finding number. Another
-        // request may have already restored it, which is safe to ignore.
-        if (error?.code !== 11000) {
-          console.error(`Unable to restore finding for audit ${audit.auditNumber}:`, error);
-        }
-      }
-    }
-
-    if (restored > 0 || linkedIds.size !== (audit.findingIds || []).length) {
-      const allLinked = await Finding.find({
-        $or: [{ auditId: audit._id }, { auditNumber: audit.auditNumber }]
-      }).select("_id").lean();
-      await Audit.updateOne(
-        { _id: audit._id },
-        { $set: { findingIds: allLinked.map((finding) => finding._id) } }
-      );
-    }
-  }
-}
-
-async function refreshOverdueStatuses() {
-  const now = Date.now();
-  if (now - lastOverdueRefreshAt < OVERDUE_REFRESH_INTERVAL_MS) return;
-  lastOverdueRefreshAt = now;
-  await Finding.updateMany(
-    { status: { $in: ["OPEN", "IN_PROGRESS", "REJECTED", "REOPENED"] }, dueDate: { $lt: new Date() } },
-    { $set: { status: "OVERDUE" } }
-  );
-}
 
 export async function listFindings(user: SessionUser, view: FindingListView = "full", dateRange?: FindingDateRange) {
   await connectDB();
-  if (user.role !== "SPOC") await reconcileMissingAuditFindings();
-  await refreshOverdueStatuses();
   const projection = FINDING_PROJECTIONS[view] ?? FINDING_PROJECTIONS.full;
   const request = Finding.find(scopedQuery(user, dateRange)).sort({ createdAt: -1 });
   if (projection) request.select(projection);
   // The audit date is not stored on the finding, so it is joined from the parent
   // audit. Only the date columns are read, which keeps this to one small query
   // regardless of how many findings the list returns.
-  const [findings, departments, audits] = await Promise.all([
+  const [findings, departments] = await Promise.all([
     request.lean(),
-    Department.find().select("name").lean(),
-    Audit.find().select("auditNumber date startDate").lean()
+    Department.find().select("name").lean()
   ]);
+  const audits = await Audit.find({ $or: [
+    { _id: { $in: findings.map((finding) => finding.auditId).filter(Boolean) } },
+    { auditNumber: { $in: [...new Set(findings.map((finding) => finding.auditNumber).filter(Boolean))] } }
+  ] }).select("auditNumber date startDate").lean();
   const configuredDepartments = departments.map((department) => department.name).filter(Boolean);
   const auditDates = new Map<string, Date | undefined>();
   for (const audit of audits) {
@@ -299,6 +105,9 @@ export async function listFindings(user: SessionUser, view: FindingListView = "f
   }
 
   const rows = findings.map((finding) => {
+    if (["OPEN", "IN_PROGRESS", "REJECTED", "REOPENED"].includes(finding.status) && finding.dueDate && finding.dueDate.getTime() < Date.now()) {
+      finding.status = "OVERDUE";
+    }
     const department = canonicalDepartmentName(finding.department, configuredDepartments);
     const auditDate = auditDateOf(finding);
     if (view !== "summary") return { ...finding, department, auditDate };
@@ -371,6 +180,14 @@ export async function submitCapa(id: string, input: { capaAction: string; closur
   await connectDB();
   const finding = await Finding.findOne({ _id: id, ...scopedQuery(user) });
   if (!finding) throw Object.assign(new Error("Finding not found"), { status: 404 });
+  // Management can see every department's findings but may only close its own, so
+  // the ownership check lives here rather than in the list query.
+  if (!canActOnDepartment(user, finding.department)) {
+    throw Object.assign(new Error("You can only submit a CAPA for your own department."), { status: 403 });
+  }
+  if (["CLOSED", "SUBMITTED"].includes(finding.status)) {
+    throw Object.assign(new Error("This finding cannot accept another CAPA submission"), { status: 409 });
+  }
   finding.capaAction = input.capaAction;
   finding.closureRemarks = input.closureRemarks;
   finding.set("afterPhotos", input.afterPhotos || []);
@@ -410,6 +227,9 @@ export async function reviewCapa(id: string, input: { decision: "approve" | "rej
   await connectDB();
   const finding = await Finding.findById(id);
   if (!finding) throw Object.assign(new Error("Finding not found"), { status: 404 });
+  if (input.decision === "reopen" ? finding.status !== "CLOSED" : finding.status !== "SUBMITTED") {
+    throw Object.assign(new Error("The finding is no longer in a reviewable state. Refresh and try again."), { status: 409 });
+  }
   
   let triggerEvent = "CAPA_APPROVED";
   

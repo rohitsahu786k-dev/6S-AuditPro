@@ -96,6 +96,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const user = await requireUser("findings:update");
     const { id } = await context.params;
     const input = await parseJson(request, findingUpdateSchema);
+    if (user.role === "SPOC" && Object.keys(input).some((key) => !["afterPhotos"].includes(key))) {
+      throw Object.assign(new Error("Use the CAPA workflow to update this finding"), { status: 403 });
+    }
+    if (input.status && ["CLOSED", "SUBMITTED", "REJECTED", "REOPENED"].includes(input.status)) {
+      throw Object.assign(new Error("Use the CAPA submission or review workflow to change this status"), { status: 400 });
+    }
     await connectDB();
     const finding = await Finding.findOne({
       _id: id,

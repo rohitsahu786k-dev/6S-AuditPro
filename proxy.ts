@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 import { ROLE_ROUTES } from "@/lib/roles";
+import { getAppUrl } from "@/lib/app-url";
 
 const { auth } = NextAuth(authConfig);
 
@@ -21,7 +22,13 @@ function redirectTo(request: NextRequest, pathname: string, next?: string) {
 
 export const proxy = auth((request) => {
   const { pathname } = request.nextUrl;
-  if (pathname.startsWith("/api/auth") || pathname.startsWith("/api/cron") || pathname.startsWith("/_next") || pathname.includes(".")) {
+  if (pathname.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const origin = request.headers.get("origin");
+    if (request.headers.get("sec-fetch-site") === "cross-site" || (origin && ![request.nextUrl.origin, getAppUrl()].includes(origin))) {
+      return NextResponse.json({ ok: false, error: "Forbidden origin" }, { status: 403 });
+    }
+  }
+  if (pathname.startsWith("/api/auth/") || pathname.startsWith("/api/cron/") || pathname === "/api/health" || pathname.startsWith("/_next")) {
     return NextResponse.next();
   }
   if (PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
@@ -30,6 +37,7 @@ export const proxy = auth((request) => {
 
   const user = request.auth?.user;
   if (!user) {
+    if (pathname.startsWith("/api/")) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     return redirectTo(request, "/login", pathname);
   }
 

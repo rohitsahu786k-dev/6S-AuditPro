@@ -1,6 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 import { getAppUrl } from "@/lib/app-url";
 import { permissionsForRole } from "@/lib/roles";
+import { sessionMaxAgeSeconds } from "@/lib/runtime-config";
 import type { Role } from "@/types/domain";
 
 // Auth.js otherwise derives absolute redirects from the incoming proxy host,
@@ -10,7 +11,7 @@ process.env.AUTH_URL ||= getAppUrl();
 export const authConfig: NextAuthConfig = {
   trustHost: true,
   pages: { signIn: "/login" },
-  session: { strategy: "jwt", maxAge: 7 * 24 * 60 * 60 },
+  session: { strategy: "jwt", maxAge: sessionMaxAgeSeconds() },
   providers: [],
   callbacks: {
     async jwt({ token, user }) {
@@ -20,6 +21,7 @@ export const authConfig: NextAuthConfig = {
         token.role = user.role;
         token.department = user.department;
         token.zone = user.zone;
+        token.signedInAt = Date.now();
       }
       return token;
     },
@@ -29,6 +31,7 @@ export const authConfig: NextAuthConfig = {
       session.user.role = token.role;
       session.user.department = token.department;
       session.user.zone = token.zone;
+      session.user.signedInAt = token.signedInAt;
       session.user.permissions = permissionsForRole(token.role as Role);
       return session;
     }

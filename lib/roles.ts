@@ -28,7 +28,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     "capa:review", "analytics:read", "reports:export", "masters:read"
   ],
   SPOC: ["audits:read", "findings:read", "findings:update", "capa:submit", "analytics:read", "reports:export"],
-  MANAGEMENT: ["audits:read", "findings:read", "analytics:read", "reports:export"]
+  MANAGEMENT: ["audits:read", "findings:read", "capa:submit", "analytics:read", "reports:export"]
 };
 
 export const ROLE_ROUTES: Record<Role, string[]> = {
@@ -39,10 +39,37 @@ export const ROLE_ROUTES: Record<Role, string[]> = {
   MANAGEMENT: ["/dashboard", "/audit-history", "/findings", "/register", "/analytics", "/media"]
 };
 
+/**
+ * Roles whose write actions are confined to their own department. Everything else
+ * acts across the organisation. Reading is deliberately not restricted here:
+ * Management oversees every department but may only close its own.
+ */
+const DEPARTMENT_SCOPED_ROLES: Role[] = ["SPOC", "MANAGEMENT"];
+
+function normalizeDepartment(value?: string | null) {
+  return String(value || "").trim().toLowerCase();
+}
+
+/**
+ * Whether this user may act on a record owned by `department`.
+ *
+ * Both the Findings screen and the CAPA API call this. They previously each carried
+ * their own role list, and the two disagreed: the screen offered the CAPA form to
+ * anyone whose department matched, including roles the API would then reject, while
+ * the department HOD — who does own the closure — was shown a read-only panel with
+ * no way to attach the after photos. One predicate keeps the button and the
+ * endpoint in agreement.
+ */
+export function canActOnDepartment(
+  user: { role: Role; department?: string | null },
+  department?: string | null
+) {
+  if (!DEPARTMENT_SCOPED_ROLES.includes(user.role)) return true;
+  const own = normalizeDepartment(user.department);
+  return Boolean(own) && own === normalizeDepartment(department);
+}
+
 export function permissionsForRole(role: Role): Permission[] {
   return ROLE_PERMISSIONS[role] || [];
 }
 
-export function hasPermission(role: Role, permission: Permission): boolean {
-  return permissionsForRole(role).includes(permission);
-}

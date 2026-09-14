@@ -6,6 +6,9 @@ import { connectDB } from "@/lib/db";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 import { findingCreateSchema } from "@/lib/validators";
+import { nextSequence } from "@/lib/sequence";
+import { addWorkingDays } from "@/lib/audit-scoring";
+import { findingDueWorkingDays } from "@/lib/runtime-config";
 
 const FINDING_VIEWS = new Set<FindingListView>(["full", "summary", "register", "media-selector"]);
 
@@ -45,8 +48,7 @@ export async function POST(request: Request) {
     const body = await parseJson(request, findingCreateSchema);
     await connectDB();
 
-    const count = await Finding.countDocuments();
-    const findingNumber = `FND-${String(count + 1).padStart(5, "0")}`;
+    const findingNumber = await nextSequence("findings", "findingNumber", "FND-", 5);
 
     const newFinding = new Finding({
       findingNumber,
@@ -58,7 +60,9 @@ export async function POST(request: Request) {
       observation: body.observation || "",
       beforePhotos: body.beforePhotos || [],
       assignedTo: body.assignedTo || body.department,
-      dueDate: body.dueDate ? new Date(body.dueDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      // Working days, matching how audit-raised findings are dated. This route used
+      // calendar days, so the same "due in 7 days" rule landed on two dates.
+      dueDate: body.dueDate ? new Date(body.dueDate) : addWorkingDays(new Date(), findingDueWorkingDays()),
       status: "OPEN",
       createdBy: user.id,
       timeline: [{ 

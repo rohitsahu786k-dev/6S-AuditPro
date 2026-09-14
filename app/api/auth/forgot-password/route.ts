@@ -5,12 +5,15 @@ import { connectDB } from "@/lib/db";
 import { forgotPasswordSchema } from "@/lib/validators";
 import { sendTemplatedEmail } from "@/services/email.service";
 import { fail, ok, parseJson } from "@/utils/api";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
 
 export async function POST(request: Request) {
   try {
     const input = await parseJson(request, forgotPasswordSchema);
+    await consumeRateLimit("password-reset-email", input.email.toLowerCase(), 3, 60 * 60_000);
+    await consumeRateLimit("password-reset-global", "all", 100, 60 * 60_000);
     await connectDB();
 
     const user = await User.findOne({ email: input.email.toLowerCase(), status: "active" });

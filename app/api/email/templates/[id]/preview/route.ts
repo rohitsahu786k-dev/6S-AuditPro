@@ -35,9 +35,9 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     const template = await EmailTemplate.findById(id).lean();
     if (!template) throw Object.assign(new Error("Template not found"), { status: 404 });
     return ok({
-      subject: renderTemplate(template.subject, sample),
+      subject: renderTemplate(template.subject, sample, "text"),
       html: renderTemplate(template.htmlBody, sample),
-      text: renderTemplate(template.textBody, sample),
+      text: renderTemplate(template.textBody, sample, "text"),
       sample
     });
   } catch (error) {

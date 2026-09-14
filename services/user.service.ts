@@ -3,7 +3,18 @@ import { connectDB } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { permissionsForRole } from "@/lib/roles";
 import { sendTemplatedEmail } from "@/services/email.service";
-import type { Role } from "@/types/domain";
+import type { Role, SessionUser } from "@/types/domain";
+
+export async function assertCanManageUser(actor: SessionUser, id?: string, role?: Role) {
+  if (actor.role === "MASTER_ADMIN") return;
+  if (role === "MASTER_ADMIN") throw Object.assign(new Error("Only Master Admin can assign this role"), { status: 403 });
+  if (id) {
+    await connectDB();
+    const target = await User.findById(id).select("role").lean();
+    if (!target) throw Object.assign(new Error("User not found"), { status: 404 });
+    if (target.role === "MASTER_ADMIN") throw Object.assign(new Error("Only Master Admin can manage this account"), { status: 403 });
+  }
+}
 
 export async function listUsers() {
   await connectDB();
@@ -40,7 +51,7 @@ export async function createUser(input: {
     }
   }
 
-  return user;
+  return User.findById(user._id).lean();
 }
 
 export async function updateUser(id: string, input: Partial<{
@@ -48,6 +59,13 @@ export async function updateUser(id: string, input: Partial<{
 }>) {
   await connectDB();
   const update: Record<string, unknown> = { ...input };
+  const existing = await User.findById(id).select("role status").lean();
+  if (!existing) throw Object.assign(new Error("User not found"), { status: 404 });
+  if (existing.role === "MASTER_ADMIN" && existing.status === "active" &&
+      ((input.role && input.role !== "MASTER_ADMIN") || input.status === "inactive")) {
+    const others = await User.exists({ role: "MASTER_ADMIN", status: "active", _id: { $ne: id } });
+    if (!others) throw Object.assign(new Error("Cannot remove the last active Master Admin"), { status: 400 });
+  }
   if (input.username) update.username = input.username.toLowerCase();
   if (input.role) update.permissions = permissionsForRole(input.role);
   if (input.password) {
@@ -55,7 +73,7 @@ export async function updateUser(id: string, input: Partial<{
     update.passwordChangedAt = new Date();
     delete update.password;
   }
-  return User.findByIdAndUpdate(id, update, { new: true });
+  return User.findByIdAndUpdate(id, update, { new: true, runValidators: true });
 }
 
 export async function deactivateUser(id: string) {

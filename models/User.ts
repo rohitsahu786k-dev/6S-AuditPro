@@ -3,7 +3,7 @@ import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
 const UserSchema = new Schema({
   name: { type: String, required: true, trim: true },
   username: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
-  email: { type: String, trim: true, lowercase: true },
+  email: { type: String, trim: true, lowercase: true, index: true },
   passwordHash: { type: String, required: true, select: false },
   role: { type: String, required: true, enum: ["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"], index: true },
   department: { type: String, trim: true },
@@ -13,7 +13,7 @@ const UserSchema = new Schema({
   forcePasswordChange: { type: Boolean, default: false },
   passwordChangedAt: { type: Date },
   lastLoginAt: { type: Date },
-  passwordResetTokenHash: { type: String, select: false },
+  passwordResetTokenHash: { type: String, select: false, index: true },
   passwordResetExpires: { type: Date, select: false }
 }, { timestamps: true });
 

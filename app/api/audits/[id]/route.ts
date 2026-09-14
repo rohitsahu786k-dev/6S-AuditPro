@@ -98,11 +98,19 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
     const audit = await Audit.findById(id);
     if (!audit) throw Object.assign(new Error("Audit not found"), { status: 404 });
     
-    // Remove all associated findings
-    if (audit.findingIds && audit.findingIds.length > 0) {
-      await Finding.deleteMany({ _id: { $in: audit.findingIds } });
-    }
-    
+    // findingIds is a denormalised cache and drifts: findings raised after the list
+    // was last written, or whose id was pulled from it, keep a live auditId while
+    // dropping out of the array. Deleting by the array alone left those rows behind
+    // pointing at an audit that no longer exists, where they still counted towards
+    // department scores. Match on the back-references instead.
+    await Finding.deleteMany({
+      $or: [
+        { _id: { $in: audit.findingIds || [] } },
+        { auditId: audit._id },
+        ...(audit.auditNumber ? [{ auditNumber: audit.auditNumber }] : [])
+      ]
+    });
+
     await Audit.deleteOne({ _id: id });
     return ok({ success: true, message: `Audit ${audit.auditNumber} and all related findings deleted successfully.` });
   } catch (error) {

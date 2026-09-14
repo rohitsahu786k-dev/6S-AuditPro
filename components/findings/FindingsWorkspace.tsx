@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { processImageToWebP } from "@/utils/media";
 import { SEVERITY_BADGE_STYLES, STATUS_BADGE_STYLES, badgeStyleToVars } from "@/lib/status-styles";
+import { canActOnDepartment } from "@/lib/roles";
+import type { SessionUser } from "@/types/domain";
 
 type Finding = {
   _id: string;
@@ -58,15 +60,6 @@ type Finding = {
 };
 
 type UploadedPhoto = { secureUrl: string; publicId: string; sizeBytes?: number; uploadedBy?: string; uploadedByName?: string };
-
-type SessionUser = {
-  id: string;
-  name: string;
-  username: string;
-  email?: string;
-  role: "MASTER_ADMIN" | "ADMIN" | "AUDITOR" | "SPOC" | "MANAGEMENT";
-  department?: string;
-};
 
 type Masters = {
   departments: Array<{ _id: string; name: string; isActive?: boolean }>;
@@ -279,13 +272,14 @@ export function FindingsWorkspace() {
     setPage((current) => Math.min(current, pageCount));
   }, [pageCount]);
 
-  // Check roles permissions
+  // Mirrors the CAPA endpoint exactly: the same permission it checks, and the same
+  // department predicate. The old version listed roles by hand and drifted from the
+  // permission table, so the department HOD — who does own the closure — got a
+  // read-only panel with nowhere to attach the after photos.
   const canSubmitCapa = useMemo(() => {
-    if (!user) return false;
-    if (user.role === "MASTER_ADMIN" || user.role === "ADMIN") return true;
-    // SPOC (and any department-scoped role) may act when their department matches the finding's
-    if (user.department && selectedFinding?.department === user.department) return true;
-    return false;
+    if (!user || !selectedFinding) return false;
+    if (!user.permissions?.includes("capa:submit")) return false;
+    return canActOnDepartment(user, selectedFinding.department);
   }, [user, selectedFinding]);
 
   const canReviewCapa = useMemo(() => {
@@ -624,6 +618,7 @@ export function FindingsWorkspace() {
           <select className="w-full rounded-lg border border-bd px-3 py-2.5 text-sm focus:border-brand focus:outline-none focus:ring-[3px] focus:ring-brand/12" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="ALL">All Statuses</option>
             <option value="OPEN">OPEN</option>
+            <option value="IN_PROGRESS">IN PROGRESS</option>
             <option value="SUBMITTED">SUBMITTED</option>
             <option value="CLOSED">CLOSED</option>
             <option value="REJECTED">REJECTED</option>
@@ -993,7 +988,7 @@ export function FindingsWorkspace() {
                 )}
 
                 {/* 2. REJECTED / REOPENED CAPA SUBMIT FORM */}
-                {(selectedFinding.status === "OPEN" || selectedFinding.status === "REJECTED" || selectedFinding.status === "REOPENED" || selectedFinding.status === "OVERDUE") && (
+                {(selectedFinding.status === "OPEN" || selectedFinding.status === "IN_PROGRESS" || selectedFinding.status === "REJECTED" || selectedFinding.status === "REOPENED" || selectedFinding.status === "OVERDUE") && (
                   <div>
                     {canSubmitCapa ? (
                       <div className="grid gap-3.5">
@@ -1102,7 +1097,9 @@ export function FindingsWorkspace() {
                       </div>
                     ) : (
                       <div className="rounded-md bg-bg3 p-3 text-[13px] text-t2">
-                        Waiting for CAPA submission from the department SPOC (<strong>{selectedFinding.department}</strong>).
+                        {user?.permissions?.includes("capa:submit")
+                          ? <>This finding belongs to <strong>{selectedFinding.department}</strong>. Its SPOC or HOD submits the CAPA and the closure photos.</>
+                          : <>Waiting for CAPA submission from the <strong>{selectedFinding.department}</strong> SPOC or HOD.</>}
                       </div>
                     )}
                   </div>

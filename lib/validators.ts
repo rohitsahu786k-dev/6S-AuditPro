@@ -2,13 +2,34 @@ import { z } from "zod";
 
 export const roleSchema = z.enum(["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"]);
 export const emailSchema = z.string().email().optional().or(z.literal(""));
+const newPasswordSchema = z.string().min(8).max(72).refine((value) => new TextEncoder().encode(value).length <= 72, "Password must be at most 72 bytes");
+
+/**
+ * Photo references come back from our own upload route, but they are re-submitted
+ * by the client when a finding or checklist row is saved, so the URL has to be
+ * re-checked here. These values are rendered into notification emails and exported
+ * PDFs: an arbitrary URL would let a caller plant a tracking pixel that fires when
+ * a manager opens the mail, or swap the evidence image after it was approved.
+ * MEDIA_URL_HOSTS overrides the default for self-hosted or proxied media.
+ */
+const mediaHosts = () => (process.env.MEDIA_URL_HOSTS || "res.cloudinary.com")
+  .split(",").map((host) => host.trim().toLowerCase()).filter(Boolean);
+
+export const mediaUrlSchema = z.string().url().max(2048).refine((value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && mediaHosts().includes(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}, "Photo URL must be an https URL on an approved media host");
 
 export const photoSchema = z.object({
-  secureUrl: z.string().url(),
-  publicId: z.string(),
+  secureUrl: mediaUrlSchema,
+  publicId: z.string().trim().max(300),
   sizeBytes: z.number().optional(),
-  uploadedBy: z.string().optional(),
-  uploadedByName: z.string().optional()
+  uploadedBy: z.string().trim().max(64).optional(),
+  uploadedByName: z.string().trim().max(120).optional()
 });
 
 export const loginSchema = z.object({
@@ -20,7 +41,7 @@ export const userCreateSchema = z.object({
   name: z.string().trim().min(2).max(120),
   username: z.string().trim().min(3).max(80).toLowerCase(),
   email: emailSchema,
-  password: z.string().min(8).max(200),
+  password: newPasswordSchema,
   role: roleSchema,
   department: z.string().trim().optional(),
   zone: z.string().trim().optional(),
@@ -28,19 +49,19 @@ export const userCreateSchema = z.object({
 });
 
 export const userUpdateSchema = userCreateSchema.omit({ password: true }).partial().extend({
-  password: z.string().min(8).max(200).optional()
+  password: newPasswordSchema.optional()
 });
 
 export const passwordChangeSchema = z.object({
   currentPassword: z.string().min(1).optional(),
-  newPassword: z.string().min(8).max(200)
+  newPassword: newPasswordSchema
 });
 
 export const signupSchema = z.object({
   name: z.string().trim().min(2).max(120),
   username: z.string().trim().min(3).max(80).toLowerCase(),
   email: z.string().trim().email(),
-  password: z.string().min(8).max(200)
+  password: newPasswordSchema
 });
 
 export const forgotPasswordSchema = z.object({
@@ -48,8 +69,8 @@ export const forgotPasswordSchema = z.object({
 });
 
 export const resetPasswordSchema = z.object({
-  token: z.string().min(10),
-  newPassword: z.string().min(8).max(200)
+  token: z.string().regex(/^[a-f0-9]{64}$/),
+  newPassword: newPasswordSchema
 });
 
 const optionalDateSchema = z.preprocess(
@@ -61,29 +82,29 @@ export const auditSchema = z.object({
   auditType: z.enum(["STANDARD", "ADHOC"]).optional().default("STANDARD"),
   title: z.string().trim().max(180).optional(),
   description: z.string().trim().max(2000).optional(),
-  zone: z.string().trim().min(1),
-  department: z.string().trim().min(1),
-  auditorName: z.string().trim().min(1),
+  zone: z.string().trim().min(1).max(180),
+  department: z.string().trim().min(1).max(120),
+  auditorName: z.string().trim().min(1).max(180),
   date: optionalDateSchema,
   startDate: optionalDateSchema,
   endDate: optionalDateSchema,
   checklist: z.array(z.object({
-    questionId: z.string(),
+    questionId: z.string().max(120),
     sourceRowNumber: z.number().int().positive().optional(),
     importBatchId: z.string().trim().optional(),
-    category: z.string(),
-    question: z.string(),
+    category: z.string().max(120),
+    question: z.string().max(2000),
     response: z.enum(["Adequate", "Not Adequate", "N/A"]),
-    observation: z.string().optional(),
+    observation: z.string().max(4000).optional(),
     severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
     actionOwnerId: z.string().trim().optional(),
     actionOwnerUserId: z.string().trim().optional(),
-    actionOwnerName: z.string().trim().optional(),
-    actionOwnerDepartment: z.string().trim().optional(),
+    actionOwnerName: z.string().trim().max(180).optional(),
+    actionOwnerDepartment: z.string().trim().max(120).optional(),
     dueDate: optionalDateSchema,
     remarks: z.string().trim().max(2000).optional(),
     beforePhotos: z.array(photoSchema).optional().default([])
-  })).default([])
+  })).max(1000).default([])
   ,
   importMetadata: z.object({
     originalFileName: z.string().trim().max(260),
@@ -124,10 +145,10 @@ export const auditUpdateSchema = z.object({
 
 export const findingUpdateSchema = z.object({
   severity: z.enum(["Critical", "High", "Medium", "Low"]).optional(),
-  observation: z.string().trim().optional(),
-  department: z.string().trim().optional(),
-  assignedTo: z.string().trim().optional(),
-  assignedUser: z.string().trim().optional(),
+  observation: z.string().trim().max(4000).optional(),
+  department: z.string().trim().max(120).optional(),
+  assignedTo: z.string().trim().max(180).optional(),
+  assignedUser: z.string().trim().max(64).optional(),
   dueDate: z.coerce.date().optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"]).optional(),
   beforePhotos: z.array(photoSchema).optional(),
@@ -135,35 +156,35 @@ export const findingUpdateSchema = z.object({
 });
 
 export const findingCreateSchema = z.object({
-  zone: z.string().trim().min(1),
-  department: z.string().trim().min(1),
-  category: z.string().trim().min(1),
-  question: z.string().trim().min(1),
+  zone: z.string().trim().min(1).max(180),
+  department: z.string().trim().min(1).max(120),
+  category: z.string().trim().min(1).max(120),
+  question: z.string().trim().min(1).max(2000),
   severity: z.enum(["Critical", "High", "Medium", "Low"]).optional().default("Medium"),
-  observation: z.string().trim().optional(),
+  observation: z.string().trim().max(4000).optional(),
   beforePhotos: z.array(photoSchema).optional().default([]),
-  assignedTo: z.string().trim().optional(),
+  assignedTo: z.string().trim().max(180).optional(),
   dueDate: z.coerce.date().optional()
 });
 
 export const capaSchema = z.object({
-  capaAction: z.string().trim().min(3),
-  closureRemarks: z.string().trim().optional(),
+  capaAction: z.string().trim().min(3).max(4000),
+  closureRemarks: z.string().trim().max(4000).optional(),
   afterPhotos: z.array(photoSchema).default([])
 });
 
 export const reviewSchema = z.object({
   decision: z.enum(["approve", "reject", "reopen"]),
-  remarks: z.string().trim().optional(),
-  rejectionReason: z.string().trim().optional()
+  remarks: z.string().trim().max(4000).optional(),
+  rejectionReason: z.string().trim().max(4000).optional()
 });
 
 export const emailTemplateSchema = z.object({
   templateKey: z.string().trim().min(2).max(80),
   templateName: z.string().trim().min(2).max(160),
   subject: z.string().trim().min(2).max(240),
-  htmlBody: z.string().min(1),
-  textBody: z.string().min(1),
+  htmlBody: z.string().min(1).max(200_000),
+  textBody: z.string().min(1).max(100_000),
   supportedVariables: z.array(z.string()).default([]),
   isActive: z.boolean().default(true),
   triggerEvent: z.enum([
@@ -195,5 +216,5 @@ export const shareReportSchema = z.object({
 });
 
 export const retryEmailSchema = z.object({
-  logId: z.string().min(1)
+  logId: z.string().trim().min(1).max(64)
 });

@@ -8,10 +8,10 @@ import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
 import { canonicalDepartmentName } from "@/lib/org-utils";
+import { adhocEmailRecipients, findingDueWorkingDays, positiveInteger } from "@/lib/runtime-config";
+import { nextSequence } from "@/lib/sequence";
 
 export type AuditListView = "full" | "summary" | "analytics" | "register";
-
-const ADHOC_AUDIT_EMAIL_RECIPIENTS = ["jatin.chouhan@onepws.com", "process@onepws.com"];
 
 const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
   full: null,
@@ -23,9 +23,7 @@ const AUDIT_PROJECTIONS: Record<AuditListView, string | null> = {
 export async function nextAuditNumber() {
   const year = new Date().getFullYear();
   const prefix = `6S-${year}-`;
-  const last = await Audit.findOne({ auditNumber: new RegExp(`^${prefix}`) }).sort({ createdAt: -1 }).lean();
-  const seq = last?.auditNumber ? Number(last.auditNumber.split("-").pop()) + 1 : 1;
-  return `${prefix}${String(seq).padStart(4, "0")}`;
+  return nextSequence("audits", "auditNumber", prefix, 4);
 }
 
 export async function listAudits(user: SessionUser, view: AuditListView = "full") {
@@ -232,8 +230,10 @@ export async function createAudit(input: {
   const categoryScores = initialScoring.categoryScores;
   const totalScore = initialScoring.score;
   const startDate = input.startDate || input.date || new Date();
-  const audit = await Audit.create({
-    auditNumber: await nextAuditNumber(),
+  const auditNumber = await nextAuditNumber();
+  const { audit, findings } = await Audit.db.transaction(async (session) => {
+  const audit = new Audit({
+    auditNumber,
     auditType,
     title: input.title,
     description: input.description,
@@ -257,8 +257,8 @@ export async function createAudit(input: {
       importedByName: user.name,
       importedAt: new Date()
     } as any;
-    await audit.save();
   }
+  await audit.save({ session });
 
   const findings = await Finding.insertMany(input.checklist
     .filter((item) => item.response === "Not Adequate")
@@ -280,19 +280,21 @@ export async function createAudit(input: {
         beforePhotos: item.beforePhotos || [],
         assignedTo: ownerName,
         assignedUser: item.actionOwnerUserId,
-        dueDate: item.dueDate || addWorkingDays(new Date(), 7),
+        dueDate: item.dueDate || addWorkingDays(new Date(), findingDueWorkingDays()),
         status: "OPEN",
         createdBy: user.id,
         timeline: [{ action: "Finding created", note: auditType === "ADHOC" ? "Created from Adhoc Excel assessment import" : "Created from audit checklist", by: user.id, byName: user.name }]
       };
-    }));
+    }), { session });
 
   audit.findingIds = findings.map((finding) => finding._id);
-  await audit.save();
+  await audit.save({ session });
+  return { audit, findings };
+  });
 
   try {
-    const recipients = auditType === "ADHOC"
-      ? [...ADHOC_AUDIT_EMAIL_RECIPIENTS]
+    const recipients = auditType === "ADHOC" && adhocEmailRecipients().length
+      ? adhocEmailRecipients()
       : await resolveRecipients({ department: audit.department, roles: ["MASTER_ADMIN", "ADMIN", "MANAGEMENT", "AUDITOR"] });
     if (auditType !== "ADHOC" && user.email && !recipients.includes(user.email)) recipients.push(user.email);
     await sendTemplatedEmail({
@@ -313,10 +315,12 @@ export async function createAudit(input: {
     console.error("Error sending audit completion email:", err);
   }
 
-  await Promise.all(findings.map(async (finding) => {
+  const concurrency = positiveInteger("EMAIL_CONCURRENCY", 3, 10);
+  for (let offset = 0; offset < findings.length; offset += concurrency) {
+  await Promise.all(findings.slice(offset, offset + concurrency).map(async (finding) => {
     try {
-      const spocRecipients = auditType === "ADHOC"
-        ? [...ADHOC_AUDIT_EMAIL_RECIPIENTS]
+      const spocRecipients = auditType === "ADHOC" && adhocEmailRecipients().length
+        ? adhocEmailRecipients()
         : await resolveRecipients({ department: finding.department, roles: ["SPOC", "ADMIN", "MASTER_ADMIN"] });
       await sendTemplatedEmail({
         triggerEvent: "FINDING_ASSIGNED",
@@ -340,6 +344,7 @@ export async function createAudit(input: {
       console.error(`Error sending finding assignment email for ${finding.findingNumber}:`, err);
     }
   }));
+  }
 
   return { audit, findings };
 }

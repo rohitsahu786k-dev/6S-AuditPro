@@ -3,7 +3,7 @@ import { validateAdhocWorkbook, MAX_ADHOC_EXCEL_BYTES } from "@/lib/adhoc-excel"
 import { connectDB } from "@/lib/db";
 import Department from "@/models/Department";
 import User from "@/models/User";
-import { fail, ok } from "@/utils/api";
+import { fail, ok, parseFormData } from "@/utils/api";
 
 const EXCEL_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -17,7 +17,7 @@ const EXCEL_MIME_TYPES = new Set([
 export async function POST(request: Request) {
   try {
     await requireUser("audits:create");
-    const form = await request.formData();
+    const form = await parseFormData(request);
     const file = form.get("file");
     if (!(file instanceof File)) throw Object.assign(new Error("CSV or Excel file is required."), { status: 400 });
     const lowerName = file.name.toLowerCase();

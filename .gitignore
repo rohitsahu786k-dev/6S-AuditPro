@@ -12,3 +12,10 @@ tsconfig.tsbuildinfo
 public/uploads/*
 !public/uploads/.gitkeep
 fir-audit-portal-default-rtdb-export.json
+output/
+
+# Local database exports and cleanup reports. These carry real audit, user and
+# email-recipient records, so they must never reach the repository.
+data-pull-*/
+removed-duplicate-findings-*.json
+.playwright-cli/

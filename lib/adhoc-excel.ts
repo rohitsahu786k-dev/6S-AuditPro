@@ -224,7 +224,7 @@ export function validateAdhocWorkbook(input: {
   departments: string[];
   users: AdhocUserLookup[];
 }): AdhocPreviewResult {
-  const workbook = XLSX.read(input.buffer, { type: "buffer", cellDates: true, cellFormula: false });
+  const workbook = XLSX.read(input.buffer, { type: "buffer", cellDates: true, cellFormula: false, sheets: 0, sheetRows: MAX_ADHOC_ROWS + 2 });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) throw Object.assign(new Error("Import file does not contain any sheets."), { status: 400 });
 

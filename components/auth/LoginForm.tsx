@@ -10,13 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { APP_NAME, COMPANY_NAME } from "@/lib/constants";
 
-export function LoginForm() {
+export function LoginForm({ allowSignup = false }: { allowSignup?: boolean }) {
   const router = useRouter();
   const search = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [remember, setRemember] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +29,8 @@ export function LoginForm() {
         setError("Invalid username or password");
         return;
       }
-      router.push(search.get("next") || "/dashboard");
+      const next = search.get("next") || "/dashboard";
+      router.push(/^\/(?!\/)/.test(next) && !next.includes("\\") ? next : "/dashboard");
       router.refresh();
     } catch {
       setError("Login failed");
@@ -100,15 +100,6 @@ export function LoginForm() {
       </div>
 
       <div className="mb-4 flex items-center justify-between text-[13px]">
-        <label className="flex items-center gap-2 text-t2">
-          <input
-            type="checkbox"
-            checked={remember}
-            onChange={(event) => setRemember(event.target.checked)}
-            className="h-3.5 w-3.5 accent-brand"
-          />
-          Remember me
-        </label>
         <Link href="/forgot-password" className="font-semibold text-brand hover:text-brand-d">
           Forgot password?
         </Link>
@@ -122,12 +113,12 @@ export function LoginForm() {
         {loading ? "Signing in..." : "Login →"}
       </Button>
 
-      <p className="mt-4 text-center text-[13px] text-t2">
+      {allowSignup && <p className="mt-4 text-center text-[13px] text-t2">
         Don&apos;t have an account?{" "}
         <Link href="/signup" className="font-semibold text-brand hover:text-brand-d">
           Sign up
         </Link>
-      </p>
+      </p>}
     </form>
   );
 }

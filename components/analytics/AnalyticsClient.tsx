@@ -326,6 +326,12 @@ export function AnalyticsClient() {
     }
   }, [exportType, filterDept, filterSeverity, filterStatus, startDate, endDate, audits, findings]);
 
+  /** RFC 4180 quoting: wrap the value when it contains a comma, quote or newline. */
+  function csvField(value: unknown) {
+    const text = String(value ?? "");
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
   // Export to CSV Function
   function downloadCSV() {
     let headers: string[] = [];
@@ -359,11 +365,16 @@ export function AnalyticsClient() {
         item.severity,
         formatReportDate(item.dueDate),
         item.status,
-        `"${item.question.replace(/"/g, '""')}"`
+        item.question
       ]);
     }
 
-    const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    // Every field is escaped, not just the observation. Zone, department and
+    // auditor names routinely contain commas, and an unescaped one shifted every
+    // column after it onto the wrong header for the rest of that row.
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map(csvField).join(","))
+      .join("\r\n");
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
