@@ -3,7 +3,7 @@ import Department from "@/models/Department";
 import Finding from "@/models/Finding";
 import User from "@/models/User";
 import { connectDB } from "@/lib/db";
-import { addWorkingDays, calculateDepartmentAuditScore, defaultSeverity } from "@/lib/audit-scoring";
+import { addWorkingDays, calculateDepartmentAuditScore, defaultSeverity, departmentScoreEntriesForAudit } from "@/lib/audit-scoring";
 import type { SessionUser } from "@/types/domain";
 import { resolveRecipients } from "@/services/email-recipient.service";
 import { sendTemplatedEmail } from "@/services/email.service";
@@ -99,13 +99,29 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
 
     if (view !== "register") {
       const scoring = calculateDepartmentAuditScore({
-        audit: { ...audit, department, checklist },
+        audit: { ...audit, department, auditType: (audit as any).auditType, checklist },
         department,
         findings: scoringFindings,
         configuredDepartments,
         sourceDepartmentByAuditId,
         sourceDepartmentByAuditNumber
       });
+      const departmentScores = view === "analytics"
+        ? departmentScoreEntriesForAudit({
+            audit: { ...audit, department, auditType: (audit as any).auditType, checklist },
+            findings: scoringFindings,
+            configuredDepartments,
+            sourceDepartmentByAuditId,
+            sourceDepartmentByAuditNumber
+          }).map((entry) => ({
+            department: entry.department,
+            totalScore: entry.totalScore,
+            adequateCount: entry.adequateCount,
+            applicableCount: entry.applicableCount,
+            ownedNotAdequateCount: entry.ownedNotAdequateCount,
+            naCount: entry.naCount
+          }))
+        : undefined;
       const scoredAudit = {
         ...audit,
         department,
@@ -115,7 +131,8 @@ export async function listAudits(user: SessionUser, view: AuditListView = "full"
         adequateCount: scoring.adequateCount,
         ownedNotAdequateCount: scoring.ownedNotAdequateCount,
         applicableCount: scoring.applicableCount,
-        naCount: scoring.naCount
+        naCount: scoring.naCount,
+        ...(departmentScores ? { departmentScores } : {})
       };
       if (view === "summary" || view === "analytics") {
         const listAudit = { ...scoredAudit };

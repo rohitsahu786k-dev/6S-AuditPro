@@ -14,6 +14,7 @@ type ChecklistItem = {
   severity?: string;
   actionOwnerName?: string;
   actionOwnerDepartment?: string;
+  actionOwnerUserId?: unknown;
   beforePhotos?: unknown[];
 };
 
@@ -66,6 +67,7 @@ async function syncLinkedAuditForFinding(finding: any) {
     item.severity = finding.severity;
     item.actionOwnerName = finding.assignedTo || finding.department;
     item.actionOwnerDepartment = finding.department;
+    item.actionOwnerUserId = finding.assignedUser;
     item.beforePhotos = finding.beforePhotos || [];
     audit.markModified("checklist");
   }
@@ -108,13 +110,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if (input.observation !== undefined) finding.observation = input.observation;
     if (input.department) finding.department = input.department;
     if (input.assignedTo !== undefined) finding.assignedTo = input.assignedTo;
+    if (input.assignedUser !== undefined) finding.set("assignedUser", input.assignedUser || undefined);
     if (input.dueDate) finding.dueDate = input.dueDate;
     if (input.status) finding.status = input.status;
     if (input.beforePhotos) finding.beforePhotos = input.beforePhotos as any;
     if (input.afterPhotos) finding.afterPhotos = input.afterPhotos as any;
     
     finding.timeline.push({ 
-      action: "Finding updated", 
+      action: input.department || input.assignedTo !== undefined || input.assignedUser !== undefined
+        ? "Responsible person transferred"
+        : "Finding updated",
       note: input.department || input.assignedTo !== undefined
         ? `Owner changed from ${previousOwner || previousDepartment} / ${previousDepartment} to ${finding.assignedTo || finding.department} / ${finding.department}`
         : `Updated attributes by ${user.name}`,

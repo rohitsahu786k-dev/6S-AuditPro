@@ -127,6 +127,7 @@ export const findingUpdateSchema = z.object({
   observation: z.string().trim().optional(),
   department: z.string().trim().optional(),
   assignedTo: z.string().trim().optional(),
+  assignedUser: z.string().trim().optional(),
   dueDate: z.coerce.date().optional(),
   status: z.enum(["OPEN", "IN_PROGRESS", "SUBMITTED", "CLOSED", "REJECTED", "REOPENED", "OVERDUE"]).optional(),
   beforePhotos: z.array(photoSchema).optional(),

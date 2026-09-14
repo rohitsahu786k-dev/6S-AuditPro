@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   calculateDepartmentAuditScore,
+  departmentScoreEntriesForAudit,
   departmentMonthKey,
   mergeAuditScores,
   mergeAuditScoresByDepartmentMonth
@@ -214,5 +215,31 @@ const partiallyApplicable = mergeAuditScores([
   { adequateCount: 0, applicableCount: 0, totalScore: 0 }
 ]);
 assert.equal(partiallyApplicable?.score, 60);
+
+const adhocDepartmentScores = departmentScoreEntriesForAudit({
+  audit: {
+    _id: "adhoc-1",
+    auditNumber: "ADHOC-1",
+    auditType: "ADHOC",
+    department: "Department A",
+    checklist: [
+      ...adequate(2, "1S").map((item) => ({ ...item, actionOwnerDepartment: "Department A" })),
+      ...notAdequate(1, "Department A", "1S", "adhoc-a"),
+      ...notAdequate(2, "Department B", "2S", "adhoc-b")
+    ]
+  },
+  configuredDepartments: departments
+});
+const adhocA = adhocDepartmentScores.find((entry) => entry.department === "Department A");
+const adhocB = adhocDepartmentScores.find((entry) => entry.department === "Department B");
+assert.equal(adhocA?.totalScore, 67);
+assert.equal(adhocA?.applicableCount, 3);
+assert.equal(adhocB?.totalScore, 0);
+assert.equal(adhocB?.applicableCount, 2);
+
+const mergedAdhocByResponsibleDepartment = mergeAuditScoresByDepartmentMonth([
+  { department: adhocB!.department, startDate: "2026-09-14", adequateCount: adhocB!.adequateCount, applicableCount: adhocB!.applicableCount, totalScore: adhocB!.totalScore }
+]);
+assert.equal(mergedAdhocByResponsibleDepartment.get(departmentMonthKey("Department B", "2026-09"))?.score, 0);
 
 console.log("Canonical audit scoring checks passed.");

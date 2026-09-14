@@ -1038,7 +1038,7 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
       if (!current) return current;
       const rows = current.rows
         .filter((_, rowIndex) => rowIndex !== index)
-        .map((row, rowIndex) => ({ ...row, srNo: row.srNo || String(rowIndex + 1), rowNumber: rowIndex + 2 }));
+        .map((row, rowIndex) => ({ ...row, srNo: String(rowIndex + 1), rowNumber: rowIndex + 2 }));
       return recalculateAdhocPreview(current, rows);
     });
   }
@@ -1058,6 +1058,11 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
 
   async function submitAdhocAudit() {
     if (!masters.data || !selectedZone || !adhocPreview) return;
+    if (adhocPreview.rows.length === 0) {
+      alert("Please add at least one Adhoc observation before creating the audit.");
+      return;
+    }
+
     const revalidatedRows = adhocPreview.rows.map((row) => ({ ...row, ...validateAdhocPreviewRow(row, masters.data!) }));
     const revalidatedPreview = recalculateAdhocPreview(adhocPreview, revalidatedRows);
     setAdhocPreview(revalidatedPreview);
@@ -1566,7 +1571,13 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                     </tr>
                   </thead>
                   <tbody>
-                    {adhocPreview.rows
+                    {adhocPreview.rows.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-6 text-center text-sm font-semibold text-t2" colSpan={11}>
+                          No ad-hoc points remaining. Use Add Row to create a new observation.
+                        </td>
+                      </tr>
+                    ) : adhocPreview.rows
                       .map((row, originalIndex) => ({ row, originalIndex }))
                       .filter(({ row }) => adhocFilterAssessment === "ALL" || row.assessment === adhocFilterAssessment)
                       .filter(({ row }) => adhocFilterDepartment === "ALL" || row.responsibleDepartment === adhocFilterDepartment)
@@ -1684,7 +1695,6 @@ export function AuditWorkspace({ historyOnly = false, newOnly = false }: { histo
                                 type="button"
                                 className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-45"
                                 onClick={() => deleteAdhocRow(originalIndex)}
-                                disabled={adhocPreview.rows.length <= 1}
                                 title="Delete row"
                               >
                                 <Trash2 size={14} />

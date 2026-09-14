@@ -22,6 +22,7 @@ export type AuditScoreFinding = {
 export type AuditScoreAudit = {
   _id?: unknown;
   auditNumber?: string | null;
+  auditType?: "STANDARD" | "ADHOC" | string | null;
   department: string;
   checklist?: ChecklistResponse[];
   findingIds?: unknown[];
@@ -245,6 +246,69 @@ export type MergedAuditScore = {
 };
 
 export type MergedAuditGroup = MergedAuditScore & { department: string; monthKey: string };
+
+export type DepartmentScoreEntry = {
+  department: string;
+  totalScore: number;
+  adequateCount: number;
+  applicableCount: number;
+  ownedNotAdequateCount: number;
+  naCount: number;
+  categoryScores: Record<string, DepartmentAuditCategoryScore>;
+};
+
+function scoreEntry(department: string, score: DepartmentAuditScore): DepartmentScoreEntry {
+  return {
+    department,
+    totalScore: score.score,
+    adequateCount: score.adequateCount,
+    applicableCount: score.applicableCount,
+    ownedNotAdequateCount: score.ownedNotAdequateCount,
+    naCount: score.naCount,
+    categoryScores: score.categoryScores
+  };
+}
+
+export function departmentScoreEntriesForAudit(input: {
+  audit: AuditScoreAudit;
+  findings?: AuditScoreFinding[];
+  includeTransferredIn?: boolean;
+} & DepartmentLookup): DepartmentScoreEntry[] {
+  const configuredDepartments = input.configuredDepartments || [];
+  const auditDepartment = canonicalOwner(input.audit.department, configuredDepartments);
+
+  if (input.audit.auditType === "ADHOC") {
+    const departments = uniqueDepartments(
+      (input.audit.checklist || []).map((item) => canonicalOwner(item.actionOwnerDepartment || auditDepartment, configuredDepartments))
+    );
+
+    return departments
+      .map((department) => {
+        const checklist = (input.audit.checklist || []).filter((item) =>
+          canonicalOwner(item.actionOwnerDepartment || auditDepartment, configuredDepartments) === department
+        );
+        return scoreEntry(department, calculateDepartmentAuditScore({
+          ...input,
+          audit: { ...input.audit, department, checklist },
+          department,
+          includeTransferredIn: false
+        }));
+      })
+      .filter((entry) => entry.applicableCount > 0);
+  }
+
+  return [
+    scoreEntry(auditDepartment, calculateDepartmentAuditScore({
+      ...input,
+      audit: { ...input.audit, department: auditDepartment },
+      department: auditDepartment
+    }))
+  ];
+}
+
+function uniqueDepartments(values: string[]) {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
 
 export function auditPeriodDate(audit: MergeableAudit) {
   return audit.startDate || audit.date || null;

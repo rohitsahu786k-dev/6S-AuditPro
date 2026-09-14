@@ -30,6 +30,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 export async function requireUser(required?: Permission | Permission[]) {
   const user = await getSessionUser();
   if (!user) throw Object.assign(new Error("Unauthorized"), { status: 401 });
+  if (user.role === "MASTER_ADMIN") return user;
   const requirements = Array.isArray(required) ? required : required ? [required] : [];
   if (requirements.length && !requirements.every((p) => user.permissions.includes(p))) {
     throw Object.assign(new Error("Forbidden"), { status: 403 });

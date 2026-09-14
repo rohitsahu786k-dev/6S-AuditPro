@@ -23,6 +23,12 @@ type Audit = {
   totalScore: number;
   adequateCount?: number;
   applicableCount?: number;
+  departmentScores?: Array<{
+    department: string;
+    totalScore: number;
+    adequateCount: number;
+    applicableCount: number;
+  }>;
   status: string;
   auditorName: string;
 };
@@ -192,6 +198,7 @@ export function DashboardClient() {
 
   useEffect(() => {
     const reloadDashboard = () => {
+      if (document.visibilityState !== "visible") return;
       void Promise.all([auditsApi.reload(), findingsApi.reload()]);
     };
     const onVisibilityChange = () => {
@@ -200,7 +207,7 @@ export function DashboardClient() {
 
     window.addEventListener("focus", reloadDashboard);
     document.addEventListener("visibilitychange", onVisibilityChange);
-    const intervalId = window.setInterval(reloadDashboard, 30_000);
+    const intervalId = window.setInterval(reloadDashboard, 120_000);
 
     return () => {
       window.removeEventListener("focus", reloadDashboard);
@@ -243,11 +250,36 @@ export function DashboardClient() {
     [audits]
   );
 
+  const auditScoreRows = useMemo(
+    () => completedAudits.flatMap((audit) => {
+      const sourceDate = auditStartDate(audit);
+      if (audit.departmentScores?.length) {
+        return audit.departmentScores.map((score) => ({
+          department: score.department,
+          date: audit.date,
+          startDate: sourceDate,
+          totalScore: score.totalScore,
+          adequateCount: score.adequateCount,
+          applicableCount: score.applicableCount
+        }));
+      }
+      return [{
+        department: audit.department,
+        date: audit.date,
+        startDate: sourceDate,
+        totalScore: audit.totalScore,
+        adequateCount: audit.adequateCount,
+        applicableCount: audit.applicableCount
+      }];
+    }),
+    [completedAudits]
+  );
+
   // One score per department per month: a department's standard and adhoc audits of
   // the same month are merged, so every table below reads from the same merged set.
   const mergedScores = useMemo(
-    () => mergeAuditScoresByDepartmentMonth(completedAudits),
-    [completedAudits]
+    () => mergeAuditScoresByDepartmentMonth(auditScoreRows),
+    [auditScoreRows]
   );
 
   const overallAuditRating = useMemo(() => {

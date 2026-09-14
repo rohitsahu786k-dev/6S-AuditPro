@@ -33,6 +33,12 @@ type Audit = {
   totalScore: number;
   adequateCount?: number;
   applicableCount?: number;
+  departmentScores?: Array<{
+    department: string;
+    totalScore: number;
+    adequateCount: number;
+    applicableCount: number;
+  }>;
   categoryScores?: Record<string, number>;
   // Omitted by the analytics view, which sends categoryScores instead.
   checklist?: Array<{
@@ -94,6 +100,33 @@ export function AnalyticsClient() {
   const findings = findingsApi.data || [];
   const findingsLoading = findingsApi.loading && !findingsApi.data;
 
+  const auditScoreRows = useMemo(
+    () => audits
+      .filter((audit) => audit.status === "COMPLETED")
+      .flatMap((audit) => {
+        const sourceDate = auditStartDate(audit);
+        if (audit.departmentScores?.length) {
+          return audit.departmentScores.map((score) => ({
+            department: score.department,
+            date: audit.date,
+            startDate: sourceDate,
+            totalScore: score.totalScore,
+            adequateCount: score.adequateCount,
+            applicableCount: score.applicableCount
+          }));
+        }
+        return [{
+          department: audit.department,
+          date: audit.date,
+          startDate: sourceDate,
+          totalScore: audit.totalScore,
+          adequateCount: audit.adequateCount,
+          applicableCount: audit.applicableCount
+        }];
+      }),
+    [audits]
+  );
+
   // Active view: Dashboard vs Exports
   const [activeSubView, setActiveSubView] = useState<"dashboard" | "exports">("dashboard");
 
@@ -129,14 +162,13 @@ export function AnalyticsClient() {
     const map = new Map<string, { monthScores: number[]; count: number; openFindings: number }>();
     const newStats = () => ({ monthScores: [] as number[], count: 0, openFindings: 0 });
 
-    for (const a of audits) {
-      if (a.status !== "COMPLETED") continue;
-      const stats = map.get(a.department) || newStats();
+    for (const row of auditScoreRows) {
+      const stats = map.get(row.department) || newStats();
       stats.count += 1;
-      map.set(a.department, stats);
+      map.set(row.department, stats);
     }
 
-    for (const group of mergeAuditScoresByDepartmentMonth(audits.filter((a) => a.status === "COMPLETED")).values()) {
+    for (const group of mergeAuditScoresByDepartmentMonth(auditScoreRows).values()) {
       const stats = map.get(group.department) || newStats();
       stats.monthScores.push(group.score);
       map.set(group.department, stats);
@@ -159,7 +191,7 @@ export function AnalyticsClient() {
       auditCount: s.count,
       openFindings: s.openFindings
     })).sort((a, b) => b.avgScore - a.avgScore);
-  }, [audits, findings]);
+  }, [auditScoreRows, findings]);
 
   const monthlyAuditCount = useMemo(() => {
     const year = new Date().getFullYear();

@@ -15,7 +15,8 @@ import {
   Trash2,
   Plus,
   ExternalLink,
-  ImageIcon
+  ImageIcon,
+  ArrowRightLeft
 } from "lucide-react";
 import { processImageToWebP } from "@/utils/media";
 import { SEVERITY_BADGE_STYLES, STATUS_BADGE_STYLES, badgeStyleToVars } from "@/lib/status-styles";
@@ -36,6 +37,7 @@ type Finding = {
   observation?: string;
   beforePhotos: Array<UploadedPhoto>;
   assignedTo?: string;
+  assignedUser?: string;
   dueDate?: string;
   status: "OPEN" | "IN_PROGRESS" | "SUBMITTED" | "CLOSED" | "REJECTED" | "REOPENED" | "OVERDUE";
   capaAction?: string;
@@ -71,13 +73,16 @@ type Masters = {
   zones: Array<{ name: string; department: string }>; 
   questions: Array<{ _id: string; category: string; text: string; subSection: string }>;
   people: Array<{ _id: string; name: string; type: string; department?: string; isActive?: boolean }>;
+  users: Array<{ _id: string; name: string; username: string; email?: string; department?: string; role: string; status?: string }>;
 };
 
 type ActionOwnerOption = {
   key: string;
+  id?: string;
   name: string;
   department: string;
   label: string;
+  source: "user" | "person" | "department" | "current";
 };
 
 const PAGE_SIZE = 20;
@@ -135,6 +140,7 @@ export function FindingsWorkspace() {
   const [editDueDate, setEditDueDate] = useState("");
   const [editAssignedDepartment, setEditAssignedDepartment] = useState("");
   const [editAssignedTo, setEditAssignedTo] = useState("");
+  const [editAssignedUser, setEditAssignedUser] = useState("");
 
   // Ad-hoc Finding form state
   const [isCreateFindingModalOpen, setIsCreateFindingModalOpen] = useState(false);
@@ -195,17 +201,37 @@ export function FindingsWorkspace() {
     if (!masters.data) return [];
     const options = new Map<string, ActionOwnerOption>();
 
+    for (const portalUser of masters.data.users || []) {
+      if (portalUser.status === "inactive") continue;
+      const department = portalUser.department || "";
+      if (!department) continue;
+      const key = `user:${portalUser._id}`;
+      options.set(key, {
+        key,
+        id: portalUser._id,
+        name: portalUser.name,
+        department,
+        label: `${portalUser.name} (${department})`,
+        source: "user"
+      });
+    }
+
     for (const person of masters.data.people || []) {
       if (person.type !== "RESPONSIBLE" || person.isActive === false) continue;
       const department = person.department && person.department !== "All" ? person.department : selectedFinding?.department || "";
       if (!department) continue;
       const key = `person:${person._id}`;
-      options.set(key, {
-        key,
-        name: person.name,
-        department,
-        label: `${person.name} (${department})`
-      });
+      const duplicatePortalUser = [...options.values()].some((option) => option.name === person.name && option.department === department);
+      if (!duplicatePortalUser) {
+        options.set(key, {
+          key,
+          id: person._id,
+          name: person.name,
+          department,
+          label: `${person.name} (${department})`,
+          source: "person"
+        });
+      }
     }
 
     for (const department of masters.data.departments || []) {
@@ -215,7 +241,8 @@ export function FindingsWorkspace() {
         key,
         name: department.name,
         department: department.name,
-        label: department.name
+        label: department.name,
+        source: "department"
       });
     }
 
@@ -229,7 +256,8 @@ export function FindingsWorkspace() {
           key,
           name: assignedTo,
           department,
-          label: `${assignedTo} (${department})`
+          label: `${assignedTo} (${department})`,
+          source: "current"
         });
       }
     }
@@ -238,10 +266,14 @@ export function FindingsWorkspace() {
   }, [masters.data, selectedFinding?.assignedTo, selectedFinding?.department]);
 
   const editActionOwnerKey = useMemo(() => {
+    if (editAssignedUser) {
+      const userOption = actionOwnerOptions.find((option) => option.source === "user" && option.id === editAssignedUser);
+      if (userOption) return userOption.key;
+    }
     return actionOwnerOptions.find((option) =>
       option.name === editAssignedTo && option.department === editAssignedDepartment
     )?.key || "";
-  }, [actionOwnerOptions, editAssignedDepartment, editAssignedTo]);
+  }, [actionOwnerOptions, editAssignedDepartment, editAssignedTo, editAssignedUser]);
 
   useEffect(() => {
     setPage((current) => Math.min(current, pageCount));
@@ -260,6 +292,8 @@ export function FindingsWorkspace() {
     if (!user) return false;
     return ["MASTER_ADMIN", "ADMIN", "AUDITOR"].includes(user.role);
   }, [user]);
+
+  const canMasterAdminManageFinding = user?.role === "MASTER_ADMIN";
 
   function normalizeFinding(finding: Finding): Finding {
     return {
@@ -293,6 +327,7 @@ export function FindingsWorkspace() {
     setEditDueDate(summaryFinding.dueDate ? new Date(summaryFinding.dueDate).toISOString().split("T")[0] : "");
     setEditAssignedDepartment(summaryFinding.department || "");
     setEditAssignedTo(summaryFinding.assignedTo || summaryFinding.department || "");
+    setEditAssignedUser(summaryFinding.assignedUser || "");
     setIsLoadingDetails(true);
     try {
       const response = await fetch(`/api/findings/${finding._id}`, { cache: "no-store" });
@@ -307,6 +342,7 @@ export function FindingsWorkspace() {
       setEditDueDate(fullFinding.dueDate ? new Date(fullFinding.dueDate).toISOString().split("T")[0] : "");
       setEditAssignedDepartment(fullFinding.department || "");
       setEditAssignedTo(fullFinding.assignedTo || fullFinding.department || "");
+      setEditAssignedUser(fullFinding.assignedUser || "");
     } catch (err: any) {
       alert(`Unable to load finding details: ${err.message}`);
     } finally {
@@ -520,6 +556,16 @@ export function FindingsWorkspace() {
     }
   }
 
+  function startMetadataEdit() {
+    if (!selectedFinding) return;
+    setEditSeverity(selectedFinding.severity);
+    setEditDueDate(selectedFinding.dueDate ? new Date(selectedFinding.dueDate).toISOString().split("T")[0] : "");
+    setEditAssignedDepartment(selectedFinding.department || "");
+    setEditAssignedTo(selectedFinding.assignedTo || selectedFinding.department || "");
+    setEditAssignedUser(selectedFinding.assignedUser || "");
+    setIsEditingMetadata(true);
+  }
+
   async function saveMetadataEdits() {
     if (!selectedFinding) return;
 
@@ -528,11 +574,13 @@ export function FindingsWorkspace() {
         severity: editSeverity,
         dueDate: editDueDate ? new Date(editDueDate) : undefined,
         department: editAssignedDepartment || selectedFinding.department,
-        assignedTo: editAssignedTo
+        assignedTo: editAssignedTo,
+        assignedUser: editAssignedUser
       });
       applySelectedFinding(updated);
       setIsEditingMetadata(false);
-      setNote(`Finding metadata updated.`);
+      const ownerChanged = editAssignedTo !== (selectedFinding.assignedTo || selectedFinding.department) || editAssignedDepartment !== selectedFinding.department;
+      setNote(ownerChanged ? `Responsible person transferred to ${updated.assignedTo || updated.department}.` : `Finding metadata updated.`);
       await findingsApi.reload();
     } catch (err: any) {
       alert(`Update failed: ${err.message}`);
@@ -805,9 +853,9 @@ export function FindingsWorkspace() {
                       {canReviewCapa && !isEditingMetadata && (
                         <button
                           className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-2 py-[3px] text-[11px] font-bold text-t1 hover:bg-bg3"
-                          onClick={() => setIsEditingMetadata(true)}
+                          onClick={startMetadataEdit}
                         >
-                          Edit
+                          <ArrowRightLeft size={12} /> Transfer / Edit
                         </button>
                       )}
                     </div>
@@ -836,9 +884,10 @@ export function FindingsWorkspace() {
                               const owner = actionOwnerOptions.find((option) => option.key === e.target.value);
                               setEditAssignedTo(owner?.name || "");
                               setEditAssignedDepartment(owner?.department || "");
+                              setEditAssignedUser(owner?.source === "user" ? owner.id || "" : "");
                             }}
                           >
-                            <option value="">Select Action Owner...</option>
+                            <option value="">Select responsible person...</option>
                             {actionOwnerOptions.map((owner) => (
                               <option key={owner.key} value={owner.key}>{owner.label}</option>
                             ))}
@@ -851,7 +900,7 @@ export function FindingsWorkspace() {
                             onClick={saveMetadataEdits}
                             disabled={!editAssignedTo || !editAssignedDepartment}
                           >
-                            Save
+                            Save Transfer
                           </button>
                         </div>
                       </div>
@@ -864,6 +913,17 @@ export function FindingsWorkspace() {
                         <div>Severity: <strong>{selectedFinding.severity}</strong></div>
                         <div>Due Date: <strong>{selectedFinding.dueDate ? new Date(selectedFinding.dueDate).toLocaleDateString() : "No Date"}</strong></div>
                         <div className="col-span-2">Action Owner: <strong>{selectedFinding.assignedTo || selectedFinding.department}</strong></div>
+                        {canMasterAdminManageFinding && selectedFinding.status !== "SUBMITTED" && (
+                          <div className="col-span-2 mt-1 flex justify-end">
+                            <button
+                              className="inline-flex items-center gap-2 rounded-lg border border-bd bg-white px-2 py-1 text-xs font-bold text-t1 hover:bg-bg3 disabled:cursor-not-allowed disabled:opacity-55"
+                              disabled={isSubmittingReview}
+                              onClick={() => submitReview("reopen")}
+                            >
+                              Reopen Finding
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
