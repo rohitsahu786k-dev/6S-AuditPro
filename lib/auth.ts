@@ -4,7 +4,7 @@ import type { Permission, SessionUser } from "@/types/domain";
 import User from "@/models/User";
 import { connectDB } from "@/lib/db";
 import { cache } from "react";
-import { permissionsForRole } from "@/lib/roles";
+import { effectivePermissions, effectiveRoutes } from "@/services/role-config.service";
 import type { Role } from "@/types/domain";
 import { consumeRateLimit } from "@/lib/rate-limit";
 
@@ -31,7 +31,9 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     role: current.role as Role,
     department: current.department || undefined,
     zone: current.zone || undefined,
-    permissions: permissionsForRole(current.role as Role)
+    // Read from the administrator-managed role table, which falls back to the
+    // defaults in lib/roles.ts when nothing has been customised.
+    permissions: await effectivePermissions(current.role as Role)
   };
 });
 
@@ -47,6 +49,19 @@ export async function requireUser(required?: Permission | Permission[]) {
     throw Object.assign(new Error("Forbidden"), { status: 403 });
   }
   return user;
+}
+
+/**
+ * Pages a signed-in user may open. The proxy only proves who you are; this is the
+ * authorisation check, and it runs in the Node runtime where the role table is
+ * readable. Keeping it in one place is why the edge proxy no longer decides.
+ */
+export async function allowedRoutesFor(user: SessionUser) {
+  return effectiveRoutes(user.role);
+}
+
+export function isRouteAllowed(pathname: string, allowed: string[]) {
+  return pathname === "/" || allowed.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 }
 
 export async function authenticate(username: string, password: string) {

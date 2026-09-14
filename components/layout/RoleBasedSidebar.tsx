@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { SessionUser } from "@/types/domain";
-import { ROLE_ROUTES } from "@/lib/roles";
 import { activeNavHref, navItemsForRoutes } from "@/lib/nav-items";
 import { COMPANY_NAME } from "@/lib/constants";
 
-export function RoleBasedSidebar({ user }: { user: SessionUser }) {
+export function RoleBasedSidebar({ allowedRoutes }: { allowedRoutes: string[] }) {
   const pathname = usePathname();
-  const allowed = ROLE_ROUTES[user.role] || [];
+  const allowed = allowedRoutes;
   const items = navItemsForRoutes(allowed);
   const activeHref = activeNavHref(pathname, items);
 

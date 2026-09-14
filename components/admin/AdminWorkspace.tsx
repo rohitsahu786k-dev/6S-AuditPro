@@ -7,9 +7,10 @@ import { ZoneManagementTable } from "@/components/admin/ZoneManagementTable";
 import { DepartmentManagementTable } from "@/components/admin/DepartmentManagementTable";
 import { QuestionManagementTable } from "@/components/admin/QuestionManagementTable";
 import { PersonManagementTable } from "@/components/admin/PersonManagementTable";
+import { RolePermissionMatrix } from "@/components/admin/RolePermissionMatrix";
 
 export function AdminWorkspace() {
-  const [activeTab, setActiveTab] = useState<"users" | "zones" | "depts" | "questions" | "people">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "permissions" | "zones" | "depts" | "questions" | "people">("users");
 
   return (
     <>
@@ -33,6 +34,12 @@ export function AdminWorkspace() {
           className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "users" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
         >
           User Accounts
+        </button>
+        <button
+          onClick={() => setActiveTab("permissions")}
+          className={`border-b-2 px-4 py-2 text-sm whitespace-nowrap ${activeTab === "permissions" ? "border-brand font-bold text-t1" : "border-transparent font-normal text-t2"}`}
+        >
+          Roles &amp; Permissions
         </button>
         <button
           onClick={() => setActiveTab("zones")}
@@ -62,6 +69,7 @@ export function AdminWorkspace() {
 
       {/* Render active workspace panel */}
       {activeTab === "users" && <UserManagementTable />}
+      {activeTab === "permissions" && <RolePermissionMatrix />}
       {activeTab === "zones" && <ZoneManagementTable />}
       {activeTab === "depts" && <DepartmentManagementTable />}
       {activeTab === "questions" && <QuestionManagementTable />}

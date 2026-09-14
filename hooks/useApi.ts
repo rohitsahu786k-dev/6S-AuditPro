@@ -61,6 +61,16 @@ export async function apiPatch<T>(url: string, body: unknown) {
   return parseApiResponse<T>(res);
 }
 
+export async function apiPut<T>(url: string, body: unknown) {
+  const res = await fetch(url, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return parseApiResponse<T>(res);
+}
+
+export async function apiDelete<T>(url: string) {
+  const res = await fetch(url, { method: "DELETE" });
+  return parseApiResponse<T>(res);
+}
+
 export async function apiUpload<T>(url: string, body: FormData) {
   const res = await fetch(url, { method: "POST", body });
   return parseApiResponse<T>(res);

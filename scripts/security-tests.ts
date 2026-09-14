@@ -5,7 +5,10 @@ import { getAppUrl } from "../lib/app-url";
 import { positiveInteger, adhocEmailRecipients } from "../lib/runtime-config";
 import { loginSchema, resetPasswordSchema, signupSchema, auditSchema, photoSchema, capaSchema } from "../lib/validators";
 import { parseJson, parseFormData, fail } from "../utils/api";
-import { canActOnDepartment, permissionsForRole } from "../lib/roles";
+import { canActOnDepartment, permissionsForRole, ROLES, ROLE_PERMISSIONS, ROLE_ROUTES } from "../lib/roles";
+import { ALL_PERMISSIONS, ALL_ROUTES, ALWAYS_ALLOWED_ROUTES, LOCKED_ROLE, PERMISSION_GROUPS, ROUTE_CATALOG } from "../lib/permission-catalog";
+import { roleConfigSchema } from "../lib/validators";
+import type { Permission } from "../types/domain";
 import { z } from "zod";
 
 /** Every attribute name the parser finds on the rendered markup, tags and all. */
@@ -73,6 +76,46 @@ async function main() {
   for (const role of ["MASTER_ADMIN", "ADMIN", "AUDITOR"] as const) {
     assert(canActOnDepartment({ role, department: undefined }, "Production"), role + " acts organisation-wide");
   }
+
+  // The Permissions screen renders from the catalogue, so a permission missing from
+  // it is a permission no administrator can ever grant or revoke.
+  const catalogued = new Set(ALL_PERMISSIONS);
+  assert.equal(catalogued.size, ALL_PERMISSIONS.length, "The catalogue must not list a permission twice");
+  for (const role of ROLES) {
+    for (const granted of ROLE_PERMISSIONS[role]) {
+      assert(catalogued.has(granted), `${granted} is granted to ${role} but missing from the catalogue`);
+    }
+    for (const route of ROLE_ROUTES[role]) {
+      assert(ALL_ROUTES.includes(route) || ALWAYS_ALLOWED_ROUTES.includes(route), `${route} is granted to ${role} but missing from the route catalogue`);
+    }
+  }
+  assert.equal(new Set(PERMISSION_GROUPS.map((g) => g.key)).size, PERMISSION_GROUPS.length, "Duplicate permission group key");
+  assert.equal(new Set(ROUTE_CATALOG.map((r) => r.id)).size, ROUTE_CATALOG.length, "Duplicate route in the catalogue");
+  assert(!ALL_ROUTES.some((r) => ALWAYS_ALLOWED_ROUTES.includes(r)), "An always-allowed page must not also be grantable");
+
+  // Master Admin is the recovery role: it must hold everything, so a mis-saved
+  // configuration can never leave the portal with nobody able to undo it.
+  assert.equal(LOCKED_ROLE, "MASTER_ADMIN");
+  for (const permission of ALL_PERMISSIONS) {
+    assert(ROLE_PERMISSIONS.MASTER_ADMIN.includes(permission), `Master Admin must hold ${permission}`);
+  }
+  assert(ROLE_PERMISSIONS.MASTER_ADMIN.includes("settings:manage"), "Only Master Admin reaches the Permissions screen by default");
+  for (const role of ROLES.filter((r) => r !== LOCKED_ROLE)) {
+    assert(!ROLE_PERMISSIONS[role].includes("settings:manage"), `${role} must not manage settings by default`);
+  }
+
+  // The saved payload is bounded and unknown ids are dropped, not trusted.
+  assert(!roleConfigSchema.safeParse({ role: "NOT_A_ROLE", permissions: [], routes: [] }).success);
+  assert(!roleConfigSchema.safeParse({ role: "ADMIN", permissions: Array.from({ length: 201 }, () => "x"), routes: [] }).success);
+  assert(roleConfigSchema.safeParse({ role: "ADMIN", permissions: ["audits:read"], routes: ["/findings"] }).success);
+  {
+    const parsed = roleConfigSchema.parse({ role: "SPOC", permissions: ["audits:read", "made:up"], routes: ["/findings", "/nope"] });
+    const permissions = parsed.permissions.filter((x): x is Permission => ALL_PERMISSIONS.includes(x as Permission));
+    const routes = parsed.routes.filter((x) => ALL_ROUTES.includes(x));
+    assert.deepEqual(permissions, ["audits:read"], "Unknown permissions must be discarded");
+    assert.deepEqual(routes, ["/findings"], "Unknown routes must be discarded");
+  }
+  void permissionsForRole;
 
   const original = { ...process.env };
   try {

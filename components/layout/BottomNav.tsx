@@ -2,13 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { Role } from "@/types/domain";
-import { ROLE_ROUTES } from "@/lib/roles";
 import { activeNavHref, navItemsForRoutes } from "@/lib/nav-items";
 
-export function BottomNav({ role }: { role: Role }) {
+export function BottomNav({ allowedRoutes }: { allowedRoutes: string[] }) {
   const pathname = usePathname();
-  const allowed = ROLE_ROUTES[role] || [];
+  const allowed = allowedRoutes;
   const items = navItemsForRoutes(allowed);
   const activeHref = activeNavHref(pathname, items);
 

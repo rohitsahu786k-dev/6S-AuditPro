@@ -211,6 +211,17 @@ export const testEmailSchema = z.object({
   sampleData: z.record(z.string()).default({})
 });
 
+/**
+ * The API re-checks every id against the catalogue before saving, so this only has
+ * to bound the request. Unknown entries are dropped rather than rejected, which
+ * keeps an older browser tab from failing a save after a permission is renamed.
+ */
+export const roleConfigSchema = z.object({
+  role: roleSchema,
+  permissions: z.array(z.string().trim().max(64)).max(200),
+  routes: z.array(z.string().trim().max(120)).max(100)
+});
+
 export const shareReportSchema = z.object({
   email: z.string().trim().email()
 });

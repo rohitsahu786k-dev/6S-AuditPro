@@ -1,4 +1,8 @@
 import type { Permission, Role } from "@/types/domain";
+import { ALL_PERMISSIONS } from "@/lib/permission-catalog";
+
+/** Every role the portal knows, in the order the Permissions screen lists them. */
+export const ROLES: Role[] = ["MASTER_ADMIN", "ADMIN", "AUDITOR", "SPOC", "MANAGEMENT"];
 
 export const ROLE_LABELS: Record<Role, string> = {
   MASTER_ADMIN: "Master Admin",
@@ -8,17 +12,9 @@ export const ROLE_LABELS: Record<Role, string> = {
   MANAGEMENT: "Management"
 };
 
-const allPermissions: Permission[] = [
-  "users:read", "users:create", "users:update", "users:disable",
-  "masters:read", "masters:create", "masters:update", "masters:delete",
-  "audits:read", "audits:create", "audits:update", "audits:delete",
-  "findings:read", "findings:create", "findings:update", "findings:close",
-  "capa:submit", "capa:review",
-  "analytics:read", "reports:export",
-  "emailTemplates:read", "emailTemplates:create", "emailTemplates:update", "emailTemplates:disable",
-  "emailLogs:read", "settings:manage"
-];
+const allPermissions: Permission[] = ALL_PERMISSIONS;
 
+/** Default grants. Overridden per role from the Permissions screen. */
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   MASTER_ADMIN: allPermissions,
   ADMIN: allPermissions.filter((p) => p !== "settings:manage"),
@@ -31,6 +27,7 @@ export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   MANAGEMENT: ["audits:read", "findings:read", "capa:submit", "analytics:read", "reports:export"]
 };
 
+/** Default page access. Overridden per role from the Permissions screen. */
 export const ROLE_ROUTES: Record<Role, string[]> = {
   MASTER_ADMIN: ["/dashboard", "/audits", "/audit-history", "/findings", "/register", "/analytics", "/admin", "/media"],
   ADMIN: ["/dashboard", "/audits", "/audit-history", "/findings", "/register", "/analytics", "/admin", "/media"],
