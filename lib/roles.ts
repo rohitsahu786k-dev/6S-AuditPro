@@ -40,11 +40,15 @@ export const ROLE_ROUTES: Record<Role, string[]> = {
 };
 
 /**
- * Roles whose write actions are confined to their own department. Everything else
- * acts across the organisation. Reading is deliberately not restricted here:
- * Management oversees every department but may only close its own.
+ * Roles whose write actions are confined to their own department.
+ *
+ * Only the SPOC is scoped. Management is the oversight role: it already reads
+ * every department's findings, most Management accounts carry no department at
+ * all, and a HOD is expected to close a finding wherever it was raised — so
+ * scoping it by department made the role unusable rather than safer. The
+ * department field on a Management account is informational.
  */
-const DEPARTMENT_SCOPED_ROLES: Role[] = ["SPOC", "MANAGEMENT"];
+const DEPARTMENT_SCOPED_ROLES: Role[] = ["SPOC"];
 
 function normalizeDepartment(value?: string | null) {
   return String(value || "").trim().toLowerCase();

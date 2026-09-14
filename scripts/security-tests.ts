@@ -60,13 +60,16 @@ async function main() {
   assert(!permissionsForRole("AUDITOR").includes("capa:submit"), "Auditors review, they do not submit");
   assert(!permissionsForRole("MANAGEMENT").includes("findings:update"), "Management stays out of finding metadata");
 
-  // Department-scoped roles act only on their own department; org-wide roles anywhere.
-  assert(canActOnDepartment({ role: "MANAGEMENT", department: "HR & Admin" }, "HR & Admin"));
+  // The SPOC is the department boundary; every other role acts organisation-wide.
   assert(canActOnDepartment({ role: "SPOC", department: "Stores" }, "Stores"));
-  assert(canActOnDepartment({ role: "MANAGEMENT", department: " hr & admin " }, "HR & Admin"), "Spelling drift must not lock a HOD out");
-  assert(!canActOnDepartment({ role: "MANAGEMENT", department: "HR & Admin" }, "Production"), "A HOD must not close another department");
-  assert(!canActOnDepartment({ role: "SPOC", department: "Stores" }, "Production"));
+  assert(canActOnDepartment({ role: "SPOC", department: " stores " }, "Stores"), "Spelling drift must not lock a SPOC out");
+  assert(!canActOnDepartment({ role: "SPOC", department: "Stores" }, "Production"), "A SPOC must not close another department");
   assert(!canActOnDepartment({ role: "SPOC", department: "" }, "Stores"), "No department means no write scope");
+  // Management oversees every department and most of these accounts carry no
+  // department, so it must not be scoped by one.
+  for (const department of ["HR & Admin", undefined]) {
+    assert(canActOnDepartment({ role: "MANAGEMENT", department }, "HSE"), "A HOD closes findings in any department");
+  }
   for (const role of ["MASTER_ADMIN", "ADMIN", "AUDITOR"] as const) {
     assert(canActOnDepartment({ role, department: undefined }, "Production"), role + " acts organisation-wide");
   }
