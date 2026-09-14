@@ -402,7 +402,7 @@ export function DashboardClient() {
 
       await downloadInsightsPdf({
         title: "Operations Dashboard",
-        subtitle: `${COMPANY_NAME} - 6S Audit Control Centre`,
+        subtitle: `${COMPANY_NAME} - 6S Audit Control Center`,
         fileName: `6S_Dashboard_Report_${new Date().toISOString().split("T")[0]}.pdf`,
         kpis: [
           { label: "Open Findings", value: stats.open },
@@ -483,7 +483,7 @@ export function DashboardClient() {
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-t1">Operations Dashboard</h1>
-          <p className="mt-1 text-sm text-t2">{COMPANY_NAME} - 6S Audit Control Centre</p>
+          <p className="mt-1 text-sm text-t2">{COMPANY_NAME} - 6S Audit Control Center</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
