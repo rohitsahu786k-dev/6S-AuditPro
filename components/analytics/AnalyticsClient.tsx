@@ -92,6 +92,12 @@ type Finding = {
   createdAt?: string;
 };
 
+const OPEN_FINDING_STATUSES = ["OPEN", "REOPENED", "REJECTED"] as const;
+
+function isOpenFindingStatus(status: string) {
+  return OPEN_FINDING_STATUSES.includes(status as typeof OPEN_FINDING_STATUSES[number]);
+}
+
 export function AnalyticsClient() {
   const auditsApi = useApi<Audit[]>("/api/audits?view=analytics");
   const findingsApi = useApi<Finding[]>("/api/findings?view=summary");
@@ -141,7 +147,7 @@ export function AnalyticsClient() {
   // Aggregate Outstanding Finding Counters
   const counters = useMemo(() => {
     const total = findings.length;
-    const open = findings.filter(f => f.status === "OPEN" || f.status === "REOPENED").length;
+    const open = findings.filter(f => isOpenFindingStatus(f.status)).length;
     const submitted = findings.filter(f => f.status === "SUBMITTED").length;
     const closed = findings.filter(f => f.status === "CLOSED").length;
     

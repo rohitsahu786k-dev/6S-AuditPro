@@ -77,6 +77,8 @@ const SEVERITY_COLORS: Record<string, string> = {
 const COMPLIANCE_TARGET = 90;
 const DASHBOARD_YEAR = new Date().getFullYear();
 const CURRENT_MONTH_INDEX = new Date().getMonth();
+const OPEN_FINDING_STATUSES = ["OPEN", "REOPENED", "REJECTED"] as const;
+const DEPARTMENT_OPEN_FINDING_STATUSES = [...OPEN_FINDING_STATUSES, "OVERDUE", "SUBMITTED"];
 const TH_CLASS = "bg-bg3 px-2 py-2 text-left text-xs font-bold uppercase tracking-wide text-t2";
 const TH_RIGHT_CLASS = "bg-bg3 px-2 py-2 text-right text-xs font-bold uppercase tracking-wide text-t2";
 const TD_CLASS = "border-b border-[#edf0f4] px-2 py-2";
@@ -114,6 +116,14 @@ function isFindingOverdue(finding: Finding) {
   if (finding.status === "CLOSED") return false;
   if (finding.status === "OVERDUE") return true;
   return Boolean(finding.dueDate && new Date(finding.dueDate) < new Date());
+}
+
+function isOpenFindingStatus(status: string) {
+  return OPEN_FINDING_STATUSES.includes(status as typeof OPEN_FINDING_STATUSES[number]);
+}
+
+function isDepartmentOpenFindingStatus(status: string) {
+  return DEPARTMENT_OPEN_FINDING_STATUSES.includes(status as typeof DEPARTMENT_OPEN_FINDING_STATUSES[number]);
 }
 
 function uniqueSorted(values: string[]) {
@@ -228,7 +238,7 @@ export function DashboardClient() {
   }, [mastersApi.data, audits, findings]);
 
   const stats = useMemo(() => {
-    const open = findings.filter((finding) => finding.status === "OPEN" || finding.status === "REOPENED").length;
+    const open = findings.filter((finding) => isOpenFindingStatus(finding.status)).length;
     const inProgress = findings.filter((finding) => finding.status === "IN_PROGRESS").length;
     const closed = findings.filter((finding) => finding.status === "CLOSED").length;
     const overdue = findings.filter(isFindingOverdue).length;
@@ -302,7 +312,7 @@ export function DashboardClient() {
     for (const finding of findings) {
       const row = map.get(finding.department) || newDepartmentState();
       row.total += 1;
-      if (["OPEN", "REOPENED", "OVERDUE", "SUBMITTED"].includes(finding.status)) row.open += 1;
+      if (isDepartmentOpenFindingStatus(finding.status)) row.open += 1;
       if (finding.status === "IN_PROGRESS") row.inProcess += 1;
       if (finding.status === "CLOSED") row.closed += 1;
       if (isFindingOverdue(finding)) row.delayed += 1;
