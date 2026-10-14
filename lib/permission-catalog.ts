@@ -108,7 +108,7 @@ export const ROUTE_CATALOG: Array<{ id: string; label: string; description: stri
 ];
 
 /** Always reachable by anyone signed in, so no role can be locked out of the app. */
-export const ALWAYS_ALLOWED_ROUTES = ["/dashboard"];
+export const ALWAYS_ALLOWED_ROUTES = ["/dashboard", "/ocp-manual"];
 
 export const ALL_ROUTES: string[] = ROUTE_CATALOG.map((route) => route.id);
 

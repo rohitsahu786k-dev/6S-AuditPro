@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BookOpen } from "lucide-react";
 import { activeNavHref, navItemsForRoutes } from "@/lib/nav-items";
 import { COMPANY_NAME } from "@/lib/constants";
 
@@ -37,6 +38,21 @@ export function RoleBasedSidebar({ allowedRoutes }: { allowedRoutes: string[] })
           );
         })}
       </nav>
+
+      <div className="px-2 py-2 border-t border-bd/60">
+        <p className="px-3 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-t3">Help</p>
+        <Link
+          href="/ocp-manual"
+          className={
+            pathname === "/ocp-manual"
+              ? "mx-1 flex items-center gap-2.5 rounded-lg border border-brand bg-accent px-3.5 py-2.5 text-[13px] font-semibold text-brand shadow-xs"
+              : "mx-1 flex items-center gap-2.5 rounded-lg border border-brand/60 bg-brand/5 px-3.5 py-2.5 text-[13px] font-semibold text-brand hover:border-brand hover:bg-brand/10 transition"
+          }
+        >
+          <BookOpen size={15} className="w-[18px] shrink-0 text-center text-brand" />
+          <span>OCP Manual</span>
+        </Link>
+      </div>
 
       <div className="mt-auto border-t border-bd px-3.5 py-3 text-[10px] leading-relaxed text-t3">
         <div>IMS-16-04-L4-07 Rev.03</div>
