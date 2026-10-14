@@ -6,7 +6,7 @@ import { getAppUrl } from "@/lib/app-url";
 
 const { auth } = NextAuth(authConfig);
 
-const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/favicon.png", "/onepws-dark-logo-scaled.png"];
+const PUBLIC_PATHS = ["/login", "/signup", "/forgot-password", "/reset-password", "/favicon.png", "/onepws-dark-logo-scaled.png", "/docs"];
 
 // Derived from the incoming request so the browser stays on whichever domain the
 // app is served from. A fixed origin here would send visitors of one domain to
@@ -59,5 +59,5 @@ export const proxy = auth((request) => {
 });
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|favicon.png|onepws-dark-logo-scaled.png|login|signup|forgot-password|reset-password).*)"]
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|favicon.png|onepws-dark-logo-scaled.png|docs|login|signup|forgot-password|reset-password).*)"]
 };
